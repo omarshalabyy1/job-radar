@@ -1,4 +1,4 @@
-"""Job tracker: every job the radar found, your status for each, and the skills in demand.
+"""Job tracker: every job the radar found, your status for each, and which of your skills are in demand.
 
 Run by docker-compose.yml on http://127.0.0.1:8501, or from the repo root with .env set:
     streamlit run tracker/app.py
@@ -28,28 +28,28 @@ def query(sql: str) -> pd.DataFrame:
 st.set_page_config(page_title="Job tracker", page_icon=":material/work:", layout="wide")
 st.title("Job tracker")
 
-jobs = query("SELECT job_id, fit_score, target_company, title, company, role, place, source, status, note,"
-             " first_seen, job_url, fit_reason FROM mart.job_status"
-             " ORDER BY role_rank, target_company DESC, fit_score DESC NULLS LAST, first_seen DESC")
+jobs = query("SELECT job_id, skill_matches, target_company, title, company, role, place, source, status, note,"
+             " first_seen, job_url, skills_matched FROM mart.job_status"
+             " ORDER BY role_rank, target_company DESC, skill_matches DESC, first_seen DESC")
 
 with st.sidebar:
     roles = st.multiselect("Role", sorted(jobs["role"].unique()))
     places = st.multiselect("Where", sorted(jobs["place"].unique()))
     statuses = st.multiselect("Status", STATUSES, default=["new", "saved", "applied", "interview", "offer"])
-    min_fit = st.slider("Minimum fit score", 0, 100, 0)
+    min_skills = st.slider("At least this many of your skills", 0, 10, 0)
     text = st.text_input("Search title or company")
 
 shown = jobs[(jobs["role"].isin(roles) if roles else True)
              & (jobs["place"].isin(places) if places else True)
              & (jobs["status"].isin(statuses) if statuses else True)
-             & ((jobs["fit_score"].fillna(0) >= min_fit) if min_fit else True)
+             & (jobs["skill_matches"] >= min_skills)
              & ((jobs["title"] + " " + jobs["company"]).str.contains(text, case=False, regex=False) if text else True)]
 
 counts = jobs["status"].value_counts()
 for column, status in zip(st.columns(5), ["new", "saved", "applied", "interview", "offer"]):
     column.metric(status.title(), int(counts.get(status, 0)))
 
-jobs_tab, skills_tab = st.tabs(["Jobs", "Skills in demand"])
+jobs_tab, skills_tab, companies_tab = st.tabs(["Jobs", "Skills in demand", "Companies"])
 
 with jobs_tab:
     edited = st.data_editor(
@@ -57,11 +57,11 @@ with jobs_tab:
         disabled=[c for c in shown.columns if c not in ("status", "note")],
         column_config={
             "job_id": None,
-            "fit_score": st.column_config.ProgressColumn("Fit", min_value=0, max_value=100, format="%d"),
+            "skill_matches": st.column_config.NumberColumn("Skills", help="How many of your skills the job asks for"),
             "target_company": st.column_config.CheckboxColumn("Target"),
             "status": st.column_config.SelectboxColumn("Status", options=STATUSES, required=True),
             "job_url": st.column_config.LinkColumn("Link", display_text="Open"),
-            "fit_reason": "Why",
+            "skills_matched": "Your skills it asks for",
         })
     changed = edited[(edited["status"] != shown["status"]) | (edited["note"].fillna("") != shown["note"].fillna(""))]
     if st.button(f"Save {len(changed)} changes", type="primary", disabled=changed.empty):
@@ -77,12 +77,39 @@ with jobs_tab:
         st.rerun()
 
 with skills_tab:
-    skills = query("SELECT role_rank, role, skill, jobs, pct_of_role FROM mart.skill_demand ORDER BY role_rank, jobs DESC")
+    skills = query("SELECT role_rank, role, track, skill, jobs, pct_of_role FROM mart.skill_demand"
+                   " ORDER BY role_rank, jobs DESC")
     if skills.empty:
         st.info("No job descriptions yet: the skills appear after the first run's describe step.")
     else:
         role = st.selectbox("Role", skills["role"].unique())
-        top = skills[skills["role"] == role].head(20)
-        st.caption("Share of the last 90 days' jobs of this role that ask for each skill.")
+        track = st.segmented_control("Course", ["Data Engineering", "Generative AI"], default="Data Engineering")
+        top = skills[(skills["role"] == role) & ((skills["track"] == track) if track else True)].head(20)
+        st.caption("Share of the last 90 days' jobs of this role that ask for each of your skills.")
         st.bar_chart(top, x="skill", y="pct_of_role", horizontal=True, sort="-pct_of_role",
                      x_label="% of jobs", y_label="")
+
+with companies_tab:
+    st.caption("Every company here is starred in the email and the tracker. With a careers page, the next run "
+               "detects its platform (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or any "
+               "other page, read with Playwright) and reads its jobs every run. Sites whose robots.txt forbids it, "
+               "or that turn scripts away, are shown as such and not read.")
+    with st.form("add_company", clear_on_submit=True):
+        name = st.text_input("Company name")
+        url = st.text_input("Careers page or portal (optional)", placeholder="https://...")
+        if st.form_submit_button("Add or update", type="primary") and name.strip():
+            with connect() as conn:
+                conn.execute(
+                    "INSERT INTO core.company (company, careers_url) VALUES (%s, %s) ON CONFLICT (company) DO UPDATE"
+                    " SET careers_url = EXCLUDED.careers_url, platform = NULL, api = NULL, note = NULL, checked_at = NULL",
+                    (name.strip(), url.strip() or None))
+            st.rerun()
+    companies = query("SELECT company, careers_url, platform, note, checked_at FROM core.company ORDER BY company")
+    st.dataframe(companies, hide_index=True, column_config={
+        "careers_url": st.column_config.LinkColumn("Careers page"), "platform": "Read as",
+        "note": "Why not read", "checked_at": st.column_config.DatetimeColumn("Checked", format="D MMM, HH:mm")})
+    gone = st.multiselect("Remove companies", companies["company"])
+    if st.button("Remove", disabled=not gone):
+        with connect() as conn:
+            conn.execute("DELETE FROM core.company WHERE company = ANY(%s)", (gone,))
+        st.rerun()

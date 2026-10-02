@@ -1,9 +1,8 @@
 python-jobspy==1.2.0
-anthropic
 beautifulsoup4
 pandas
+playwright
 psycopg[binary]
-pydantic
 python-dotenv
 requests
 streamlit

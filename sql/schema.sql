@@ -1,10 +1,11 @@
 -- The job_radar warehouse. Run by `python -m job_radar schema` before every run; safe to re-run.
 --
---   raw.job_posting   bronze: every posting each run found, as the source gave it (append-only)
+--   raw.job_posting   bronze: each posting once (source + link), as the source gave it the first time
 --   core.job          silver: one row per job (same title and company on any board), in scope
 --   core.application  your status for a job, set in the tracker
---   core.skill        the skills the demand report counts, as case-insensitive patterns
---   mart.*            gold: views for the tracker and Power BI
+--   core.skill        your skills: the Data Engineering and Generative AI courses, as patterns
+--   core.job_skill    which of your skills each job asks for, stored once by match_skills
+--   mart.*            gold: views for the email, the tracker and Power BI
 
 CREATE SCHEMA IF NOT EXISTS raw;
 CREATE SCHEMA IF NOT EXISTS core;
@@ -13,8 +14,9 @@ CREATE SCHEMA IF NOT EXISTS mart;
 CREATE TABLE IF NOT EXISTS raw.job_posting (
     posting_id   bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     run_date     date        NOT NULL,
-    source       text        NOT NULL,  -- linkedin, indeed, bayt, remotive, himalayas, weworkremotely,
-                                        -- workable, jooble, or the career page's system (greenhouse, workday ...)
+    source       text        NOT NULL,  -- indeed, bayt, himalayas, weworkremotely, tanqeeb, workable, jooble,
+                                        -- email, a company (orange, dhl ...), or the career page's system
+                                        -- (greenhouse, workday ...)
     searched_for text,                  -- the place searched, for the sources that search by place
     title        text,
     company      text,
@@ -26,10 +28,12 @@ CREATE TABLE IF NOT EXISTS raw.job_posting (
     loaded_at    timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS job_posting_run_date ON raw.job_posting (run_date);
+-- a posting found again (next run, another search) is not stored twice
+CREATE UNIQUE INDEX IF NOT EXISTS job_posting_source_url ON raw.job_posting (source, job_url);
 
 CREATE TABLE IF NOT EXISTS core.job (
     job_id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    job_key        text     NOT NULL UNIQUE,  -- lower(title) | lower(company)
+    job_key        text     NOT NULL UNIQUE,  -- normalized title | company (steps.job_key): one row per job
     title          text     NOT NULL,
     company        text     NOT NULL,
     location       text     NOT NULL,
@@ -42,13 +46,60 @@ CREATE TABLE IF NOT EXISTS core.job (
     date_posted    date,
     description    text,
     described_at   timestamptz,               -- its page was read (description found or not)
-    fit_score      smallint CHECK (fit_score BETWEEN 0 AND 100),
-    fit_reason     text,
-    scored_at      timestamptz,
     first_seen     date     NOT NULL,
-    last_seen      date     NOT NULL,
-    emailed_at     timestamptz
+    emailed_at     timestamptz                -- set once: a job is never emailed twice
 );
+CREATE INDEX IF NOT EXISTS job_first_seen ON core.job (first_seen);
+
+-- Your companies: each one's jobs are starred from any source, and its careers page, when given,
+-- is read every run. Add them in the tracker (Companies tab). The platform is detected on the
+-- next run; 'forbidden' (robots.txt), 'blocked' (turns scripts away) and 'unreachable' (page not
+-- found) sites are retried daily.
+CREATE TABLE IF NOT EXISTS core.company (
+    company     text PRIMARY KEY,
+    careers_url text,         -- its careers page or portal; empty = starred only
+    platform    text,         -- workable, greenhouse, lever, ashby, phenom, successfactors, rss, page,
+                              -- or forbidden, blocked, unreachable
+    api         text,         -- what the platform's reader calls (an account, a feed, the page)
+    note        text,         -- why a site cannot be read
+    checked_at  timestamptz,
+    added_at    timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO core.company (company, careers_url) VALUES
+    ('Nawy', 'https://apply.workable.com/nawy-real-estate/'),
+    ('Sumerge', 'https://www.sumerge.com/job-openings'),
+    ('Orange', 'https://orange.jobs/gb/en'),
+    ('DHL', 'https://careers.dhl.com/global/en'),
+    ('Nestlé', 'https://jobdetails.nestle.com'),
+    ('Deloitte', 'https://middleeastjobs.deloitte.com/careersME/SearchJobs/feed/'),
+    ('Finaira', 'https://finaira.ai/work-at-finaira/'),
+    ('Vodafone', 'https://jobs.vodafone.com/careers'),
+    ('PwC', 'https://www.pwc.com/gx/en/careers/job-results.html'),
+    ('Advansys', 'https://advansys-esc.com/'),
+    ('Thndr', 'https://thndr.app/careers'),
+    ('EY', 'https://careers.ey.com/ey/search/?q=data&locationsearch=Egypt'),
+    ('Instabug', 'https://www.instabug.com/careers'),
+    ('Paymob', 'https://paymob.com/en/careers'),
+    ('Fawry', 'https://www.fawry.com/careers/'),
+    ('Breadfast', 'https://www.breadfast.com/careers'),
+    ('Valu', 'https://www.valu.com.eg/careers'),
+    ('Khazna', 'https://khazna.app/careers'),
+    ('Rabbit', 'https://www.rabbitmart.com/careers'),
+    ('Synapse Analytics', 'https://synapse-analytics.io/careers'),
+    ('Giza Systems', 'https://gizasystems.com/careers'),
+    ('Robusta', 'https://robustastudio.com/careers'),
+    ('talabat', 'https://careers.talabat.com'),
+    ('Tabby', 'https://tabby.ai/en-AE/careers'),
+    ('dubizzle', 'https://www.dubizzlegroup.com/careers'),
+    ('CIB', 'https://www.cibeg.com/en/careers'),
+    ('Contact Financial', 'https://www.contact.eg/careers'),
+    ('Majorel', 'https://www.majorel.com/careers/'),
+    ('Siemens', 'https://jobs.siemens.com/careers'),
+    ('e& Egypt', 'https://www.eand.com.eg/careers'),
+    ('ADIB', NULL), ('EG Bank', NULL), ('Etisalat', NULL), ('Swvl', NULL), ('MNT-Halan', NULL), ('ITWorx', NULL),
+    ('Trella', NULL), ('Raya', NULL), ('Careem', NULL), ('noon', NULL), ('Elmenus', NULL), ('Vezeeta', NULL),
+    ('Sylndr', NULL), ('Yodawy', NULL), ('Brimore', NULL), ('Property Finder', NULL)
+ON CONFLICT (company) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS core.application (
     job_id     bigint      PRIMARY KEY REFERENCES core.job,
@@ -57,54 +108,107 @@ CREATE TABLE IF NOT EXISTS core.application (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Your skills (Data Engineering and Generative AI). Reloaded on every run, so this list is the
+-- only place to change them.
 CREATE TABLE IF NOT EXISTS core.skill (
     skill   text PRIMARY KEY,
+    track   text NOT NULL CHECK (track IN ('Data Engineering', 'Generative AI')),
     pattern text NOT NULL  -- Postgres regular expression, matched case-insensitively (~*)
 );
-INSERT INTO core.skill (skill, pattern) VALUES
-    ('Python', '\mpython\M'), ('SQL', '\msql\M'), ('Spark', '\m(py)?spark\M'), ('Airflow', 'airflow'),
-    ('dbt', '\mdbt\M'), ('Kafka', '\mkafka\M'), ('Databricks', 'databricks'), ('Snowflake', 'snowflake'),
-    ('BigQuery', 'bigquery'), ('Redshift', 'redshift'), ('Azure Data Factory', 'data factory|\madf\M'),
-    ('Microsoft Fabric', 'microsoft fabric'), ('Synapse', 'synapse'), ('SSIS', '\mssis\M'),
-    ('ETL / ELT', '\metl\M|\melt\M'), ('Data warehousing', 'data warehous|\mdwh\M'),
-    ('Data modeling', 'data model'), ('Streaming', 'streaming|real-time'),
-    ('AWS', '\maws\M|amazon web services'), ('Azure', '\mazure\M'), ('GCP', '\mgcp\M|google cloud'),
-    ('Docker', 'docker'), ('Kubernetes', 'kubernetes|\mk8s\M'), ('Terraform', 'terraform'),
-    ('Git', '\mgit\M|github|gitlab'), ('Linux', 'linux'), ('PostgreSQL', 'postgres'), ('MongoDB', 'mongo'),
-    ('Power BI', 'power ?bi'), ('DAX', '\mdax\M'), ('Excel', '\mexcel\M'), ('Tableau', 'tableau'),
-    ('Looker', 'looker'), ('Statistics', 'statistic'), ('Pandas', 'pandas'),
-    ('Machine learning', 'machine learning|\mml\M'), ('Deep learning', 'deep learning'),
-    ('PyTorch', 'pytorch'), ('TensorFlow', 'tensorflow'), ('scikit-learn', 'scikit|sklearn'),
-    ('NLP', '\mnlp\M|natural language'), ('LLMs', '\mllms?\M|large language model'),
-    ('RAG', '\mrag\M|retrieval[- ]augmented'), ('AI agents', 'agentic|\mai agents?\M|multi-agent'),
-    ('LangChain / LangGraph', 'langchain|langgraph'), ('LlamaIndex', 'llama ?index'),
-    ('Hugging Face', 'hugging ?face'), ('OpenAI API', 'openai|\mgpt'), ('MLOps', 'mlops|mlflow|kubeflow'),
-    ('Vector databases', 'vector (db|database|store|search)|pinecone|weaviate|qdrant|chroma|pgvector|faiss|milvus'),
-    ('FastAPI', 'fastapi')
-ON CONFLICT (skill) DO UPDATE SET pattern = EXCLUDED.pattern;
+DELETE FROM core.skill;
+INSERT INTO core.skill (track, skill, pattern) VALUES
+    ('Data Engineering', 'SQL', '\msql\M'),
+    ('Data Engineering', 'SQL Server', 'sql server|mssql|t-sql|tsql'),
+    ('Data Engineering', 'Data modeling', 'data model|\merd\M|entity relationship|normali[sz]ation'),
+    ('Data Engineering', 'Data warehousing', 'data warehous|\mdwh\M|\molap\M'),
+    ('Data Engineering', 'Star schema / SCD', 'star schema|snowflake schema|dimensional model|fact table|\mscd\M|slowly changing'),
+    ('Data Engineering', 'ETL / ELT', '\metl\M|\melt\M'),
+    ('Data Engineering', 'Data lake / lakehouse', 'data lake|lakehouse|delta lake'),
+    ('Data Engineering', 'Query optimization', 'query optimi|query tuning|performance tuning|execution plan|indexing'),
+    ('Data Engineering', 'dbt', '\mdbt\M'),
+    ('Data Engineering', 'Data quality', 'data quality|data validation|great expectations'),
+    ('Data Engineering', 'Data governance', 'data governance|data lineage|data catalog|metadata management'),
+    ('Data Engineering', 'NoSQL', 'nosql|mongo|cassandra|dynamodb'),
+    ('Data Engineering', 'Python', '\mpython\M'),
+    ('Data Engineering', 'Pandas / NumPy', 'pandas|numpy'),
+    ('Data Engineering', 'REST APIs', 'rest(ful)? api|api integration'),
+    ('Data Engineering', 'Azure', '\mazure\M'),
+    ('Data Engineering', 'Azure Data Factory', 'data factory|\madf\M'),
+    ('Data Engineering', 'Databricks', 'databricks'),
+    ('Data Engineering', 'Azure Data Lake / Blob', '\madls|data lake storage|blob storage'),
+    ('Data Engineering', 'Spark', '\m(py)?spark\M'),
+    ('Data Engineering', 'Hadoop / HDFS', 'hadoop|\mhdfs\M|mapreduce|\mhive\M'),
+    ('Data Engineering', 'Kafka / streaming', 'kafka|stream processing|real-time data|event hub'),
+    ('Data Engineering', 'Airflow', 'airflow'),
+    ('Data Engineering', 'SSIS', '\mssis\M'),
+    ('Data Engineering', 'Informatica', 'informatica'),
+    ('Data Engineering', 'Linux / shell', 'linux|shell script|\mbash\M'),
+    ('Data Engineering', 'Docker', 'docker'),
+    ('Data Engineering', 'Power BI', 'power ?bi'),
+    ('Generative AI', 'LLMs', '\mllms?\M|large language model'),
+    ('Generative AI', 'Generative AI', 'generative ai|\mgen ?ai\M'),
+    ('Generative AI', 'Prompt engineering', 'prompt engineering|prompt design|few-shot'),
+    ('Generative AI', 'RAG', '\mrag\M|retrieval[- ]augmented'),
+    ('Generative AI', 'Embeddings / semantic search', 'embedding|semantic search|vector search|similarity search|hybrid search'),
+    ('Generative AI', 'Vector databases', 'vector (db|database|store)|qdrant|pinecone|weaviate|pgvector|faiss|milvus|chroma'),
+    ('Generative AI', 'LangChain / LangGraph', 'langchain|langgraph'),
+    ('Generative AI', 'AI agents', 'agentic|\mai agents?\M|multi-agent|autonomous agent'),
+    ('Generative AI', 'Tool / function calling', 'function calling|tool calling'),
+    ('Generative AI', 'MCP', 'model context protocol|\mmcp\M'),
+    ('Generative AI', 'OpenAI / Gemini APIs', 'openai|\mgpt|gemini|anthropic|claude'),
+    ('Generative AI', 'Hugging Face / Transformers', 'hugging ?face|transformer'),
+    ('Generative AI', 'Fine-tuning (LoRA, PEFT)', 'fine-?tun|\mlora\M|qlora|\mpeft\M'),
+    ('Generative AI', 'LLM evaluation', 'ragas|deepeval|llm evaluation|hallucination'),
+    ('Generative AI', 'LLMOps / MLflow', 'llmops|mlops|mlflow|langsmith|langfuse'),
+    ('Generative AI', 'Model serving (Ollama, vLLM)', 'ollama|vllm|model serving|inference'),
+    ('Generative AI', 'NLP', '\mnlp\M|natural language|named entity|\mner\M'),
+    ('Generative AI', 'OCR / document AI', '\mocr\M|document (ai|processing|parsing)|docling'),
+    ('Generative AI', 'Multimodal / vision', 'multimodal|vision-language|\mvlms?\M|computer vision|speech-to-text|text-to-speech'),
+    ('Generative AI', 'FastAPI', 'fastapi'),
+    ('Generative AI', 'Pydantic', 'pydantic'),
+    ('Generative AI', 'Async Python', 'asyncio|aiohttp'),
+    ('Generative AI', 'Deep learning (PyTorch, TensorFlow)', 'pytorch|tensorflow|deep learning|neural network'),
+    ('Generative AI', 'Machine learning', 'machine learning|\mml\M|scikit|sklearn'),
+    ('Generative AI', 'Diffusion / image generation', 'stable diffusion|diffusion model|dall-?e|image generation'),
+    ('Generative AI', 'GenAI security', 'prompt injection|guardrail|jailbreak');
 
--- How many of the last 90 days' described jobs of each role ask for each skill.
-CREATE OR REPLACE VIEW mart.skill_demand AS
-WITH described AS (
-    SELECT role_rank, role, description FROM core.job
-    WHERE description IS NOT NULL AND first_seen >= current_date - 90
-)
-SELECT d.role_rank, d.role, s.skill, count(*) AS jobs,
-       round(100.0 * count(*) / (SELECT count(*) FROM described x WHERE x.role_rank = d.role_rank), 1) AS pct_of_role
-FROM described d
-JOIN core.skill s ON d.description ~* s.pattern
-GROUP BY d.role_rank, d.role, s.skill;
+-- Matched once per job by the match_skills step (a regex scan of every job on every read would
+-- slow down as the warehouse grows); the skill is kept as text so the list above can change.
+CREATE TABLE IF NOT EXISTS core.job_skill (
+    job_id bigint NOT NULL REFERENCES core.job ON DELETE CASCADE,
+    skill  text   NOT NULL,
+    PRIMARY KEY (job_id, skill)
+);
 
--- New jobs a day, by place, role and source.
-CREATE OR REPLACE VIEW mart.jobs_daily AS
-SELECT first_seen, place, role_rank, role, source, count(*) AS jobs, round(avg(fit_score)) AS avg_fit_score
-FROM core.job
-GROUP BY first_seen, place, role_rank, role, source;
+-- Views hold no data: dropped and created again on every run, so a change here always applies.
+DROP VIEW IF EXISTS mart.job_status, mart.skill_demand, mart.jobs_daily, mart.job_skill;
 
--- Every job with your status ('new' when you have not set one).
-CREATE OR REPLACE VIEW mart.job_status AS
+-- Every job with how many of your skills it asks for, and your status ('new' until you set one).
+CREATE VIEW mart.job_status AS
 SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j.source, j.job_url,
-       j.target_company, j.fit_score, j.fit_reason, j.date_posted, j.first_seen,
+       j.target_company, coalesce(k.skill_matches, 0) AS skill_matches, k.skills_matched,
+       j.description IS NOT NULL AS described, j.date_posted, j.first_seen, j.emailed_at,
        coalesce(a.status, 'new') AS status, a.note, a.updated_at
 FROM core.job j
+LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
+           FROM core.job_skill GROUP BY job_id) k USING (job_id)
 LEFT JOIN core.application a USING (job_id);
+
+-- How many of the last 90 days' described jobs of each role ask for each of your skills.
+CREATE VIEW mart.skill_demand AS
+WITH described AS (
+    SELECT job_id, role_rank, role FROM core.job
+    WHERE description IS NOT NULL AND first_seen >= current_date - 90
+)
+SELECT d.role_rank, d.role, s.track, k.skill, count(*) AS jobs,
+       round(100.0 * count(*) / (SELECT count(*) FROM described x WHERE x.role_rank = d.role_rank), 1) AS pct_of_role
+FROM described d
+JOIN core.job_skill k USING (job_id)
+JOIN core.skill s USING (skill)
+GROUP BY d.role_rank, d.role, s.track, k.skill;
+
+-- New jobs a day, by place, role and source.
+CREATE VIEW mart.jobs_daily AS
+SELECT first_seen, place, role_rank, role, source, count(*) AS jobs
+FROM core.job
+GROUP BY first_seen, place, role_rank, role, source;

@@ -2,30 +2,49 @@
 
 import re
 
-HOURS_OLD = 72  # every source looks back this far; a day the laptop slept through is caught up
-CANDIDATE = "based in New Cairo, Egypt; open to Egypt, the Gulf (UAE, Saudi Arabia, Qatar) and remote"
+HOURS_OLD = 24  # every run looks back this far: a run after the laptop was asleep or off backfills the last day
 
-# (rank, label, LinkedIn/Indeed/Bayt search term, title patterns that must all match)
+# (rank, label, Indeed/Bayt search term, title patterns that must all match), English and Arabic
 ROLES = [
-    (1, "AI & Data Engineer", '"AI Data Engineer" OR "Data AI Engineer"',
-     [r"\bdata\b", r"\b(ai|ml|genai|llm|machine learning)\b", r"engineer|developer"]),
-    (2, "Data Engineer", '"Data Engineer" OR "ETL Developer" OR "Analytics Engineer"',
-     [r"data engineer|\betl\b|big data|data platform|analytics engineer|data warehouse|\bdwh\b"]),
+    (1, "AI & Data Engineer", '"AI Data Engineer" OR "Data AI Engineer" OR "ML Data Engineer"',
+     [r"\bdata\b", r"\b(ai|ml|genai|llms?|machine learning)\b", r"engineer|developer"]),
+    (2, "Data Engineer",
+     '"Data Engineer" OR "ETL Developer" OR "Analytics Engineer" OR "Big Data" OR "Data Integration"'
+     ' OR "Data Warehouse" OR "Database Developer" OR "Azure Data Engineer" OR "Databricks"',
+     [r"data (engineer|engineering|integration|pipeline|platform|warehous|infrastructure|migration|modell?er|developer"
+      r"|quality|governance)"
+      r"|dataops|\b(etl|elt|dwh)\b|big data|analytics engineer"
+      r"|(sql|database|spark|databricks|snowflake|informatica|ssis|talend|hadoop|kafka) (developer|engineer)"
+      r"|مهندس بيانات"]),
     (3, "AI Engineer (NLP, LLM, agents, RAG)",
-     '"AI Engineer" OR "LLM Engineer" OR "NLP Engineer" OR "Machine Learning Engineer" OR "GenAI Engineer"',
-     [r"\b(ai|ml|nlp|llms?|genai|gen ai|generative ai|machine learning|deep learning|rag|agentic)\b",
-      r"engineer|developer"]),
-    (4, "BI Developer", '"BI Developer" OR "Power BI" OR "Business Intelligence"',
-     [r"\bbi\b|business intelligence|power ?bi|tableau"]),
-    (5, "Data Analyst", '"Data Analyst" OR "Reporting Analyst"',
-     [r"(data|business|reporting|insights?) analyst|data analytics"]),
+     '"AI Engineer" OR "LLM Engineer" OR "NLP Engineer" OR "Machine Learning Engineer" OR "GenAI Engineer"'
+     ' OR "AI Developer" OR "Data Scientist" OR "Generative AI" OR "RAG"',
+     [r"\b(ai|ml|nlp|llms?|genai|gen ai|generative ai|machine learning|deep learning|computer vision|rag|agentic"
+      r"|conversational ai|chatbot|prompt|langchain|langgraph)\b|data scien|ذكاء اصطناعي|تعلم الآلة",
+      r"engineer|developer|specialist|scientist|programmer|researcher|consultant|intern|trainee|مهندس|مطور|أخصائي"]),
+    (4, "BI Developer",
+     '"BI Developer" OR "Power BI" OR "Business Intelligence" OR "Data Visualization" OR "MIS Specialist"'
+     ' OR "Reporting Developer"',
+     [r"\bbi\b|business intelligence|power ?bi|tableau|qlik|looker|ssrs|\bmis\b|data visuali[sz]ation|dashboard"
+      r"|report(ing)? (developer|specialist|engineer)|ذكاء الأعمال|باور بي"]),
+    (5, "Data Analyst",
+     '"Data Analyst" OR "Reporting Analyst" OR "Business Analyst" OR "Analytics Specialist" OR "Product Analyst"',
+     [r"(data|business|reporting|insights?|analytics|product|marketing|quantitative) analyst|data analy(sis|tics)"
+      r"|analytics (specialist|associate|executive)|data specialist|محلل بيانات"]),
 ]
 # plain keywords for the sources that take no OR syntax (Himalayas, Jooble)
-KEYWORDS = ["data engineer", "AI engineer", "machine learning engineer", "BI developer", "power bi",
-            "data analyst"]
-TOO_SENIOR = r"\b(senior|sr|lead|principal|staff|head|director|manager|vp|chief|architect)\b"
+KEYWORDS = ["data engineer", "analytics engineer", "ETL developer", "databricks", "AI engineer",
+            "machine learning engineer", "NLP engineer", "LLM engineer", "generative AI", "data scientist",
+            "BI developer", "power bi", "data analyst"]
+# broad queries for the boards that match words loosely (Wuzzuf): the title rules do the filtering
+BROAD_KEYWORDS = ["data", "AI", "machine learning", "NLP", "LLM", "business intelligence", "power bi", "analyst"]
+TOO_SENIOR =r"\b(senior|sr|lead|principal|staff|head|director|manager|vp|chief|architect)\b"
+# titles that are never yours, whatever else they say
+NOT_RELEVANT = (r"\b(data entry|mlops|llmops|devops|sre|site reliability|technician|teacher|tutor|instructor"
+                r"|lecturer|recruiter|accountant|cyber ?security|quality (assurance|control|inspector))\b"
+                r"|إدخال بيانات")
 
-# (place, LinkedIn location, Indeed country)
+# (place, search location, Indeed country)
 PLACES = [
     ("Egypt", "Egypt", "egypt"),
     ("UAE", "United Arab Emirates", "united arab emirates"),
@@ -40,21 +59,31 @@ PLACE_PATTERNS = {
     "Qatar": r"qatar|doha",
 }
 REMOTE_OPEN_TO = r"worldwide|anywhere|global|emea|mena|africa|middle east|egypt"
-# job pages never fetched: LinkedIn (its jobs come only from your alert emails) and Wuzzuf (blocks scripts)
-NO_FETCH = r"linkedin\.com|wuzzuf\.net"
+# job pages never fetched: LinkedIn (its jobs come only from your alert emails)
+NO_FETCH = r"linkedin\.com"
 
-# companies whose jobs are starred and listed first, from any source
-TARGET_COMPANIES = (r"vodafone|\b_?vois\b|\borange\b|pwc|pricewaterhouse|deloitte|\bdhl\b|nestl[eé]|\badib\b"
+# companies whose jobs are starred and listed first, from any source (with every company in core.company)
+TARGET_COMPANIES =(r"vodafone|\b_?vois\b|\borange\b|pwc|pricewaterhouse|deloitte|\bdhl\b|nestl[eé]|\badib\b"
                     r"|abu dhabi islamic|\beg ?bank\b|egyptian gulf bank|etisalat|\be&|advansys|\bnawy\b"
-                    r"|alignerr|labelbox|crossover")
+                    r"|alignerr|labelbox|crossover|sumerge|finaira")
 
-# companies on Workable, read through its public widget API (the slug in apply.workable.com/<slug>)
-WORKABLE_ACCOUNTS = ["nawy-real-estate"]
+# The companies whose own career sites are read live in core.company: add them in the tracker
+# (Companies tab) or in sql/schema.sql. A Phenom site searches by keywords only, so each search
+# names a place.
+PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst")
+                   for where in ("Egypt", "Dubai", "Abu Dhabi", "Riyadh", "Jeddah", "Doha")]
+
+# Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and the job
+# pages its robots.txt allows (no ?keywords searches)
+TANQEEB_SITES = {"egypt": "Egypt", "uae": "UAE", "saudi": "Saudi Arabia", "qatar": "Qatar"}
+TANQEEB_PAGES = ["data-analyst-jobs", "python-developer-jobs"]
 
 
 def role_of(title: str) -> int | None:
     """The rank of the first role whose patterns all match the title, seniority aside."""
     t = title.lower()
+    if re.search(NOT_RELEVANT, t):
+        return None
     for rank, _, _, patterns in ROLES:
         if all(re.search(p, t) for p in patterns):
             return rank
