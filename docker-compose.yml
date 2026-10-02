@@ -1,32 +1,78 @@
-# Airflow for job_radar: one container running `airflow standalone` (LocalExecutor on SQLite).
+# job-radar: the warehouse (Postgres), Airflow (`airflow standalone`: LocalExecutor on SQLite, in one
+# container) and the tracker (Streamlit). Everything listens on 127.0.0.1 only.
 #
-#   docker compose up -d --build     # UI: http://127.0.0.1:8081, no login
-#   docker compose down              # stops it; the airflow-home volume (run history) stays
+#   docker compose up -d --build    # Airflow http://127.0.0.1:8081 (no login), tracker http://127.0.0.1:8501,
+#                                   # warehouse localhost:5433 (Power BI, psql)
+#   docker compose down             # stops everything; the volumes (warehouse, run history) stay
 #
-# Gmail settings come from .env (gitignored; see .env.example). Empty settings are fine: the run
-# then writes output/digest-<date>.html instead of emailing.
+# Settings come from .env (gitignored; see .env.example).
 
 name: job-radar
 
+x-job-env: &job-env
+  WAREHOUSE_HOST: warehouse
+  WAREHOUSE_PORT: "5432"
+  WAREHOUSE_PASSWORD: ${WAREHOUSE_PASSWORD:?set in .env}
+  GMAIL_USER: ${GMAIL_USER:-}
+  GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+  MAIL_TO: ${MAIL_TO:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  JOOBLE_API_KEY: ${JOOBLE_API_KEY:-}
+  MAILBOXES: ${MAILBOXES:-}
+  PYTHONUNBUFFERED: "1"
+
 services:
+  warehouse:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobradar
+      POSTGRES_PASSWORD: ${WAREHOUSE_PASSWORD:?set in .env}
+      POSTGRES_DB: jobradar
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - warehouse-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobradar -d jobradar"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   airflow:
     build: .
-    image: job-radar-airflow:3.3.2
+    image: job-radar:3.3.2
     command: standalone
     restart: unless-stopped
     environment:
+      <<: *job-env
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
-      PYTHONUNBUFFERED: "1"
-      GMAIL_USER: ${GMAIL_USER:-}
-      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
-      MAIL_TO: ${MAIL_TO:-}
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
       - airflow-home:/opt/airflow
       - ./dags:/opt/airflow/dags
       - .:/opt/job-radar
+    depends_on:
+      warehouse:
+        condition: service_healthy
+
+  tracker:
+    build: .
+    image: job-radar:3.3.2
+    entrypoint: /opt/job-radar-venv/bin/streamlit
+    command: run /opt/job-radar/tracker/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+    restart: unless-stopped
+    environment: *job-env
+    ports:
+      - "127.0.0.1:8501:8501"
+    volumes:
+      - .:/opt/job-radar
+    depends_on:
+      airflow:
+        condition: service_started
 
 volumes:
+  warehouse-data:
   airflow-home:
