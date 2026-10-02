@@ -17,14 +17,12 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
-from email.utils import parseaddr, parsedate_to_datetime
+from email.utils import parsedate_to_datetime
 
-import anthropic
 import requests
 from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 
-from . import ai
 from .config import HOURS_OLD, KEYWORDS, PLACES, REMOTE_OPEN_TO, ROLES, WORKABLE_ACCOUNTS, place_of, role_of
 
 PORTAL_FEED = "https://feashliaa.github.io/job-board-data/data/chunks"
@@ -165,30 +163,29 @@ def company_portals() -> list[dict]:
 
 
 def mailboxes(seen: set[str]) -> list[dict]:
-    """Job alerts (LinkedIn, Indeed, Wuzzuf, Bayt ...) and recruiter emails from your inboxes, over
-    IMAP and read-only: nothing is marked read, moved or deleted. Only an email whose sender or
-    subject looks like a job is opened, and only those go to Claude, which pulls the jobs out.
-    An email already read (its Message-ID in `seen`) is not read again.
+    """Job alerts (LinkedIn, Indeed, Wuzzuf, Bayt ...) from your inboxes, over IMAP and read-only:
+    nothing is marked read, moved or deleted, and nothing leaves the laptop. Only an email whose
+    sender or subject looks like a job is opened. An email already read (its Message-ID in `seen`)
+    is not read again.
 
     MAILBOXES in .env: address:app-password[:imap-host], comma-separated; the host is known for
-    Gmail, Yahoo, iCloud and Outlook addresses. A job without a link points to the sender."""
+    Gmail, Yahoo, iCloud and Outlook addresses."""
     accounts = [a.strip() for a in os.environ.get("MAILBOXES", "").split(",") if a.strip()]
-    if not (accounts and os.environ.get("ANTHROPIC_API_KEY")):
-        print("email: needs MAILBOXES and ANTHROPIC_API_KEY, skipped")
+    if not accounts:
+        print("email: no MAILBOXES, skipped")
         return []
-    client = anthropic.Anthropic()
     rows = []
     for account in accounts:
         address, password, *host = account.split(":")
         try:
-            rows += read_mailbox(client, address, password.replace(" ", ""),
+            rows += read_mailbox(address, password.replace(" ", ""),
                                  host[0] if host else IMAP_HOSTS[address.split("@")[-1].lower()], seen)
         except Exception as e:  # one mailbox down is a short day
             print(f"WARNING email {address}: {e!r}"[:300])
     return rows
 
 
-def read_mailbox(client: anthropic.Anthropic, address: str, password: str, host: str, seen: set[str]) -> list[dict]:
+def read_mailbox(address: str, password: str, host: str, seen: set[str]) -> list[dict]:
     rows = []
     with imaplib.IMAP4_SSL(host) as imap:
         imap.login(address, password)
@@ -203,36 +200,45 @@ def read_mailbox(client: anthropic.Anthropic, address: str, password: str, host:
                 continue
             msg = email.message_from_bytes(imap.uid("fetch", uid, "(BODY.PEEK[])")[1][0][1],
                                            policy=email.policy.default)
-            try:
-                jobs = ai.jobs_in_email(client, f"From: {h['From']}\nSubject: {h['Subject']}\n\n{email_text(msg)}")
-            except anthropic.APIError as e:
-                print(f"WARNING email {address} {h['Subject']}: {e!r}"[:300])
-                continue
-            sender = parseaddr(str(h["From"]))[1]
+            body = msg.get_body(preferencelist=("html",))
+            jobs = jobs_in_email(body.get_content()) if body else []
             posted = str(parsedate_to_datetime(str(h["Date"])).date()) if h["Date"] else None
             meta = {"mailbox": address, "message_id": message_id, "from": str(h["From"]), "subject": str(h["Subject"])}
-            for job in jobs:
-                if role_of(job.title):
-                    # an alert you subscribed to, or a recruiter writing to you, is in your region
-                    # unless its location says otherwise
-                    rows.append(row("email", place_of(job.location) or "Egypt", job.title, job.company,
-                                    job.location, canonical_url(job.url) or f"mailto:{sender}", posted, None,
-                                    {**meta, **job.model_dump()}))
+            for title, company, location, url in jobs:
+                # an alert you subscribed to is for your region unless its location says otherwise
+                rows.append(row("email", place_of(location) or "Egypt", title, company, location, url, posted,
+                                None, {**meta, "title": title, "company": company, "location": location, "url": url}))
             print(f"email {address}: {h['Subject']!s:.60} -> {len(jobs)} jobs")
     return rows
 
 
-def email_text(msg: email.message.EmailMessage) -> str:
-    """The email's text, each link written out after its words so Claude can return it."""
-    part = msg.get_body(preferencelist=("html", "plain"))
-    if part is None:
-        return ""
-    if part.get_content_type() != "text/html":
-        return part.get_content()
-    soup = BeautifulSoup(part.get_content(), "html.parser")
+def jobs_in_email(page: str) -> list[tuple[str, str, str, str]]:
+    """(title, company, location, url) of each link in a job email whose words are one of the roles.
+    Job alerts put the company and location on the line under the title ("Company · Location")."""
+    soup = BeautifulSoup(page, "html.parser")
+    links = []
     for a in soup.find_all("a", href=True):
-        a.replace_with(f"{a.get_text(' ', strip=True)} <{a['href']}>")
-    return soup.get_text("\n", strip=True)
+        links.append((a.get_text(" ", strip=True), a["href"]))
+        a.replace_with(f"\n@@{len(links) - 1}@@\n")
+    lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
+    jobs, urls = [], set()
+    for i, line in enumerate(lines):
+        link = re.fullmatch(r"@@(\d+)@@", line)
+        if not link:
+            continue
+        title, url = links[int(link.group(1))]
+        url = canonical_url(url)
+        if not role_of(title) or url in urls:
+            continue
+        urls.add(url)
+        after = lines[i + 1] if i + 1 < len(lines) else ""
+        if (next_link := re.fullmatch(r"@@(\d+)@@", after)):  # the company is a link of its own
+            after = links[int(next_link.group(1))][0]
+        company, location = (re.split(r"\s+[·•|–-]\s+", after, maxsplit=1) + [""])[:2]
+        if not location and i + 2 < len(lines) and not lines[i + 2].startswith("@@"):
+            location = lines[i + 2]  # the location on a line of its own
+        jobs.append((title, company if not role_of(company) else "", location, url))
+    return jobs
 
 
 def canonical_url(url: str) -> str:
