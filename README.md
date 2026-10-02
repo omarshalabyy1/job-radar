@@ -15,16 +15,17 @@ starred and listed first, from whichever source finds them.
 
 | Source | How |
 |---|---|
-| LinkedIn, Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy), as a guest |
+| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy), as a guest |
+| LinkedIn | your LinkedIn job-alert emails only: nothing ever contacts LinkedIn |
 | Himalayas, We Work Remotely | public search API, RSS feed |
 | 28,000+ company career pages on Greenhouse, Lever, Ashby, Workday, BambooHR, iCIMS, Paylocity | the daily crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) |
 | Companies on Workable (Nawy ...) | Workable's public API |
 | Your Gmail inboxes: job alerts from LinkedIn, Indeed, **Wuzzuf**, Bayt ... | IMAP, read-only, on your laptop: the job links are read from the alert emails |
 | Jooble (local Egyptian and Gulf boards) | official API, with a free key |
 
-**No ban risk to your accounts:** nothing logs in to a job site, so there is no account to ban.
-The worst a board can do is rate-limit your internet address for a while (LinkedIn answers HTTP
-429), which costs that board's results for that day only.
+**No ban risk to your accounts:** nothing logs in to a job site, and nothing contacts LinkedIn at
+all. The worst a board can do is rate-limit your internet address for a while (HTTP 429), which
+costs that board's results for that day only.
 
 **Wuzzuf** puts its site behind Cloudflare's bot check, which turns away scripts and headless
 browsers alike; getting past it would take bot-detection evasion, which this project does not do.
@@ -47,8 +48,8 @@ schema -> extract_boards, extract_portals, extract_email -> transform -> describ
 | | `core.skill` | the skills the demand report counts |
 | mart (gold) | `mart.job_status`, `mart.skill_demand`, `mart.jobs_daily` | views for the tracker and Power BI |
 
-- **describe** reads each new job's page for its description (schema.org JobPosting or LinkedIn's
-  public page).
+- **describe** reads each new job's page for its description (its schema.org JobPosting); never
+  a LinkedIn or Wuzzuf page.
 - **score** (optional, needs an Anthropic API key): Claude Haiku 4.5 rates each job 0-100 against
   your CV, with a one-line reason. Without a key the step is skipped and nothing else changes.
 - **email** sends the jobs not emailed yet, by role, target companies first, then by score.
@@ -61,7 +62,8 @@ schema -> extract_boards, extract_portals, extract_email -> transform -> describ
    daily email, your inboxes (`MAILBOXES`, one Gmail app password each), and optionally a Jooble
    key and an Anthropic key. Gmail app passwords: turn on 2-Step Verification, then
    https://myaccount.google.com/apppasswords. Your normal Gmail password does not work over IMAP.
-2. Turn on job alerts for your roles on Wuzzuf, LinkedIn, Indeed and Bayt, sent to those inboxes.
+2. Turn on job alerts for your roles on LinkedIn and Wuzzuf (their jobs come only from these
+   emails), and on Indeed and Bayt if you like, sent to those inboxes.
 3. `docker compose up -d --build`. Airflow is at http://127.0.0.1:8081; the DAG is on from the start,
    so press Trigger to run it now, or wait for 07:00.
 

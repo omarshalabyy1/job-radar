@@ -40,6 +40,8 @@ PLACE_PATTERNS = {
     "Qatar": r"qatar|doha",
 }
 REMOTE_OPEN_TO = r"worldwide|anywhere|global|emea|mena|africa|middle east|egypt"
+# job pages never fetched: LinkedIn (its jobs come only from your alert emails) and Wuzzuf (blocks scripts)
+NO_FETCH = r"linkedin\.com|wuzzuf\.net"
 
 # companies whose jobs are starred and listed first, from any source
 TARGET_COMPANIES = (r"vodafone|\b_?vois\b|\borange\b|pwc|pricewaterhouse|deloitte|\bdhl\b|nestl[eé]|\badib\b"

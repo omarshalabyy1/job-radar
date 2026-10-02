@@ -24,7 +24,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import ai, sources
-from .config import HOURS_OLD, ROLES, is_target, place_of, role_of, too_senior
+from .config import HOURS_OLD, NO_FETCH, ROLES, is_target, place_of, role_of, too_senior
 
 ROOT = Path(__file__).resolve().parent.parent
 DAYS = HOURS_OLD // 24
@@ -119,18 +119,18 @@ def transform(conn) -> None:
 
 
 def describe(conn) -> None:
-    """Read the page of each new job that came without a description: its schema.org JobPosting
-    (Greenhouse, Lever, Workday, Workable, LinkedIn's public page ...) or LinkedIn's description
-    block. LinkedIn 5 seconds apart; a board that answers 429 waits for the next run."""
+    """Read the page of each new job that came without a description, for its schema.org
+    JobPosting (Greenhouse, Lever, Workday, Workable ...); never a NO_FETCH page. A source that
+    answers 429 waits for the next run."""
     todo = conn.execute(
         "SELECT job_id, source, job_url FROM core.job WHERE description IS NULL AND described_at IS NULL"
-        " AND job_url LIKE 'http%%' AND first_seen >= current_date - %s ORDER BY role_rank, job_id LIMIT 300",
-        (DAYS,)).fetchall()
+        " AND job_url LIKE 'http%%' AND job_url !~ %s AND first_seen >= current_date - %s"
+        " ORDER BY role_rank, job_id LIMIT 300", (NO_FETCH, DAYS)).fetchall()
     limited, found = set(), 0
     for job_id, source, url in todo:
         if source in limited:
             continue
-        time.sleep(5 if source == "linkedin" else 1)
+        time.sleep(1)
         try:
             r = requests.get(url, headers=BROWSER, timeout=30)
         except requests.RequestException as e:
@@ -159,8 +159,7 @@ def page_description(page: bytes) -> str | None:
         for item in data if isinstance(data, list) else [data]:
             if isinstance(item, dict) and item.get("@type") == "JobPosting" and item.get("description"):
                 return BeautifulSoup(html.unescape(item["description"]), "html.parser").get_text(" ", strip=True)
-    block = soup.select_one(".show-more-less-html__markup, .description__text")
-    return block.get_text(" ", strip=True) if block else None
+    return None
 
 
 def score(conn) -> None:

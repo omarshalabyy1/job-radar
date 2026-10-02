@@ -55,19 +55,16 @@ def get(url: str, **params) -> requests.Response:
 
 
 def job_boards() -> list[dict]:
-    """LinkedIn, Indeed and Bayt through JobSpy: every role in every place, one board per call (one
-    board down is a short day), plus LinkedIn's remote jobs open to someone in Egypt."""
-    searches = [(place, location, country, False) for place, location, country in PLACES]
-    searches.append(("Remote", "Egypt", "egypt", True))
+    """Indeed and Bayt through JobSpy: every role in every place, one board per call (one board
+    down is a short day). LinkedIn jobs come only from your LinkedIn job-alert emails."""
     rows = []
     for _, label, term, _ in ROLES:
-        for place, location, country, remote in searches:
-            for site in ["linkedin"] if remote else ["linkedin", "indeed", "bayt"]:
+        for place, location, country in PLACES:
+            for site in ["indeed", "bayt"]:
                 time.sleep(5)
                 try:
                     df = scrape_jobs(site_name=site, search_term=term, location=location,
-                                     country_indeed=country, is_remote=remote,
-                                     hours_old=HOURS_OLD, results_wanted=30, verbose=0)
+                                     country_indeed=country, hours_old=HOURS_OLD, results_wanted=30, verbose=0)
                 except Exception as e:
                     print(f"WARNING {site} {label} / {place}: {e!r}"[:300])
                     continue
