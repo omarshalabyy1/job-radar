@@ -1,0 +1,32 @@
+# Airflow for job_radar: one container running `airflow standalone` (LocalExecutor on SQLite).
+#
+#   docker compose up -d --build     # UI: http://127.0.0.1:8081, no login
+#   docker compose down              # stops it; the airflow-home volume (run history) stays
+#
+# Gmail settings come from .env (gitignored; see .env.example). Empty settings are fine: the run
+# then writes output/digest-<date>.html instead of emailing.
+
+name: job-radar
+
+services:
+  airflow:
+    build: .
+    image: job-radar-airflow:3.3.2
+    command: standalone
+    restart: unless-stopped
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+      PYTHONUNBUFFERED: "1"
+      GMAIL_USER: ${GMAIL_USER:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      MAIL_TO: ${MAIL_TO:-}
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - airflow-home:/opt/airflow
+      - ./dags:/opt/airflow/dags
+      - .:/opt/job-radar
+
+volumes:
+  airflow-home:
