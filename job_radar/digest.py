@@ -112,10 +112,8 @@ def digest(jobs: list[dict], name: str) -> str:
     for j in jobs:
         j["employment"] = employment(j)
         j["level"], j["years"] = experience(j)
-    # fewest years first inside each level (a job that does not say sits with its level's usual
-    # years); stable, so the best match stays first among equals
-    usual = (0, EXPERIENCE["entry_max_years"] + 1, EXPERIENCE["senior_min_years"])
-    jobs = sorted(jobs, key=lambda j: (j["level"], usual[j["level"]] if j["years"] is None else j["years"]))
+    # entry and junior first, senior last; stable, so inside each level the best match stays first
+    jobs = sorted(jobs, key=lambda j: j["level"])
     places = sorted({j["place"] for j in jobs},
                     key=lambda p: PLACE_ORDER.index(p) if p in PLACE_ORDER else len(PLACE_ORDER))
     by_place = {place: [j for j in jobs if j["place"] == place] for place in places}

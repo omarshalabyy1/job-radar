@@ -1,5 +1,6 @@
 """What job_radar looks for, from settings.yaml: the roles in rank order, the places, your companies."""
 
+import functools
 import re
 from pathlib import Path
 
@@ -44,8 +45,10 @@ BAYT_PLACES = {"Egypt", "UAE", "Saudi Arabia", "Qatar", "Kuwait", "Bahrain", "Om
 # another code ("Toronto, ON, CA" is Canada); IN and DE are left out (India, Germany).
 US_CODES = (r"(?-i:\bUSA?\b)|(?-i:(?<!, [A-Z]{2}), (AL|AK|AZ|AR|CA|CO|CT|FL|GA|HI|ID|IL|IA|KS|KY|LA|ME|MD|MA|MI|MN"
             r"|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)$)")
-# a free-text location -> place, for the sources that do not search by place (first match wins)
-PLACE_PATTERNS = {place["name"]: words(place["words"]) + (f"|{US_CODES}" if place["name"] == "USA" else "")
+# a free-text location -> place, for the sources that do not search by place (first match wins);
+# compiled once, as place_of runs on every posting
+PLACE_PATTERNS = {place["name"]: re.compile(words(place["words"]) + (f"|{US_CODES}" if place["name"] == "USA" else ""),
+                                            re.I)
                   for place in SETTINGS["places"]}
 if HOME not in PLACE_PATTERNS:  # the Egypt email and the onsite rule go by this name
     raise ValueError(f"settings.yaml: keep a place named {HOME!r} in places")
@@ -54,6 +57,7 @@ REMOTE_OPEN_TO = r"worldwide|anywhere|global|emea|mena|africa|middle east|egypt"
 # job is dropped only when its location names another home city (no city: kept).
 CAIRO_GIZA = words(SETTINGS["onsite_areas"])
 OTHER_EGYPT = words(SETTINGS["other_home_cities"])
+HOME_AREAS = re.compile(f"{CAIRO_GIZA}|{OTHER_EGYPT}", re.I)  # any of them names home, for place_of
 REMOTE = words(SETTINGS["remote_words"])
 # a location or title saying one of these is not a remote job, whatever else it says
 NOT_REMOTE = r"hybrid|on-?site|in[- ]office|\b(not|non|no)[- ]remote"
@@ -96,19 +100,21 @@ def too_senior(title: str) -> bool:
     return re.search(TOO_SENIOR, title, re.I) is not None
 
 
+@functools.cache  # locations repeat ("Remote", "Cairo, Egypt"): each is worked out once per step
 def place_of(location: str) -> str | None:
     """Your home, a Gulf country, USA, Europe, Remote (open to Egypt), or None when out of scope. A
     remote job open worldwide is Remote; one tied to a country takes that country."""
-    if re.search(r"remote", location, re.I) and re.search(r"worldwide|anywhere|global", location, re.I):
+    remote = re.search(r"remote", location, re.I)
+    if remote and re.search(r"worldwide|anywhere|global", location, re.I):
         return "Remote"
     for place, pattern in PLACE_PATTERNS.items():
-        if re.search(pattern, location, re.I):
+        if pattern.search(location):
             return place
     # a home area or city alone ("Maadi", "Sheikh Zayed", "القاهرة"); after the other places, so
     # "Sheikh Zayed Road, Dubai" stays in the UAE
-    if re.search(f"{CAIRO_GIZA}|{OTHER_EGYPT}", location, re.I):
+    if HOME_AREAS.search(location):
         return HOME
-    if re.search(r"remote", location, re.I) and re.search(REMOTE_OPEN_TO, location, re.I):
+    if remote and re.search(REMOTE_OPEN_TO, location, re.I):
         return "Remote"
     return None
 
