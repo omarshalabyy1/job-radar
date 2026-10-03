@@ -2,8 +2,9 @@
 settings.yaml (schedule), Cairo time; as shipped:
 
     job_radar               1am, 7am, 11am, 6pm: schema -> extract_boards, extract_remote, extract_egypt,
-                            extract_workable, extract_companies, extract_portals, extract_email (side by
-                            side) -> transform -> describe -> match_skills -> export_career_ops
+                            extract_workable, extract_freehire, extract_companies, extract_portals,
+                            extract_email (side by side) -> transform -> describe -> match_skills
+                            -> export_career_ops
     job_radar_email_egypt   12pm and 7pm: your home's jobs (Egypt) not emailed yet
     job_radar_email_abroad  8am and 8pm: the jobs everywhere else (remote only: no hybrid, no onsite) not emailed yet
 
@@ -65,7 +66,7 @@ with DAG(
     default_args={"retries": 0, "execution_timeout": timedelta(seconds=170)},
 ):
     extracts = [step(name) for name in ("extract_boards", "extract_remote", "extract_egypt", "extract_workable",
-                                        "extract_companies", "extract_portals", "extract_email")]
+                                        "extract_freehire", "extract_companies", "extract_portals", "extract_email")]
     step("schema") >> extracts
     matched = step("match_skills", trigger_rule="all_done")
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=80)) >> matched

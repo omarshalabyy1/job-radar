@@ -174,6 +174,8 @@ that answers 429 Too Many Requests is left alone for as long as it asks, by ever
 | Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt site's IT, data, business analyst, Python and internship pages | 5 pages a run, 1 second apart |
 | Workable | its public job search, every company on it; remote only outside Egypt | one round a day: it allows few searches a day, and each covers the whole day |
 | Himalayas, We Work Remotely | public search API, RSS feed | 1 second between pages |
+| [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart (its robots.txt allows them) |
+| [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
 | Your companies | each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
 | Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
@@ -201,15 +203,15 @@ so this project stays non-commercial.
 ## Recommended GitHub projects
 
 From a search of 868 job-hunting repos (stars, last push, license, archived checked on 2026-10-02).
-**Used by job-radar:** JobSpy (a library), job-board-aggregator (its data), career-ops (the export),
-and the design of wuzzuf-etl-pipeline.
+**Used by job-radar:** JobSpy (a library), job-board-aggregator (its data), freehire (its public API at
+freehire.me, found through ai-job-search), career-ops (the export), and the design of wuzzuf-etl-pipeline.
 
 ### AI job agents that run inside your coding tool
 
 | Repo | ★ | What it does |
 |---|---|---|
 | [career-ops-hq/career-ops](https://github.com/career-ops-hq/career-ops) | 73.3k | Scans job boards, scores each job against your CV, tailors an ATS-friendly CV, tracks applications |
-| [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search) | 44.8k | Claude Code framework: rates postings, tailors CVs, writes cover letters |
+| [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search) | 44.9k | Claude Code framework: rates postings, tailors CVs and cover letters (LaTeX), preps interviews; reads freehire.me |
 | [pinloop-ai/pinloop-cli](https://github.com/pinloop-ai/pinloop-cli) | 546 | Job-board command-line tool for coding agents, refreshed hourly |
 | [vaibhavarora14/job-application-agent](https://github.com/vaibhavarora14/job-application-agent) | 154 | Agent skill that asks you to confirm every submission |
 

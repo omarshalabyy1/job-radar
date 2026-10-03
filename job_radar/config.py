@@ -85,6 +85,9 @@ PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst") for where
 TANQEEB_SITES = {"egypt": "Egypt"}
 TANQEEB_PAGES = ["it-jobs", "data-analyst-jobs", "business-analyst-jobs", "python-developer-jobs", "internship-jobs"]
 
+# Relomote's pages of remote jobs open to someone in Egypt, by field (its robots.txt allows them)
+RELOMOTE_PAGES = ["data-analytics-in-egypt", "engineering-development-in-egypt"]
+
 
 def role_of(title: str) -> int | None:
     """The rank of the first role whose patterns all match the title, seniority aside."""

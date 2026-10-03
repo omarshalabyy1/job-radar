@@ -30,7 +30,8 @@ from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 
 from .config import (BAYT_PLACES, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, ONSITE_PLACES, PHENOM_SEARCHES, PLACES,
-                     REMOTE_OPEN_TO, RESPECT_ROBOTS, ROLES, ROOT, TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
+                     RELOMOTE_PAGES, REMOTE_OPEN_TO, RESPECT_ROBOTS, ROLES, ROOT, TANQEEB_PAGES, TANQEEB_SITES,
+                     place_of, role_of)
 
 STARTED = time.monotonic()  # each step is its own process: its time budget counts from here
 
@@ -225,6 +226,75 @@ def weworkremotely() -> list[dict]:
         if posted >= since() and role_of(title) and re.search(REMOTE_OPEN_TO, f.get("region", ""), re.I):
             rows.append(row("weworkremotely", "Remote", title, company, f["region"], f["link"], posted,
                             f["description"], f))
+    return rows
+
+
+def relomote() -> list[dict]:
+    """Relomote: remote jobs from companies' own career pages, each checked for the countries it can
+    hire from. Its pages of data and engineering jobs open to Egypt (RELOMOTE_PAGES), newest first,
+    15 a page, until a page reaches past the window (about 3 pages a run); 1 second apart."""
+    rows = []
+    for name in RELOMOTE_PAGES:
+        for n in range(1, 11):
+            time.sleep(1)
+            try:
+                page = get(f"https://relomote.com/remote-jobs/{name}", **({"page": n} if n > 1 else {})).text
+            except Held as e:  # keep what the pages before it found
+                print(f"relomote: {e}")
+                return rows
+            cards, past_window = BeautifulSoup(page, "html.parser").find_all("article"), False
+            for card in cards:
+                link, stamp = card.find("a", href=re.compile(r"^/jobs/")), card.find("time")
+                if not (link and stamp and stamp.get("datetime")):
+                    continue
+                posted = stamp["datetime"][:10]
+                if posted < since():
+                    past_window = True
+                    continue
+                # the card's words: title, company, field, who it hires from ("Egypt", "Worldwide"), mode, salary, age
+                words = card.get_text("|", strip=True).split("|")
+                mode = next((w for w in words if w in ("Remote", "Hybrid", "On-site", "Onsite")), "")
+                where = words[words.index(mode) - 1] if mode else ""
+                companies = card.find_all("a", href=re.compile(r"^/companies/"))  # its logo, then its name
+                company = next((a.get_text(" ", strip=True) for a in companies if a.get_text(strip=True)), "")
+                title = words[0]  # the job link is an empty layer over the whole card
+                if role_of(title):
+                    rows.append(row("relomote", "Remote" if mode == "Remote" else None, title, company,
+                                    f"{where} ({mode})" if mode else where, f"https://relomote.com{link['href']}",
+                                    posted, None, {"card": card.get_text(" | ", strip=True)}))
+            if past_window or not cards:
+                break
+    return rows
+
+
+def freehire() -> list[dict]:
+    """freehire.me's public job API (no key; its robots.txt lets all but Googlebot use /api/): each
+    keyword, posted in the last day, remote anywhere and any job in Egypt, the 100 most relevant of
+    each with the full description. Only jobs it rates fresh: not old ones posted again, and not
+    falsely refreshed. 1 second apart."""
+    rows = []
+    for keyword in KEYWORDS:
+        for where in ({"work_mode": "remote"}, {"countries": "eg"}):
+            if time_left(EXTRACT_SECONDS) < 15:
+                print("freehire: time budget reached, the rest waits for the next run")
+                return rows
+            time.sleep(1)
+            try:
+                jobs = get("https://freehire.me/api/v1/agent/jobs/search", q=keyword, limit=100, posted_within_days=1,
+                           semantic_ratio=0, include_description="true", description_format="text",
+                           **where).json().get("data", [])
+            except Held as e:  # keep what the searches before it found
+                print(f"freehire: {e}")
+                return rows
+            for j in jobs:
+                reality, mode = j.get("reality") or {}, j.get("work_mode") or ""
+                place_text = "Worldwide" if "global" in (j.get("regions") or []) else j.get("location") or ""
+                location = f"{place_text} ({mode})" if mode else place_text
+                if (reality.get("class") == "fresh" and not reality.get("fake_freshness") and j.get("url")
+                        and role_of(j.get("title") or "") and place_of(location)):
+                    rows.append(row("freehire", "Remote" if mode == "remote" else None, j["title"], j.get("company"),
+                                    location, j["url"], (j.get("posted_at") or "")[:10] or None, j.get("description"),
+                                    {k: v for k, v in j.items() if k != "description"}))
     return rows
 
 
