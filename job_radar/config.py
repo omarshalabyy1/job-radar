@@ -36,8 +36,6 @@ ROLES = [
 KEYWORDS = ["data engineer", "analytics engineer", "ETL developer", "databricks", "AI engineer",
             "machine learning engineer", "NLP engineer", "LLM engineer", "generative AI", "data scientist",
             "BI developer", "power bi", "data analyst"]
-# broad queries for the boards that match words loosely (Wuzzuf): the title rules do the filtering
-BROAD_KEYWORDS = ["data", "AI", "machine learning", "NLP", "LLM", "business intelligence", "power bi", "analyst"]
 TOO_SENIOR =r"\b(senior|sr|lead|principal|staff|head|director|manager|vp|chief|architect)\b"
 # titles that are never yours, whatever else they say
 NOT_RELEVANT = (r"\b(data entry|mlops|llmops|devops|sre|site reliability|technician|teacher|tutor|instructor"
@@ -61,6 +59,9 @@ PLACE_PATTERNS = {
 REMOTE_OPEN_TO = r"worldwide|anywhere|global|emea|mena|africa|middle east|egypt"
 # job pages never fetched: LinkedIn (its jobs come only from your alert emails)
 NO_FETCH = r"linkedin\.com"
+# Your choice (2026-10-03): read public careers pages even when their robots.txt asks crawlers to
+# stay away (a few requests a run, no login). Pages behind a bot check are never read either way.
+RESPECT_ROBOTS = False
 
 # companies whose jobs are starred and listed first, from any source (with every company in core.company)
 TARGET_COMPANIES =(r"vodafone|\b_?vois\b|\borange\b|pwc|pricewaterhouse|deloitte|\bdhl\b|nestl[eé]|\badib\b"
@@ -76,7 +77,7 @@ PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst")
 # Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and the job
 # pages its robots.txt allows (no ?keywords searches)
 TANQEEB_SITES = {"egypt": "Egypt", "uae": "UAE", "saudi": "Saudi Arabia", "qatar": "Qatar"}
-TANQEEB_PAGES = ["data-analyst-jobs", "python-developer-jobs"]
+TANQEEB_PAGES = ["it-jobs", "data-analyst-jobs", "business-analyst-jobs", "python-developer-jobs", "internship-jobs"]
 
 
 def role_of(title: str) -> int | None:

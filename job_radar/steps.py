@@ -217,8 +217,31 @@ def match_skills(conn) -> None:
         "INSERT INTO core.job_skill (job_id, skill) SELECT j.job_id, s.skill FROM core.job j"
         " JOIN core.skill s ON j.title || ' ' || coalesce(j.description, '') ~* s.pattern"
         f" WHERE j.job_id IN ({window})", (DAYS,)).rowcount
+    conn.execute("DELETE FROM core.cv_skill")  # your CVs: few and small, matched again every run
+    conn.execute("INSERT INTO core.cv_skill (label, skill) SELECT c.label, s.skill FROM core.cv c"
+                 " JOIN core.skill s ON c.text ~* s.pattern")
     conn.commit()
     print(f"match_skills: {matched} skill matches")
+
+
+def export_career_ops(conn) -> None:
+    """Hand the window's best matches to career-ops (github.com/career-ops-hq/career-ops), which
+    scores them against your CV and tailors it when you run it in Claude Code: writes
+    output/career-ops/pipeline.md (one job link per line, best first) and cv.md (your newest CV).
+    Copy both into your career-ops folder (data/pipeline.md, cv.md)."""
+    jobs = conn.execute(
+        "SELECT job_url, title, company, place, skill_matches FROM mart.job_status"
+        " WHERE first_seen >= current_date - %s AND skill_matches >= 3 AND status NOT IN ('ignored', 'rejected')"
+        " ORDER BY role_rank, target_company DESC, skill_matches DESC LIMIT 25", (DAYS,)).fetchall()
+    folder = ROOT / "output" / "career-ops"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "pipeline.md").write_text(
+        "# Pipeline\n\n" + "".join(f"- [ ] {url} | {company} | {title} | {place} | {skills} of your skills\n"
+                                   for url, title, company, place, skills in jobs), encoding="utf-8")
+    cv = conn.execute("SELECT text FROM core.cv ORDER BY uploaded_at DESC LIMIT 1").fetchone()
+    if cv:
+        (folder / "cv.md").write_text(cv[0], encoding="utf-8")
+    print(f"export_career_ops: {len(jobs)} jobs{' and your CV' if cv else ''} in {folder}")
 
 
 def page_description(page: bytes) -> str | None:
@@ -272,6 +295,8 @@ def job_card(j: dict) -> str:
     skills = [s for s in (j["skills_matched"] or "").split(", ") if s]
     star = "⭐ " if j["target_company"] else ""
     posted = badge(f"posted {j['date_posted']:%d %b}", "#334155", "#f1f5f9") if j["date_posted"] else ""
+    if j.get("cv_coverage") is not None:
+        posted += badge(f"your CV covers {j['cv_coverage']:.0f}%", "#5b21b6", "#ede9fe")
     meta =" · ".join(html.escape(str(x)) for x in (j["company"], j["location"] or j["place"]) if x)
     skill_line = ("".join(badge(s, "#065f46", "#d1fae5") for s in skills[:10])
                   + (badge(f"+{len(skills) - 10} more", "#065f46", "#ecfdf5") if len(skills) > 10 else "")

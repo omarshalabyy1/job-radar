@@ -1,7 +1,7 @@
 """job_radar: every 6 hours (01:00, 07:00, 13:00, 19:00 Cairo time), find the new jobs, rank them, email them.
 
     schema -> extract_boards, extract_remote, extract_egypt, extract_companies, extract_portals,
-              extract_email (side by side) -> transform -> describe -> match_skills -> email
+              extract_email (side by side) -> transform -> describe -> match_skills -> export_career_ops, email
 
 Each task is one step of `python -m job_radar`, run from the job_radar virtual environment. The
 extract tasks run in parallel, so a run takes about as long as its slowest source.
@@ -45,5 +45,6 @@ with DAG(
     extracts = [step(name) for name in ("extract_boards", "extract_remote", "extract_egypt", "extract_companies",
                                         "extract_portals", "extract_email")]
     step("schema") >> extracts
-    extracts >> step("transform", trigger_rule="all_done") >> step("describe") \
-        >> step("match_skills", trigger_rule="all_done") >> step("email", trigger_rule="all_done")
+    matched = step("match_skills", trigger_rule="all_done")
+    extracts >> step("transform", trigger_rule="all_done") >> step("describe") >> matched
+    matched >> [step("export_career_ops"), step("email")]

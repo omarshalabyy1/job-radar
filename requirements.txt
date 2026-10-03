@@ -3,6 +3,7 @@ beautifulsoup4
 pandas
 playwright
 psycopg[binary]
+pypdf
 python-dotenv
 requests
 streamlit

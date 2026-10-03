@@ -98,8 +98,47 @@ INSERT INTO core.company (company, careers_url) VALUES
     ('e& Egypt', 'https://www.eand.com.eg/careers'),
     ('ADIB', NULL), ('EG Bank', NULL), ('Etisalat', NULL), ('Swvl', NULL), ('MNT-Halan', NULL), ('ITWorx', NULL),
     ('Trella', NULL), ('Raya', NULL), ('Careem', NULL), ('noon', NULL), ('Elmenus', NULL), ('Vezeeta', NULL),
-    ('Sylndr', NULL), ('Yodawy', NULL), ('Brimore', NULL), ('Property Finder', NULL)
+    ('Sylndr', NULL), ('Yodawy', NULL), ('Brimore', NULL), ('Property Finder', NULL),
+    -- the same sectors as your list, starred from any source:
+    -- telecom
+    ('Telecom Egypt', NULL), ('Ericsson', NULL), ('Nokia', NULL), ('Huawei', NULL), ('stc', NULL), ('Zain', NULL),
+    ('Ooredoo', NULL),
+    -- Big 4, consulting and IT services
+    ('KPMG', NULL), ('Accenture', NULL), ('McKinsey', NULL), ('BCG', NULL), ('Bain', NULL), ('Capgemini', NULL),
+    ('IBM', NULL), ('Microsoft', NULL), ('Oracle', NULL), ('SAP', NULL), ('Dell', NULL), ('Valeo', NULL),
+    ('Teleperformance', NULL), ('Concentrix', NULL), ('Sutherland', NULL), ('ITIDA', NULL), ('Link Development', NULL),
+    ('Ejada', NULL), ('Intercom', NULL), ('Andersen', NULL), ('Grant Thornton', NULL), ('BDO', NULL),
+    -- logistics
+    ('Aramex', NULL), ('FedEx', NULL), ('UPS', NULL), ('Maersk', NULL), ('DP World', NULL), ('Bosta', NULL), ('Mylerz', NULL),
+    -- FMCG
+    ('PepsiCo', NULL), ('Unilever', NULL), ('Procter & Gamble', NULL), ('Coca-Cola', NULL), ('Mondelez', NULL),
+    ('Danone', NULL), ('Edita', NULL), ('Juhayna', NULL), ('Mars', NULL), ('Henkel', NULL), ('L''Oréal', NULL),
+    -- banking and financial services
+    ('National Bank of Egypt', NULL), ('Banque Misr', NULL), ('QNB', NULL), ('HSBC', NULL), ('Emirates NBD', NULL),
+    ('AAIB', NULL), ('Alexbank', NULL), ('Banque du Caire', NULL), ('Mashreq', NULL), ('First Abu Dhabi Bank', NULL),
+    ('Kuwait Finance House', NULL), ('Al Rajhi', NULL), ('Visa', NULL), ('Mastercard', NULL), ('EFG Hermes', NULL),
+    -- real estate and proptech
+    ('Palm Hills', NULL), ('SODIC', NULL), ('Emaar', NULL), ('Ora Developers', NULL), ('Mountain View', NULL),
+    ('Talaat Moustafa', NULL), ('Aqarmap', NULL), ('Hassan Allam', NULL),
+    -- fintech, AI and data
+    ('Tamara', NULL), ('Sympl', NULL), ('MoneyFellows', NULL), ('Khazna', NULL),
+    ('Valify', NULL), ('Paysky', NULL), ('Geidea', NULL), ('Halan', NULL), ('Rology', NULL), ('Intelligent Systems', NULL)
 ON CONFLICT (company) DO NOTHING;
+
+-- Your CVs, uploaded in the tracker (CV tab): their words are matched against each job's skills,
+-- and the newest is exported to career-ops.
+CREATE TABLE IF NOT EXISTS core.cv (
+    label       text PRIMARY KEY,           -- e.g. 'AI & Data Engineer'
+    filename    text NOT NULL,
+    text        text NOT NULL,
+    uploaded_at timestamptz NOT NULL DEFAULT now()
+);
+-- Which of the skills each CV shows, stored by match_skills.
+CREATE TABLE IF NOT EXISTS core.cv_skill (
+    label text NOT NULL REFERENCES core.cv ON DELETE CASCADE,
+    skill text NOT NULL,
+    PRIMARY KEY (label, skill)
+);
 
 CREATE TABLE IF NOT EXISTS core.application (
     job_id     bigint      PRIMARY KEY REFERENCES core.job,
@@ -183,15 +222,22 @@ CREATE TABLE IF NOT EXISTS core.job_skill (
 -- Views hold no data: dropped and created again on every run, so a change here always applies.
 DROP VIEW IF EXISTS mart.job_status, mart.skill_demand, mart.jobs_daily, mart.job_skill;
 
--- Every job with how many of your skills it asks for, and your status ('new' until you set one).
+-- Every job with how many of your skills it asks for, how much of that your best CV shows, and
+-- your status ('new' until you set one).
 CREATE VIEW mart.job_status AS
 SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j.source, j.job_url,
        j.target_company, coalesce(k.skill_matches, 0) AS skill_matches, k.skills_matched,
        j.description IS NOT NULL AS described, j.date_posted, j.first_seen, j.emailed_at,
-       coalesce(a.status, 'new') AS status, a.note, a.updated_at
+       coalesce(a.status, 'new') AS status, a.note, a.updated_at, v.cv_label, v.cv_coverage
 FROM core.job j
 LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
            FROM core.job_skill GROUP BY job_id) k USING (job_id)
+LEFT JOIN (SELECT DISTINCT ON (job_id) job_id, label AS cv_label, cv_coverage
+           FROM (SELECT k.job_id, c.label, round(100.0 * count(cs.skill) / count(*)) AS cv_coverage
+                 FROM core.job_skill k CROSS JOIN core.cv c
+                 LEFT JOIN core.cv_skill cs ON cs.label = c.label AND cs.skill = k.skill
+                 GROUP BY k.job_id, c.label) per_cv
+           ORDER BY job_id, cv_coverage DESC) v USING (job_id)
 LEFT JOIN core.application a USING (job_id);
 
 -- How many of the last 90 days' described jobs of each role ask for each of your skills.

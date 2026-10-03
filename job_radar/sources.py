@@ -26,8 +26,8 @@ import requests
 from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 
-from .config import (BROAD_KEYWORDS, HOURS_OLD, KEYWORDS, PHENOM_SEARCHES, PLACES, REMOTE_OPEN_TO, ROLES, TANQEEB_PAGES,
-                     TANQEEB_SITES, place_of, role_of)
+from .config import (HOURS_OLD, KEYWORDS, PHENOM_SEARCHES, PLACES, REMOTE_OPEN_TO, RESPECT_ROBOTS, ROLES,
+                     TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
 
 PORTAL_FEED = "https://feashliaa.github.io/job-board-data/data/chunks"
 IMAP_HOSTS = {"gmail.com": "imap.gmail.com", "googlemail.com": "imap.gmail.com",
@@ -183,23 +183,23 @@ def company_portals() -> list[dict]:
 
 def wuzzuf() -> list[dict]:
     """Wuzzuf, through the JSON API its own web app calls (robots.txt allows it; only its search
-    page sits behind Cloudflare's challenge, and this does not touch it): each keyword posted in
-    the last 24 hours, then the jobs' details, 20 per call."""
+    page sits behind Cloudflare's challenge, and this does not touch it): every job posted in the
+    last 24 hours, all of Egypt, all companies, 50 a page; then their details, 20 per call. The
+    title rules keep yours."""
     api = {**BROWSER, "Content-Type": "application/vnd.api+json", "Accept": "application/vnd.api+json"}
     companies: dict[str, str] = {}
-    for keyword in BROAD_KEYWORDS:
-        start, total = 0, 1
-        while start < total:
-            body = {"startIndex": start, "pageSize": 50, "longitude": "0", "latitude": "0", "query": keyword,
-                    "searchFilters": {"post_date": ["within_24_hours"]}}
-            r = requests.post("https://wuzzuf.net/api/search/job", data=json.dumps(body), headers=api, timeout=30)
-            r.raise_for_status()
-            found = r.json()
-            for hit in found.get("data", []):
-                fields = {f["name"]: f["value"] for f in hit["attributes"].get("computedFields", [])}
-                companies.setdefault(hit["id"], (fields.get("company_name") or [""])[0].strip())
-            start, total = start + 50, min(found.get("meta", {}).get("totalResultsCount", 0), 500)
-            time.sleep(1)
+    start, total = 0, 1
+    while start < total:
+        body = {"startIndex": start, "pageSize": 50, "longitude": "0", "latitude": "0", "query": "",
+                "searchFilters": {"post_date": ["within_24_hours"]}}
+        r = requests.post("https://wuzzuf.net/api/search/job", data=json.dumps(body), headers=api, timeout=30)
+        r.raise_for_status()
+        found = r.json()
+        for hit in found.get("data", []):
+            fields = {f["name"]: f["value"] for f in hit["attributes"].get("computedFields", [])}
+            companies.setdefault(hit["id"], (fields.get("company_name") or [""])[0].strip())
+        start, total = start + 50, min(found.get("meta", {}).get("totalResultsCount", 0), 2000)
+        time.sleep(1)
     ids, rows = list(companies), []
     for i in range(0, len(ids), 20):
         for job in requests.get("https://wuzzuf.net/api/job", params={"filter[other][ids]": ",".join(ids[i:i + 20])},
@@ -298,7 +298,7 @@ def detect(url: str) -> tuple[str, str | None, str | None]:
                      .text.splitlines())
     except requests.RequestException:
         pass
-    if not robots.can_fetch("*", url):
+    if RESPECT_ROBOTS and not robots.can_fetch("*", url):
         return "forbidden", None, "its robots.txt forbids reading it"
     try:
         r = requests.get(url, headers=BROWSER, timeout=30)

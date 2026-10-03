@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
+from pypdf import PdfReader
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -28,8 +29,8 @@ def query(sql: str) -> pd.DataFrame:
 st.set_page_config(page_title="Job tracker", page_icon=":material/work:", layout="wide")
 st.title("Job tracker")
 
-jobs = query("SELECT job_id, skill_matches, target_company, title, company, role, place, source, status, note,"
-             " first_seen, job_url, skills_matched FROM mart.job_status"
+jobs = query("SELECT job_id, skill_matches, cv_coverage, target_company, title, company, role, place, source, status,"
+             " note, first_seen, job_url, skills_matched FROM mart.job_status"
              " ORDER BY role_rank, target_company DESC, skill_matches DESC, first_seen DESC")
 
 with st.sidebar:
@@ -49,7 +50,7 @@ counts = jobs["status"].value_counts()
 for column, status in zip(st.columns(5), ["new", "saved", "applied", "interview", "offer"]):
     column.metric(status.title(), int(counts.get(status, 0)))
 
-jobs_tab, skills_tab, companies_tab = st.tabs(["Jobs", "Skills in demand", "Companies"])
+jobs_tab, skills_tab, companies_tab, cv_tab = st.tabs(["Jobs", "Skills in demand", "Companies", "CV"])
 
 with jobs_tab:
     edited = st.data_editor(
@@ -58,6 +59,8 @@ with jobs_tab:
         column_config={
             "job_id": None,
             "skill_matches": st.column_config.NumberColumn("Skills", help="How many of your skills the job asks for"),
+            "cv_coverage": st.column_config.ProgressColumn("CV covers", min_value=0, max_value=100, format="%d%%",
+                                                           help="How much of what the job asks for your best CV shows"),
             "target_company": st.column_config.CheckboxColumn("Target"),
             "status": st.column_config.SelectboxColumn("Status", options=STATUSES, required=True),
             "job_url": st.column_config.LinkColumn("Link", display_text="Open"),
@@ -112,4 +115,29 @@ with companies_tab:
     if st.button("Remove", disabled=not gone):
         with connect() as conn:
             conn.execute("DELETE FROM core.company WHERE company = ANY(%s)", (gone,))
+        st.rerun()
+
+with cv_tab:
+    st.caption("Upload your CV as a PDF. The next run shows, for every job, how much of what it asks for "
+               "your CV covers, and hands your newest CV to the career-ops export. It stays in your warehouse.")
+    with st.form("add_cv", clear_on_submit=True):
+        label = st.text_input("Label", value="AI & Data Engineer")
+        pdf = st.file_uploader("CV (PDF)", type=["pdf"])
+        if st.form_submit_button("Upload", type="primary") and pdf and label.strip():
+            text = "\n".join(page.extract_text() or "" for page in PdfReader(pdf).pages)
+            if not text.strip():
+                st.error("No text found in this PDF (a scanned image?): export it from Word or Google Docs as PDF.")
+            else:
+                with connect() as conn:
+                    conn.execute("INSERT INTO core.cv (label, filename, text) VALUES (%s, %s, %s) ON CONFLICT (label)"
+                                 " DO UPDATE SET filename = EXCLUDED.filename, text = EXCLUDED.text, uploaded_at = now()",
+                                 (label.strip(), pdf.name, text))
+                st.rerun()
+    cvs = query("SELECT label, filename, length(text) AS characters, uploaded_at FROM core.cv ORDER BY uploaded_at DESC")
+    st.dataframe(cvs, hide_index=True, column_config={
+        "uploaded_at": st.column_config.DatetimeColumn("Uploaded", format="D MMM, HH:mm")})
+    drop = st.multiselect("Remove CVs", cvs["label"])
+    if st.button("Remove CVs", disabled=not drop):
+        with connect() as conn:
+            conn.execute("DELETE FROM core.cv WHERE label = ANY(%s)", (drop,))
         st.rerun()
