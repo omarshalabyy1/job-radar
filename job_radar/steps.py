@@ -18,7 +18,6 @@ import socket
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from urllib.parse import urlsplit
 
 import requests
@@ -27,11 +26,10 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import sources
-from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOME, HOURS_OLD, NO_FETCH, ROLE_LABEL, SETTINGS, in_reach,
-                     is_target, place_of, role_of, too_senior)
+from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOME, HOURS_OLD, NO_FETCH, ROLE_LABEL, ROOT, SETTINGS,
+                     in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
 
-ROOT = Path(__file__).resolve().parent.parent
 DAYS = HOURS_OLD // 24
 
 
@@ -40,7 +38,8 @@ def schema(conn) -> None:
     (companies), so a company removed there is removed here. A changed link is read and its
     platform detected again."""
     conn.execute((ROOT / "sql" / "schema.sql").read_text(encoding="utf-8"))
-    conn.execute("DELETE FROM core.company WHERE company <> ALL(%s)", ([c["name"] for c in SETTINGS["companies"]],))
+    companies = SETTINGS.get("companies") or []  # an empty "companies:" is no companies
+    conn.execute("DELETE FROM core.company WHERE company <> ALL(%s)", ([c["name"] for c in companies],))
     with conn.cursor() as cur:
         cur.executemany("""
             INSERT INTO core.company AS c (company, careers_url, starred) VALUES (%(name)s, %(link)s, %(starred)s)
@@ -48,8 +47,9 @@ def schema(conn) -> None:
                 careers_url = EXCLUDED.careers_url, starred = EXCLUDED.starred,
                 platform   = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.platform END,
                 api        = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.api END,
+                note       = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.note END,
                 checked_at = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.checked_at END""",
-            [{"name": c["name"], "link": c.get("link"), "starred": c.get("starred", True)} for c in SETTINGS["companies"]])
+            [{"name": c["name"], "link": c.get("link"), "starred": c.get("starred", True)} for c in companies])
     conn.commit()
 
 
@@ -173,7 +173,8 @@ def job_key(title: str, company: str, job_url: str) -> str:
 def transform(conn) -> None:
     """raw -> core.job: the window's postings with a role, not above senior, in a place in scope and
     in reach (remote, or onsite/hybrid in Cairo or Giza), one row per job (job_key: the same job on
-    several boards, or reposted, is one job). Re-running it changes nothing."""
+    several boards, or reposted, is one job). A job of the window not emailed yet that no longer
+    passes the rules (they changed) is removed. Re-running it changes nothing."""
     postings = conn.cursor(row_factory=dict_row).execute(
         "SELECT run_date, source, searched_for, title, company, location, job_url, date_posted, description,"
         " payload->>'is_remote' = 'true' AS is_remote FROM raw.job_posting WHERE run_date >= current_date - %s"
@@ -192,7 +193,7 @@ def transform(conn) -> None:
         # whose place none of them gives (only job alerts get this far) is "Unknown location"
         place = p["searched_for"] or place_of(p["location"] or "") or place_of(p["title"] or "") or "Unknown location"
         if (not (rank and place and p["job_url"]) or too_senior(p["title"])
-                or not in_reach(place, p["location"] or "", p["title"], bool(p["is_remote"]))):
+                or not in_reach(place, p["location"] or "", p["title"], bool(p["is_remote"]), p["description"] or "")):
             continue
         key = job_key(p["title"], p["company"], p["job_url"])
         job = jobs.setdefault(key, {
@@ -203,8 +204,9 @@ def transform(conn) -> None:
                        or letters(p["company"]) in short),
             "description": p["description"], "first_seen": p["run_date"]})
         job["description"] = job["description"] or p["description"]
-        if place == "Remote":  # found by a remote search too: it is a remote job
-            job["place"] = "Remote"
+        if place == "Remote" and job["place"] != "Remote":  # found by a remote search too: a remote
+            # job, shown with that remote listing's location and link
+            job.update(place="Remote", location=p["location"], source=p["source"], job_url=p["job_url"])
     with conn.cursor() as cur:
         cur.executemany("""
             INSERT INTO core.job AS j (job_key, title, company, location, place, source, job_url, role_rank, role,
@@ -214,10 +216,17 @@ def transform(conn) -> None:
             ON CONFLICT (job_key) DO UPDATE SET
                 description = coalesce(j.description, EXCLUDED.description),
                 target_company = j.target_company OR EXCLUDED.target_company,
-                place = CASE WHEN EXCLUDED.place = 'Remote' THEN 'Remote' ELSE j.place END""",
+                place = CASE WHEN EXCLUDED.place = 'Remote' THEN 'Remote' ELSE j.place END,
+                location = CASE WHEN EXCLUDED.place = 'Remote' THEN EXCLUDED.location ELSE j.location END,
+                source = CASE WHEN EXCLUDED.place = 'Remote' THEN EXCLUDED.source ELSE j.source END,
+                job_url = CASE WHEN EXCLUDED.place = 'Remote' THEN EXCLUDED.job_url ELSE j.job_url END""",
             list(jobs.values()))
+        cur.execute("DELETE FROM core.job j WHERE first_seen >= current_date - %s AND emailed_at IS NULL"
+                    " AND job_key <> ALL(%s) AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
+                    (DAYS, list(jobs)))
+        dropped = cur.rowcount
     conn.commit()
-    print(f"transform: {len(postings)} postings -> {len(jobs)} jobs in scope")
+    print(f"transform: {len(postings)} postings -> {len(jobs)} jobs in scope, {dropped} no longer in scope removed")
 
 
 def describe(conn) -> None:
@@ -322,7 +331,7 @@ def email(conn, home: bool) -> None:
     """Email the window's jobs at home (or outside it) not emailed yet, by place, experience, role
     and employment type, best first in each: target companies, then how many of your skills they
     ask for; nothing when there is no new job. Each job is marked emailed, so it is never sent
-    twice. Without Gmail settings, write output/digest-<date>.html instead and mark nothing."""
+    twice. Without Gmail settings, write it to output/ instead and mark nothing."""
     name = HOME if home else f"Outside {HOME}"
     jobs = conn.cursor(row_factory=dict_row).execute(
         "SELECT s.*, j.description, r.payload->>'job_type' AS job_type FROM mart.job_status s"
@@ -333,6 +342,6 @@ def email(conn, home: bool) -> None:
     if not jobs:
         print(f"email {name}: no new jobs, nothing sent")
         return
-    if send(digest(jobs, name), subject(jobs, name)):
+    if send(digest(jobs, name), subject(jobs, name), name):
         conn.execute("UPDATE core.job SET emailed_at = now() WHERE job_id = ANY(%s)", ([j["job_id"] for j in jobs],))
         conn.commit()

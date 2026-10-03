@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS core.job (
     company        text     NOT NULL,
     location       text     NOT NULL,
     place          text     NOT NULL,         -- a place in settings.yaml, Remote or Unknown location
-    source         text     NOT NULL,         -- the first source that found it
+    source         text     NOT NULL,         -- the first source that found it (a remote job: its remote listing)
     job_url        text     NOT NULL,
     role_rank      smallint NOT NULL,         -- the role's position in settings.yaml (1 = first)
     role           text     NOT NULL,
@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS core.company (
     added_at    timestamptz NOT NULL DEFAULT now(),
     starred     boolean NOT NULL DEFAULT true  -- false: its site is read, its jobs are not starred
 );
+-- a warehouse made before the column existed gets it (CREATE TABLE IF NOT EXISTS leaves it as it is)
+ALTER TABLE core.company ADD COLUMN IF NOT EXISTS starred boolean NOT NULL DEFAULT true;
 
 -- Your CVs, uploaded in the tracker (CV tab): their words are matched against each job's skills,
 -- and the newest is exported to career-ops.

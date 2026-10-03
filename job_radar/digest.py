@@ -7,13 +7,10 @@ import html
 import os
 import re
 import smtplib
-from datetime import date
+from datetime import date, datetime
 from email.message import EmailMessage
-from pathlib import Path
 
-from .config import EXPERIENCE, HOME, PLACES, ROLE_LABEL, SCHEDULE, words
-
-ROOT = Path(__file__).resolve().parent.parent
+from .config import EXPERIENCE, HOME, PLACES, ROLE_LABEL, ROOT, SCHEDULE, words
 
 
 def subject(jobs: list[dict], name: str) -> str:
@@ -24,8 +21,8 @@ def subject(jobs: list[dict], name: str) -> str:
 
 # The email is plain HTML with inline styles only, the one form every mail client (Gmail first)
 # shows as designed: a header with the numbers, then a section per place, in it one per role in
-# your order, in that one per employment type, one card per job. Cards stop at EMAIL_BYTES, so the
-# email stays under Gmail's ~100 KB clip; the rest are a link away in the tracker.
+# your order, in that one per employment type, one card per job. The whole email stops at
+# EMAIL_BYTES (UTF-8), so it stays under Gmail's ~100 KB clip; the rest are a link away in the tracker.
 EMAIL_BYTES = 70_000
 PLACE_ORDER = list(dict.fromkeys([HOME, "Remote", *(place for place, _, _ in PLACES)]))
 EMPLOYMENT = ["Full-time", "Part-time", "Contract", "Freelance"]
@@ -111,6 +108,7 @@ def digest(jobs: list[dict], name: str) -> str:
     header with one summary line and a chip per place, then a band per place (home first), in it
     a section per experience level (entry and junior, mid, senior: the further you scroll, the more
     a job asks for), a heading per role, a job-type line only when a role mixes types, and the cards."""
+    top = jobs[0]  # the best match: the jobs come best first
     for j in jobs:
         j["employment"] = employment(j)
         j["level"], j["years"] = experience(j)
@@ -123,67 +121,51 @@ def digest(jobs: list[dict], name: str) -> str:
     by_place = {place: [j for j in jobs if j["place"] == place] for place in places}
     starred = sum(j["target_company"] for j in jobs)
     summary = f"{len(jobs)} new job{'s' * (len(jobs) != 1)}{f' · ⭐ {starred} at your companies' if starred else ''}"
-    first = by_place[places[0]][0]
     # the inbox preview line under the subject
-    preheader = f"{summary} · top: {first['title']} at {first['company']}"
+    preheader = f"{summary} · top: {top['title']} at {top['company']}"
     chips = "".join(f'<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 10px;border-radius:12px;'
                     f'background:#184f95;font-size:12px;color:#cde2fb">{html.escape(place)} '
                     f'<b style="color:#ffffff">{len(group)}</b></span>' for place, group in by_place.items()
                     ) if len(by_place) > 1 else ""  # one place (the home email): the title already names it
     more = (f'<a href="http://127.0.0.1:8501" style="color:{LINK};text-decoration:none">in your tracker →</a>')
-    sections = []
+    parts: list[tuple[str, bool]] = []  # (HTML, is a job card), in reading order
     for place, in_place in by_place.items():
         if len(by_place) > 1:
-            sections.append(
+            parts.append((
                 f'<tr><td style="padding:16px 20px 14px;background:{TINT};border-top:1px solid {LINE}">'
                 f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
                 f'<td style="font-size:20px;line-height:26px;font-weight:700;color:{INK}">{html.escape(place)}</td>'
                 f'<td align="right" style="font-size:13px;color:{INK2};white-space:nowrap">{len(in_place)} '
-                f'job{"s" * (len(in_place) != 1)}</td></tr></table></td></tr>')
+                f'job{"s" * (len(in_place) != 1)}</td></tr></table></td></tr>', False))
         for lvl, level_name in enumerate(LEVELS):
             in_level = [j for j in in_place if j["level"] == lvl]
             if not in_level:
                 continue
-            sections.append(
+            parts.append((
                 f'<tr><td style="padding:22px 20px 6px;border-bottom:2px solid {SHELL}"><table role="presentation" '
                 f'width="100%" cellpadding="0" cellspacing="0"><tr><td style="font-size:16px;line-height:22px;'
                 f'font-weight:700;color:{SHELL}">{html.escape(level_name)}</td><td align="right" style="font-size:13px;'
-                f'color:{INK2}">{len(in_level)}</td></tr></table></td></tr>')
+                f'color:{INK2}">{len(in_level)}</td></tr></table></td></tr>', False))
             for rank, label in ROLE_LABEL.items():
                 in_role = [j for j in in_level if j["role_rank"] == rank]
                 if not in_role:
                     continue
-                sections.append(
+                parts.append((
                     f'<tr><td style="padding:16px 20px 8px"><table role="presentation" width="100%" cellpadding="0" '
                     f'cellspacing="0"><tr><td style="font-size:12px;font-weight:700;letter-spacing:.6px;color:{LINK}">'
                     f'{html.escape(label.upper())}</td><td align="right" style="font-size:12px;color:{INK2}">{len(in_role)}'
-                    f'</td></tr></table></td></tr>')
-                if sum(map(len, sections)) >= EMAIL_BYTES:  # no room left: one line for the whole role
-                    counts = " · ".join(f"{kind} {n}" for kind in EMPLOYMENT
-                                        if (n := sum(j["employment"] == kind for j in in_role)))
-                    sections.append(f'<tr><td style="padding:0 20px 14px;font-size:13px;color:{INK2}">{counts} · {more}'
-                                    f'</td></tr>')
-                    continue
+                    f'</td></tr></table></td></tr>', False))
                 mixed = len({j["employment"] for j in in_role}) > 1
                 for kind in EMPLOYMENT:
                     group = [j for j in in_role if j["employment"] == kind]
                     if not group:
                         continue
-                    # cards stop at EMAIL_BYTES, the rest wait in the tracker
-                    cards = []
-                    for j in group:
-                        if sum(map(len, sections)) + sum(map(len, cards)) >= EMAIL_BYTES:
-                            break
-                        cards.append(job_card(j))
-                    shown = group[:len(cards)]
-                    sections.append(
-                        (f'<tr><td style="padding:8px 20px 8px">{tag(f"{kind} · {len(group)}", *TYPE_TAG.get(kind, (PLANE, INK2)))}'
-                         f'</td></tr>' if mixed else "")
-                        + "".join(cards)
-                        + (f'<tr><td style="padding:10px 20px 14px;border-top:1px solid {LINE};font-size:13px;color:{INK2}">'
-                           f'+ {len(group) - len(shown)} more {kind.lower()} {more}</td></tr>'
-                           if len(group) > len(shown) else ""))
-    return (f'<div style="margin:0;padding:16px 8px;background:{PLANE};{FONT}">'
+                    if mixed:
+                        parts.append((f'<tr><td style="padding:8px 20px 8px">'
+                                      f'{tag(f"{kind} · {len(group)}", *TYPE_TAG.get(kind, (PLANE, INK2)))}</td></tr>',
+                                      False))
+                    parts += [(job_card(j), True) for j in group]
+    head = (f'<div style="margin:0;padding:16px 8px;background:{PLANE};{FONT}">'
             f'<div style="display:none;max-height:0;overflow:hidden;opacity:0">{html.escape(preheader)}</div>'
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;'
             f'margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid {LINE};{FONT}">'
@@ -191,14 +173,26 @@ def digest(jobs: list[dict], name: str) -> str:
             f'<div style="font-size:24px;line-height:30px;font-weight:700;color:#ffffff">Job radar · {html.escape(name)}</div>'
             f'<div style="margin-top:2px;font-size:13px;line-height:18px;color:#9ec5f4">{date.today():%A %d %B %Y}</div>'
             f'<div style="margin:14px 0 12px;font-size:16px;line-height:22px;font-weight:600;color:#ffffff">'
-            f'{html.escape(summary)}</div>{chips}</td></tr>'
-            + "".join(sections)
-            + f'<tr><td style="padding:18px 20px 22px;border-top:1px solid {LINE};font-size:12px;line-height:18px;'
+            f'{html.escape(summary)}</div>{chips}</td></tr>')
+    foot = (f'<tr><td style="padding:18px 20px 22px;border-top:1px solid {LINE};font-size:12px;line-height:18px;'
             f'color:{INK2}">Entry and junior jobs first, senior last; in each, your companies first, then the best matches. '
             f'Each job is sent once.<br>On your laptop: the <a href="http://127.0.0.1:8501" style="color:{LINK}">'
             f'tracker</a> to mark what you apply to · <a href="http://127.0.0.1:8081" style="color:{LINK}">Airflow'
             f'</a> collects at {times(SCHEDULE["collect"])} · {HOME} email {times(SCHEDULE["home_email"])}, '
             f'outside {HOME} {times(SCHEDULE["abroad_email"])} (Cairo time).</td></tr></table></div>')
+    # everything in reading order until EMAIL_BYTES (UTF-8, the header and footer counted), then one
+    # line for the jobs left to the tracker
+    sections, size = [], len((head + foot).encode())
+    for part, _ in parts:
+        size += len(part.encode())
+        if size > EMAIL_BYTES:
+            break
+        sections.append(part)
+    left = sum(card for _, card in parts[len(sections):])
+    if left:
+        sections.append(f'<tr><td style="padding:14px 20px;border-top:1px solid {LINE};font-size:13px;color:{INK2}">'
+                        f'+ {left} more job{"s" * (left != 1)} {more}</td></tr>')
+    return head + "".join(sections) + foot
 
 
 def times(items: list) -> str:
@@ -206,12 +200,13 @@ def times(items: list) -> str:
     return " and ".join([", ".join(items[:-1]), items[-1]] if len(items) > 1 else items)
 
 
-def send(body: str, title: str) -> bool:
-    """Email the digest; without Gmail settings, write it to output/ instead and return False."""
+def send(body: str, title: str, name: str) -> bool:
+    """Email the digest; without Gmail settings, write it to output/ instead (one file per email and
+    time, so the two emails do not overwrite each other) and return False."""
     user, password = os.environ.get("GMAIL_USER"), os.environ.get("GMAIL_APP_PASSWORD")
     if not (user and password):
         (ROOT / "output").mkdir(exist_ok=True)
-        path = ROOT / "output" / f"digest-{date.today()}.html"
+        path = ROOT / "output" / f"digest-{datetime.now():%Y-%m-%d-%H%M}-{name.lower().replace(' ', '-')}.html"
         path.write_text(body, encoding="utf-8")
         print(f"email: no Gmail settings, wrote {path}")
         return False

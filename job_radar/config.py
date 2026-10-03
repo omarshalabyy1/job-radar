@@ -11,9 +11,10 @@ HOURS_OLD = 24  # every run looks back this far: a run after the laptop was asle
 EXTRACT_SECONDS = 150
 DESCRIBE_SECONDS = 60
 
+ROOT = Path(__file__).resolve().parent.parent  # the repo
 # What you look for, where and when live in settings.yaml at the repo root, as plain words; this
 # module turns them into the rules below. What stays here is plumbing, not choices.
-SETTINGS = yaml.safe_load((Path(__file__).resolve().parent.parent / "settings.yaml").read_text(encoding="utf-8"))
+SETTINGS = yaml.safe_load((ROOT / "settings.yaml").read_text(encoding="utf-8"))
 
 
 def words(items: list) -> str:
@@ -46,12 +47,16 @@ US_CODES = (r"(?-i:\bUSA?\b)|(?-i:(?<!, [A-Z]{2}), (AL|AK|AZ|AR|CA|CO|CT|FL|GA|H
 # a free-text location -> place, for the sources that do not search by place (first match wins)
 PLACE_PATTERNS = {place["name"]: words(place["words"]) + (f"|{US_CODES}" if place["name"] == "USA" else "")
                   for place in SETTINGS["places"]}
+if HOME not in PLACE_PATTERNS:  # the Egypt email and the onsite rule go by this name
+    raise ValueError(f"settings.yaml: keep a place named {HOME!r} in places")
 REMOTE_OPEN_TO = r"worldwide|anywhere|global|emea|mena|africa|middle east|egypt"
 # Your rule: an onsite or hybrid job only at home, in onsite_areas; anywhere else only remote. A home
 # job is dropped only when its location names another home city (no city: kept).
 CAIRO_GIZA = words(SETTINGS["onsite_areas"])
 OTHER_EGYPT = words(SETTINGS["other_home_cities"])
 REMOTE = words(SETTINGS["remote_words"])
+# a location or title saying one of these is not a remote job, whatever else it says
+NOT_REMOTE = r"hybrid|on-?site|in[- ]office|\b(not|non|no)[- ]remote"
 # so the boards (Indeed, Bayt, Workable) search every other place for remote jobs only, and a site
 # with no remote filter is searched in these places only
 ONSITE_PLACES = {HOME}
@@ -99,17 +104,24 @@ def place_of(location: str) -> str | None:
     for place, pattern in PLACE_PATTERNS.items():
         if re.search(pattern, location, re.I):
             return place
+    # a home area or city alone ("Maadi", "Sheikh Zayed", "القاهرة"); after the other places, so
+    # "Sheikh Zayed Road, Dubai" stays in the UAE
+    if re.search(f"{CAIRO_GIZA}|{OTHER_EGYPT}", location, re.I):
+        return HOME
     if re.search(r"remote", location, re.I) and re.search(REMOTE_OPEN_TO, location, re.I):
         return "Remote"
     return None
 
 
-def in_reach(place: str, location: str, title: str, remote: bool = False) -> bool:
-    """A remote job (not hybrid) in any place; an onsite or hybrid one only at home, in onsite_areas.
-    Outside home, and where the place is unknown, only remote: no hybrid, no onsite.
-    remote: the board says so (JobSpy's is_remote), even when the location names only a city."""
+def in_reach(place: str, location: str, title: str, remote: bool = False, description: str = "") -> bool:
+    """A remote job in any place; an onsite or hybrid one only at home, in onsite_areas. Outside
+    home, and where the place is unknown, only remote: no hybrid, no onsite, no "not remote".
+    remote: the board says so (JobSpy's is_remote), even when the location names only a city; JobSpy
+    also marks Indeed's "Hybrid remote" jobs remote, so then the description must not say hybrid."""
     text = f"{location} {title}"
-    if remote or place == "Remote" or (re.search(REMOTE, text, re.I) and not re.search(r"hybrid", text, re.I)):
+    if not re.search(NOT_REMOTE, text, re.I) and (
+            place == "Remote" or re.search(REMOTE, text, re.I)
+            or (remote and not re.search(r"\bhybride?\b", description, re.I))):
         return True
     return place == HOME and (re.search(CAIRO_GIZA, location, re.I) is not None
                               or re.search(OTHER_EGYPT, location, re.I) is None)
