@@ -93,29 +93,17 @@ with skills_tab:
                      x_label="% of jobs", y_label="")
 
 with companies_tab:
-    st.caption("Every company here is starred in the email and the tracker. With a careers page, the next run "
-               "detects its platform (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or any "
-               "other page, read with Playwright) and reads its jobs every run. Sites whose robots.txt forbids it, "
-               "or that turn scripts away, are shown as such and not read.")
-    with st.form("add_company", clear_on_submit=True):
-        name = st.text_input("Company name")
-        url = st.text_input("Careers page or portal (optional)", placeholder="https://...")
-        if st.form_submit_button("Add or update", type="primary") and name.strip():
-            with connect() as conn:
-                conn.execute(
-                    "INSERT INTO core.company (company, careers_url) VALUES (%s, %s) ON CONFLICT (company) DO UPDATE"
-                    " SET careers_url = EXCLUDED.careers_url, platform = NULL, api = NULL, note = NULL, checked_at = NULL",
-                    (name.strip(), url.strip() or None))
-            st.rerun()
-    companies = query("SELECT company, careers_url, platform, note, checked_at FROM core.company ORDER BY company")
+    st.caption("Your companies, from settings.yaml (companies): add, change or remove them there and the next run "
+               "updates this list. A starred company's jobs are starred in the email and the tracker. With a careers "
+               "page, the next run detects its platform (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, "
+               "RSS, or any other page, read with Playwright) and reads its jobs every run. Sites whose robots.txt "
+               "forbids it, or that turn scripts away, are shown as such and not read.")
+    companies = query("SELECT company, starred, careers_url, platform, note, checked_at FROM core.company"
+                      " ORDER BY company")
     st.dataframe(companies, hide_index=True, column_config={
+        "starred": st.column_config.CheckboxColumn("Starred"),
         "careers_url": st.column_config.LinkColumn("Careers page"), "platform": "Read as",
         "note": "Why not read", "checked_at": st.column_config.DatetimeColumn("Checked", format="D MMM, HH:mm")})
-    gone = st.multiselect("Remove companies", companies["company"])
-    if st.button("Remove", disabled=not gone):
-        with connect() as conn:
-            conn.execute("DELETE FROM core.company WHERE company = ANY(%s)", (gone,))
-        st.rerun()
 
 with cv_tab:
     st.caption("Upload your CV as a PDF. The next run shows, for every job, how much of what it asks for "

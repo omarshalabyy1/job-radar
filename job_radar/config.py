@@ -23,10 +23,11 @@ def words(items: list) -> str:
                     for w in items) or r"(?!)"
 
 
-HOME = SETTINGS["home"]
+HOME = "Egypt"  # onsite and hybrid jobs only here, and its own email
 # (rank, label, Indeed/Bayt search term, title patterns that must all match), in your order
 ROLES = [(rank, role["name"], " OR ".join(f'"{term}"' for term in role["search"]),
           [words(need) for need in role["title_needs"]]) for rank, role in enumerate(SETTINGS["roles"], 1)]
+ROLE_LABEL = {rank: label for rank, label, _, _ in ROLES}
 # plain keywords for the sources that take no OR syntax (Himalayas, Workable, Jooble)
 KEYWORDS = SETTINGS["search_words"]
 # entry, mid and senior are yours; above senior is not
@@ -65,9 +66,9 @@ RESPECT_ROBOTS = False
 # companies whose jobs are starred and listed first, from any source (with every company in core.company)
 TARGET_COMPANIES = words(SETTINGS["your_companies"])
 
-# The companies whose own career sites are read live in core.company: settings.yaml (companies) or
-# the tracker (Companies tab). A Phenom site searches by keywords only, so each search names a
-# place: Egypt, or remote.
+# The companies whose own career sites are read: settings.yaml (companies), copied to core.company by
+# the schema step. A Phenom site searches by keywords only, so each search names a place: Egypt, or
+# remote.
 PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst") for where in ("Egypt", "remote")]
 
 # Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and the job

@@ -4,7 +4,7 @@
 
 **Your own job search, on autopilot.** Four times a day it collects the new data and AI jobs from
 job boards, company career pages and your own job-alert emails, keeps only the ones that fit you,
-and emails them in two clean digests: one for home, one for remote jobs everywhere else.
+and emails them in two clean digests: one for Egypt, one for remote jobs everywhere else.
 
 ![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)
 ![Airflow](https://img.shields.io/badge/Apache%20Airflow-3-017CEE?logo=apacheairflow&logoColor=white)
@@ -39,7 +39,7 @@ part-time, contract and freelance. Jobs at your companies are marked ⭐ and com
 **Also on your laptop**
 
 - **Tracker** at http://127.0.0.1:8501: filter jobs, mark saved / applied / interview / offer,
-  see the skills each role asks for, upload your CV, add companies.
+  see the skills each role asks for, upload your CV, see how each company's careers page is read.
 - **Airflow** at http://127.0.0.1:8081: every run, every task's log, and *Trigger* to run now.
 - **SQL** at `localhost:5433` (database and user `jobradar`): query the `mart` views.
 - **career-ops export** in `output/career-ops/`: the best matches and your CV, ready for
@@ -82,17 +82,16 @@ and the next run uses it. A schedule change shows in Airflow within a minute.
 
 | Section | What it changes |
 |---|---|
-| `home` | your home country: onsite and hybrid jobs are kept only here, and it gets its own email |
-| `schedule` | when it collects and when each email goes, written `8am`, `12pm`, `7pm` |
+| `schedule` | when it collects and when each email goes (Egypt's, and everywhere else's), written `8am`, `12pm`, `7pm` |
 | `roles` | the jobs you want, **in your order** (the email follows it): the words a title needs, and what the job boards are searched for |
 | `search_words` | the plain search words for Himalayas, Workable and Jooble |
 | `too_senior`, `never` | titles to leave out: above your level, or never yours |
 | `experience` | the words for entry and senior, and the years that make a job entry (1 or less) or senior (5 or more) |
 | `places` | the places, **in email order**, where the boards search, and the words that name each one |
-| `onsite_areas`, `other_home_cities` | where at home an onsite job is fine (Cairo, Giza ...), and the cities that are not |
+| `onsite_areas`, `other_home_cities` | where in Egypt an onsite or hybrid job is fine (Cairo, Giza ...), and the cities that are not; anywhere else a job must be remote |
 | `remote_words` | how a remote job says so |
 | `your_companies` | companies whose jobs get ⭐ and go first |
-| `companies` | career pages read every run: a name and a link |
+| `companies` | the one list of your companies: career pages read every run, a name and a link (remove one here and it is gone next run) |
 
 How words match a title, a location or a company:
 
@@ -144,13 +143,13 @@ Three Airflow DAGs share the work:
 | DAG | When | Does |
 |---|---|---|
 | `job_radar` | 1am, 7am, 11am, 6pm | extract → transform → describe → match_skills → export_career_ops |
-| `job_radar_email_egypt` | 12pm, 7pm | emails home's new jobs |
+| `job_radar_email_egypt` | 12pm, 7pm | emails Egypt's new jobs |
 | `job_radar_email_abroad` | 8am, 8pm | emails everywhere else's new jobs |
 
 **The rules that decide what reaches you**
 
 - **Roles:** a title must fit one of your roles; titles above your level or never yours are left out.
-- **Places:** onsite or hybrid only at home, in your onsite areas; anywhere else the job must be
+- **Places:** onsite or hybrid only in Egypt, in your onsite areas; anywhere else the job must be
   remote. The place comes from the search, else the location, else the title; a job alert whose
   place cannot be told goes under *Unknown location*.
 - **No duplicates:** a posting is stored once (source + link); a job is one row (its normalized
@@ -167,9 +166,9 @@ tried again a day later.
 | Source | How |
 |---|---|
 | Wuzzuf | the JSON API its web app calls: every job in Egypt in the window, with its description |
-| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy) as a guest; remote jobs only outside home |
+| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy) as a guest; remote jobs only outside Egypt |
 | Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt site's IT, data, business analyst, Python and internship pages |
-| Workable | its public job search, every company on it; remote only outside home |
+| Workable | its public job search, every company on it; remote only outside Egypt |
 | Himalayas, We Work Remotely | public search API, RSS feed |
 | Your companies | each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read every run |
 | 28,000+ career pages | the daily crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) |

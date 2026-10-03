@@ -7,14 +7,13 @@
 #   - a phrase matches as written:      "data engineer*" matches "Senior Data Engineering Lead"
 # Secrets (Gmail, inboxes, the warehouse password) stay in .env, never here.
 
-# Your home: onsite and hybrid jobs are kept only here, in onsite_areas below; anywhere else a job
-# must be remote. It gets its own email, and every other place shares the second one.
-home: Egypt
+# Egypt is home: onsite and hybrid jobs are kept only there, in onsite_areas below; anywhere else a
+# job must be remote. Egypt gets its own email, and every other place shares the second one.
 
 # When it runs, Cairo time, 12-hour style: 1am, 7am, 11am, 6pm, 12pm ...
 schedule:
   collect: [1am, 7am, 11am, 6pm]   # find new jobs
-  home_email: [12pm, 7pm]          # the email of your home's jobs
+  home_email: [12pm, 7pm]          # the email of Egypt's jobs
   abroad_email: [8am, 8pm]         # the email of the remote jobs everywhere else
 
 # The jobs you want, in your order: the email lists them in this order, and a title takes the
@@ -149,8 +148,8 @@ your_companies: [vodafone*, vois, _vois, orange, pwc*, pricewaterhouse*, deloitt
                  alignerr*, labelbox*, crossover*, sumerge*, finaira*]
 
 # Companies whose own career pages are read every run (a link is optional: without one the company
-# is only starred). A company here is set from here on each run; add more in the tracker's
-# Companies tab too (http://127.0.0.1:8501).
+# is only starred). This is the one list: add, change or remove a company here and the next run
+# does the same in the warehouse (the tracker's Companies tab shows what each site was read as).
 companies:
   - {name: "AAIB", link: "https://www.aaib.com/en/careers"}
   - {name: "Accenture", link: "https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers?locationCountry=d865e83093ad42319653b08e61f7db49"}

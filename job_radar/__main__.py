@@ -1,7 +1,7 @@
 """python -m job_radar <step> [<step> ...] | all
 
-Steps, in order: schema extract_boards extract_remote extract_egypt extract_companies extract_portals
-extract_email transform describe match_skills export_career_ops email_egypt email_abroad
+Steps, in order: schema extract_boards extract_remote extract_egypt extract_workable extract_companies
+extract_portals extract_email transform describe match_skills export_career_ops email_egypt email_abroad
 Settings come from the environment, or from .env in the repo root (see .env.example).
 """
 

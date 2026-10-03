@@ -37,10 +37,10 @@ CREATE TABLE IF NOT EXISTS core.job (
     title          text     NOT NULL,
     company        text     NOT NULL,
     location       text     NOT NULL,
-    place          text     NOT NULL,         -- one of the places in job_place_check below
+    place          text     NOT NULL,         -- a place in settings.yaml, Remote or Unknown location
     source         text     NOT NULL,         -- the first source that found it
     job_url        text     NOT NULL,
-    role_rank      smallint NOT NULL CHECK (role_rank BETWEEN 1 AND 5),
+    role_rank      smallint NOT NULL,         -- the role's position in settings.yaml (1 = first)
     role           text     NOT NULL,
     target_company boolean  NOT NULL,
     date_posted    date,
@@ -50,30 +50,22 @@ CREATE TABLE IF NOT EXISTS core.job (
     emailed_at     timestamptz                -- set once: a job is never emailed twice
 );
 CREATE INDEX IF NOT EXISTS job_first_seen ON core.job (first_seen);
--- CREATE TABLE IF NOT EXISTS never changes a table that is already there, so the places are set
--- here every run: a place added to config.PLACES only needs adding to this list.
-ALTER TABLE core.job DROP CONSTRAINT IF EXISTS job_place_check;
-ALTER TABLE core.job ADD CONSTRAINT job_place_check
-    CHECK (place IN ('Egypt', 'UAE', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'USA', 'Europe', 'Remote',
-                     'Unknown location'));
 
--- Your companies: a starred one's jobs are starred from any source, and a careers page, when given,
--- is read at most once a day. Add them in the tracker (Companies tab). The platform is detected on
--- the next run; 'forbidden' (robots.txt), 'blocked' (turns scripts away) and 'unreachable' (page
--- not found) sites are retried daily.
+-- Your companies: settings.yaml (companies) is the list, made the same here by the schema step every
+-- run. A starred one's jobs are starred from any source, and a careers page, when given, is read at
+-- most once a day. The platform is detected on the next run; 'forbidden' (robots.txt), 'blocked'
+-- (turns scripts away) and 'unreachable' (page not found) sites are retried daily.
 CREATE TABLE IF NOT EXISTS core.company (
     company     text PRIMARY KEY,
     careers_url text,         -- its careers page or portal; empty = starred only
     platform    text,         -- workable, greenhouse, lever, ashby, phenom, successfactors, rss, page,
-                              -- or forbidden, blocked, unreachable
+                              -- or forbidden, blocked, unreachable, covered (another source reads it)
     api         text,         -- what the platform's reader calls (an account, a feed, the page)
     note        text,         -- why a site cannot be read
     checked_at  timestamptz,
     added_at    timestamptz NOT NULL DEFAULT now(),
     starred     boolean NOT NULL DEFAULT true  -- false: its site is read, its jobs are not starred
 );
-ALTER TABLE core.company ADD COLUMN IF NOT EXISTS starred boolean NOT NULL DEFAULT true;
--- the companies themselves: settings.yaml (companies), loaded by the schema step, and the tracker
 
 -- Your CVs, uploaded in the tracker (CV tab): their words are matched against each job's skills,
 -- and the newest is exported to career-ops.
