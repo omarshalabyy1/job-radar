@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" width="1000" height="330" role="img" aria-label="The mental model: job-radar is a scout that works for you. 1 Sweep, the scout walks the job market: 12 sources at 11am and 7pm. 2 Sift, it keeps only what fits you: your roles, places and level in settings.yaml. 3 Merge, one card per job, never twice: raw to core, one row per job. 4 Rank, best first, in your inbox: skills matched, emails at 11:30am and 7:30pm. 5 Act, you decide and your coach helps: the tracker and Claude's /job-radar.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="0.55" stop-color="#10213A"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", -apple-system, Helvetica, Arial, sans-serif; }
+    .title { font-size: 21px; font-weight: 700; fill: #FFFFFF; }
+    .sub { font-size: 13.5px; fill: #CBD5E1; }
+    .num { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+    .step { font-size: 16px; font-weight: 700; fill: #FFFFFF; }
+    .story { font-size: 13px; fill: #E2E8F0; }
+    .tech { font-size: 12px; fill: #94A3B8; }
+    .tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px; fill: #64748B; }
+    .cap { font-size: 12px; fill: #64748B; }
+    .link { fill: none; stroke: #64748B; stroke-width: 2; stroke-dasharray: 4 6; animation: flow 1.6s linear infinite; }
+    @keyframes flow { to { stroke-dashoffset: -20; } }
+  </style>
+
+  <rect width="1000" height="330" rx="22" fill="url(#bg)"/>
+  <text x="50" y="52" class="title">The mental model: a scout that works for you</text>
+  <text x="50" y="76" class="sub">It walks the job market twice a day, keeps what fits you, and brings you a short list. You decide.</text>
+
+  <path class="link" d="M214 185h20"/>
+  <path class="link" d="M398 185h20"/>
+  <path class="link" d="M582 185h20"/>
+  <path class="link" d="M766 185h20"/>
+
+  <!-- 1 Sweep -->
+  <rect x="50" y="105" width="164" height="175" rx="14" fill="#3B82F6" fill-opacity="0.08" stroke="#3B82F6" stroke-opacity="0.7"/>
+  <circle cx="80" cy="137" r="16" fill="#3B82F6" fill-opacity="0.35"/>
+  <text x="80" y="142" class="num" text-anchor="middle">1</text>
+  <text x="104" y="143" class="step">Sweep</text>
+  <text x="64" y="178" class="story">The scout walks</text>
+  <text x="64" y="196" class="story">the job market</text>
+  <text x="64" y="232" class="tag">IN JOB-RADAR</text>
+  <text x="64" y="250" class="tech">12 sources,</text>
+  <text x="64" y="266" class="tech">at 11am and 7pm</text>
+
+  <!-- 2 Sift -->
+  <rect x="234" y="105" width="164" height="175" rx="14" fill="#14B8A6" fill-opacity="0.08" stroke="#14B8A6" stroke-opacity="0.7"/>
+  <circle cx="264" cy="137" r="16" fill="#14B8A6" fill-opacity="0.35"/>
+  <text x="264" y="142" class="num" text-anchor="middle">2</text>
+  <text x="288" y="143" class="step">Sift</text>
+  <text x="248" y="178" class="story">Keeps only what</text>
+  <text x="248" y="196" class="story">fits you</text>
+  <text x="248" y="232" class="tag">IN JOB-RADAR</text>
+  <text x="248" y="250" class="tech">roles, places, level</text>
+  <text x="248" y="266" class="tech">in settings.yaml</text>
+
+  <!-- 3 Merge -->
+  <rect x="418" y="105" width="164" height="175" rx="14" fill="#F59E0B" fill-opacity="0.08" stroke="#F59E0B" stroke-opacity="0.7"/>
+  <circle cx="448" cy="137" r="16" fill="#F59E0B" fill-opacity="0.35"/>
+  <text x="448" y="142" class="num" text-anchor="middle">3</text>
+  <text x="472" y="143" class="step">Merge</text>
+  <text x="432" y="178" class="story">One card per job,</text>
+  <text x="432" y="196" class="story">never twice</text>
+  <text x="432" y="232" class="tag">IN JOB-RADAR</text>
+  <text x="432" y="250" class="tech">raw &#8594; core,</text>
+  <text x="432" y="266" class="tech">one row per job</text>
+
+  <!-- 4 Rank -->
+  <rect x="602" y="105" width="164" height="175" rx="14" fill="#A855F7" fill-opacity="0.08" stroke="#A855F7" stroke-opacity="0.7"/>
+  <circle cx="632" cy="137" r="16" fill="#A855F7" fill-opacity="0.35"/>
+  <text x="632" y="142" class="num" text-anchor="middle">4</text>
+  <text x="656" y="143" class="step">Rank</text>
+  <text x="616" y="178" class="story">Best first,</text>
+  <text x="616" y="196" class="story">in your inbox</text>
+  <text x="616" y="232" class="tag">IN JOB-RADAR</text>
+  <text x="616" y="250" class="tech">skills matched; emails</text>
+  <text x="616" y="266" class="tech">at 11:30am and 7:30pm</text>
+
+  <!-- 5 Act -->
+  <rect x="786" y="105" width="164" height="175" rx="14" fill="#22C55E" fill-opacity="0.08" stroke="#22C55E" stroke-opacity="0.7"/>
+  <circle cx="816" cy="137" r="16" fill="#22C55E" fill-opacity="0.35"/>
+  <text x="816" y="142" class="num" text-anchor="middle">5</text>
+  <text x="840" y="143" class="step">Act</text>
+  <text x="800" y="178" class="story">You decide; your</text>
+  <text x="800" y="196" class="story">coach helps</text>
+  <text x="800" y="232" class="tag">IN JOB-RADAR</text>
+  <text x="800" y="250" class="tech">the tracker, and</text>
+  <text x="800" y="266" class="tech">Claude's /job-radar</text>
+
+  <text x="500" y="312" class="cap" text-anchor="middle">settings.yaml = your choices &#183; .env = your secrets &#183; the warehouse = its memory &#183; Airflow = its clock</text>
+</svg>

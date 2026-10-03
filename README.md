@@ -25,6 +25,10 @@
   <img src="https://img.shields.io/badge/Inside_every_site's_limits-1E293B?style=flat-square" alt="Inside every site's limits">
 </p>
 
+<p align="center">
+  <a href="GUIDE.md"><img src="https://img.shields.io/badge/New_here%3F-Baby--steps_guide_%26_mental_model-0F766E?style=for-the-badge" alt="New here? The baby-steps guide and the mental model"></a>
+</p>
+
 ## 📬 What you get
 
 <img align="right" width="300" src="docs/email.png" alt="The Egypt email on a phone">
@@ -177,7 +181,8 @@ Secrets stay in `.env`. Your skill list (what the tracker counts) is `core.skill
 
 ## 🚀 Quick start
 
-You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) and a Gmail account.
+New to Docker, Airflow or app passwords? Follow the [baby-steps guide](GUIDE.md) instead.
+Otherwise you need [Docker Desktop](https://www.docker.com/products/docker-desktop/) and a Gmail account.
 
 ```bash
 git clone https://github.com/omarshalabyy1/job-radar.git && cd job-radar
