@@ -1,0 +1,286 @@
+# job-radar settings: what to look for, where, and when to email it.
+# Edit, save, and the next run uses it (a schedule change shows in Airflow within a minute).
+#
+# How words match a job title, a location or a company name:
+#   - any case, as whole words:        "ai" matches "AI Engineer", not "Airline"
+#   - a trailing * matches word starts: "engineer*" matches engineer, engineers, engineering
+#   - a phrase matches as written:      "data engineer*" matches "Senior Data Engineering Lead"
+# Secrets (Gmail, inboxes, the warehouse password) stay in .env, never here.
+
+# Your home: onsite and hybrid jobs are kept only here, in onsite_areas below; anywhere else a job
+# must be remote. It gets its own email, and every other place shares the second one.
+home: Egypt
+
+# When it runs, Cairo time, 12-hour style: 1am, 7am, 11am, 6pm, 12pm ...
+schedule:
+  collect: [1am, 7am, 11am, 6pm]   # find new jobs
+  home_email: [12pm, 7pm]          # the email of your home's jobs
+  abroad_email: [8am, 8pm]         # the email of the remote jobs everywhere else
+
+# The jobs you want, in your order: the email lists them in this order, and a title takes the
+# first role it fits.
+#   search:      what Indeed and Bayt are searched for
+#   title_needs: the title must have one word from EACH list
+roles:
+  - name: AI & Data Engineer
+    search: [AI Data Engineer, Data AI Engineer, ML Data Engineer]
+    title_needs:
+      - [data]
+      - [ai, ml, genai, llm, llms, machine learning]
+      - [engineer*, developer*]
+
+  - name: Data Engineer
+    search: [Data Engineer, ETL Developer, Analytics Engineer, Big Data, Data Integration, Data Warehouse,
+             Database Developer, Azure Data Engineer, Databricks]
+    title_needs:
+      - [data engineer*, data integration*, data pipeline*, data platform*, data warehous*,
+         data infrastructure*, data migration*, data modeler*, data modeller*, data developer*,
+         data quality*, data governance*, dataops*, etl, elt, dwh, big data*, analytics engineer*,
+         sql developer*, sql engineer*, database developer*, database engineer*, spark developer*,
+         spark engineer*, databricks developer*, databricks engineer*, snowflake developer*,
+         snowflake engineer*, informatica developer*, informatica engineer*, ssis developer*,
+         ssis engineer*, talend developer*, talend engineer*, hadoop developer*, hadoop engineer*,
+         kafka developer*, kafka engineer*, مهندس بيانات*]
+
+  - name: AI Engineer (NLP, LLM, agents, RAG)
+    search: [AI Engineer, LLM Engineer, NLP Engineer, Machine Learning Engineer, GenAI Engineer, AI Developer,
+             Data Scientist, Generative AI, RAG]
+    title_needs:
+      - [ai, ml, nlp, llm, llms, genai, gen ai, generative ai, machine learning, deep learning,
+         computer vision, rag, agentic, conversational ai, chatbot, prompt, langchain, langgraph,
+         data scien*, ذكاء اصطناعي*, تعلم الآلة*]
+      - [engineer*, developer*, specialist*, scientist*, programmer*, researcher*, consultant*, intern*,
+         trainee*, مهندس*, مطور*, أخصائي*]
+
+  - name: BI Developer
+    search: [BI Developer, Power BI, Business Intelligence, Data Visualization, MIS Specialist, Reporting Developer]
+    title_needs:
+      - [bi, business intelligence*, power bi*, powerbi*, tableau*, qlik*, looker*, ssrs*, mis,
+         data visualization*, data visualisation*, dashboard developer*, dashboard designer*,
+         dashboard specialist*, dashboard engineer*, dashboard analyst*, dashboards developer*,
+         dashboards designer*, dashboards specialist*, dashboards engineer*, dashboards analyst*,
+         report developer*, report specialist*, report engineer*, reporting developer*,
+         reporting specialist*, reporting engineer*, ذكاء الأعمال*, باور بي*]
+
+  - name: Data Analyst
+    search: [Data Analyst, Reporting Analyst, Business Analyst, Analytics Specialist, Product Analyst]
+    title_needs:
+      - [data analyst*, business analyst*, reporting analyst*, insight analyst*, insights analyst*,
+         analytics analyst*, product analyst*, marketing analyst*, quantitative analyst*, data analysis*,
+         data analytics*, analytics specialist*, analytics associate*, analytics executive*,
+         data specialist*, محلل بيانات*]
+
+# Searched as they are on the sources that take plain words (Himalayas, Workable, Jooble)
+search_words: [data engineer, analytics engineer, ETL developer, databricks, AI engineer, machine learning engineer,
+               NLP engineer, LLM engineer, generative AI, data scientist, BI developer, power bi, data analyst]
+
+# Above your level: a title with any of these words is left out (entry, mid and senior stay in)
+too_senior: [lead, principal, staff, head, director, manager, vp, chief, architect]
+
+# Never yours, whatever else the title says
+never: [data entry, mlops, llmops, devops, sre, site reliability, technician, teacher, tutor, instructor,
+        lecturer, recruiter, accountant, cyber security, cybersecurity, quality assurance, quality control,
+        quality inspector, إدخال بيانات*]
+
+# Experience: the email goes from entry to senior as you scroll. The title's words decide first;
+# else the years the description asks for; else it is mid level.
+experience:
+  entry: [intern, internship, trainee, graduate, fresh, entry, junior, jr, متدرب*, حديث التخرج*, مبتدئ*]
+  senior: [senior, sr, expert, iii, خبير*]
+  entry_max_years: 1    # asks for this many years or fewer: entry and junior
+  senior_min_years: 5   # asks for this many years or more: senior
+
+# The places, in the order the email lists them (after your home and Remote). A location takes the
+# first place whose words it has, so keep USA before Europe: "Vienna, Virginia" is the USA.
+#   search: where the job boards look, as "search location: Indeed country"
+#   words:  how a job's location names the place (for the USA, "US", "USA" and a state code at the
+#           end, "Austin, TX", count too)
+places:
+  - name: Egypt
+    search: {Egypt: egypt}
+    words: [egypt*, cairo*, giza*]
+  - name: UAE
+    search: {United Arab Emirates: united arab emirates}
+    words: [uae, united arab emirates*, dubai*, abu dhabi*, sharjah*]
+  - name: Saudi Arabia
+    search: {Saudi Arabia: saudi arabia}
+    words: [saudi*, ksa, riyadh*, jeddah*, dammam*, khobar*]
+  - name: Qatar
+    search: {Qatar: qatar}
+    words: [qatar*, doha*]
+  - name: Kuwait
+    search: {Kuwait: kuwait}
+    words: [kuwait*]
+  - name: Bahrain
+    search: {Bahrain: bahrain}
+    words: [bahrain*, manama*]
+  - name: Oman
+    search: {Oman: oman}
+    words: [oman, muscat*]
+  - name: USA
+    search: {United States: usa}
+    words: [united states*, u.s.a, new york, san francisco, seattle, austin, boston, chicago, los angeles,
+            denver, atlanta, dallas, houston, miami, washington, san jose, san diego]
+  - name: Europe
+    search: {United Kingdom: uk, Germany: germany, Netherlands: netherlands, Ireland: ireland, France: france,
+             Spain: spain, Poland: poland, Sweden: sweden, Switzerland: switzerland, Portugal: portugal}
+    words: [united kingdom, uk, england, scotland, wales, london, manchester, germany, berlin, munich, hamburg,
+            frankfurt, netherlands, amsterdam, rotterdam, ireland, dublin, france, paris, spain, madrid, barcelona,
+            poland, warsaw, krakow, sweden, stockholm, switzerland, zurich, geneva, portugal, lisbon, porto,
+            belgium, brussels, austria, vienna, denmark, copenhagen, norway, oslo, finland, helsinki, italy,
+            milan, rome, czechia, czech republic, prague, romania, bucharest, greece, athens, europe,
+            european union]
+
+# Onsite and hybrid jobs at home: kept in these areas, and when the location names no city;
+# left out when it names one of other_home_cities.
+onsite_areas: [cairo*, giza*, القاهرة*, الجيزة*, heliopolis*, maadi*, nasr city*, zamalek*, mohandessin*, dokki*,
+               6th of october*, october city*, sheikh zayed*, smart village*, fifth settlement*, 5th settlement*]
+other_home_cities: [alexandria*, alex, الإسكندرية*, mansoura*, tanta*, assiut*, asyut*, suez*, ismailia*,
+                    port said*, damietta*, hurghada*, sharm*, sinai*, aswan*, luxor*, zagazig*, minya*, sohag*,
+                    beni suef*, fayoum*, faiyum*, sokhna*, 10th of ramadan*, tenth of ramadan*, sadat city*,
+                    bahariya*, marsa alam*, gouna*, matrouh*, alamein*, qena*, banha*, benha*, obour*, badr city*,
+                    menoufia*, monufia*, sharqia*, dakahlia*, beheira*, gharbia*, red sea*, new valley*]
+# A job is remote when its location or title says one of these (and not "hybrid")
+remote_words: [remote*, work from home, wfh, عن بعد*]
+
+# Your companies: a job at any of these is starred (⭐) and listed first
+your_companies: [vodafone*, vois, _vois, orange, pwc*, pricewaterhouse*, deloitte*, dhl, nestle*, nestlé*, adib,
+                 abu dhabi islamic*, eg bank, egbank, egyptian gulf bank*, etisalat*, e&*, advansys*, nawy,
+                 alignerr*, labelbox*, crossover*, sumerge*, finaira*]
+
+# Companies whose own career pages are read every run (a link is optional: without one the company
+# is only starred). A company here is set from here on each run; add more in the tracker's
+# Companies tab too (http://127.0.0.1:8501).
+companies:
+  - {name: "AAIB", link: "https://www.aaib.com/en/careers"}
+  - {name: "Accenture", link: "https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers?locationCountry=d865e83093ad42319653b08e61f7db49"}
+  - {name: "ADIB", link: "https://hciq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs"}
+  - {name: "Advansys", link: "https://advansys-esc.com/"}
+  - {name: "Al Rajhi", link: "https://careers.alrajhibank.com.sa/"}
+  - {name: "Alexbank", link: "https://apply.workable.com/alexbank/"}
+  - {name: "Andersen", link: "https://eg.andersen.com/open-vacancies/"}
+  - {name: "Aqarmap", link: "https://aqarmap.zohorecruit.com/jobs/Careers"}
+  - {name: "Aramex", link: "https://careers.aramex.com/"}
+  - {name: "Bain", link: "https://www.bain.com/careers/find-a-role/"}
+  - {name: "Banque du Caire", link: "https://www.bdc.com.eg/bdcwebsite/root-nav/careers.html"}
+  - {name: "Banque Misr", link: "https://www.banquemisr.com/en/Home/Careers"}
+  - {name: "BCG", link: "https://careers.bcg.com/global/en"}
+  - {name: "BDO", link: "https://www.bdo.ae/en-gb/careers"}
+  - {name: "Bosta", link: "https://jobs.lever.co/Bosta"}
+  - {name: "Breadfast", link: "https://www.breadfast.com/careers"}
+  - {name: "Brimore", link: "https://careers.smartrecruiters.com/Brimore"}
+  - {name: "Capgemini", link: "https://www.capgemini.com/careers/join-capgemini/job-search/?country_code=eg-en"}
+  - {name: "Careem", link: "https://boards.greenhouse.io/careem"}
+  - {name: "CIB", link: "https://www.cibeg.com/en/careers"}
+  - {name: "Coca-Cola", link: "https://coke.wd1.myworkdayjobs.com/coca-cola-careers?locationCountry=d865e83093ad42319653b08e61f7db49"}
+  - {name: "Concentrix", link: "https://cnx.wd1.myworkdayjobs.com/en-US/external_global?locationCountry=d865e83093ad42319653b08e61f7db49"}
+  - {name: "Contact Financial", link: "https://www.contact.eg/careers"}
+  - {name: "Danone", link: "https://careers.danone.com/en-global/jobs.html"}
+  - {name: "Dell", link: "https://enterpriseplatform.dell.com/hcmUI/CandidateExperience/en/sites/careers/jobs"}
+  - {name: "Deloitte", link: "https://middleeastjobs.deloitte.com/careersME/SearchJobs/feed/"}
+  - {name: "DHL", link: "https://careers.dhl.com/global/en"}
+  - {name: "DP World", link: "https://ehpv.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs"}
+  - {name: "du", link: "https://fa-ewnx-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs"}
+  - {name: "dubizzle", link: "https://www.dubizzlegroup.com/careers"}
+  - {name: "e& Egypt", link: "https://www.eand.com.eg/careers"}
+  - {name: "Edita", link: "https://career5.successfactors.eu/portalcareer?company=Edita&navBarLevel=JOB_SEARCH"}
+  - {name: "EFG Hermes", link: "https://careers.efghldg.com/joinUs/Index/en"}
+  - {name: "EG Bank", link: "https://career2.successfactors.eu/career?company=egyptiangu"}
+  - {name: "Ejada", link: "https://careers.ejada.com/en/job-search-results/"}
+  - {name: "Elm", link: "https://career.elm.sa/"}
+  - {name: "Elmenus", link: "https://elmenus.recruitee.com/"}
+  - {name: "Emaar", link: "https://emhm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs"}
+  - {name: "Emirates NBD", link: "https://fa-evlo-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1"}
+  - {name: "Ericsson", link: "https://jobs.ericsson.com/careers?location=Egypt"}
+  - {name: "Etisalat", link: "https://peoplehub.eand.com/hcmUI/CandidateExperience/en/sites/CX_1"}
+  - {name: "EY", link: "https://careers.ey.com/ey/search/?q=data&locationsearch=Egypt"}
+  - {name: "Fawry", link: "https://www.fawry.com/careers/"}
+  - {name: "FedEx", link: "https://careers.fedex.com/jobs"}
+  - {name: "Finaira", link: "https://finaira.ai/work-at-finaira/"}
+  - {name: "First Abu Dhabi Bank", link: "https://ehjd.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/fabCareers"}
+  - {name: "Geidea", link: "https://geidea.net/careers"}
+  - {name: "Giza Systems", link: "https://gizasystems.com/careers"}
+  - {name: "Grant Thornton", link: "https://www.grantthornton.eg/careers2/experienced-hires/"}
+  - {name: "Halan", link: "https://jobs.halan.com/"}
+  - {name: "Hassan Allam", link: "https://careers.hap.com.eg/jobs.rss"}
+  - {name: "Henkel", link: "https://www.henkel.com/careers/find-your-job-apply"}
+  - {name: "HSBC", link: "https://portal.careers.hsbc.com/careers?domain=hsbc.com&location=Egypt"}
+  - {name: "Huawei", link: "https://career.huawei.com/reccampportal/portal5/social-recruitment.html"}
+  - {name: "IBM", link: "https://www.ibm.com/careers/search"}
+  - {name: "Instabug", link: "https://www.instabug.com/careers"}
+  - {name: "Intelligent Systems", link: "https://isys.ai/Join-Us"}
+  - {name: "Intercom", link: "https://www.intercom.com.eg/home/careers/vacancies/"}
+  - {name: "ITIDA", link: "https://itida.gov.eg/English/Careers/Pages/default.aspx"}
+  - {name: "ITWorx", link: "https://careers.itworx.com/"}
+  - {name: "Juhayna", link: "https://jobs.juhayna.com/"}
+  - {name: "Khazna", link: "https://khazna.app/careers"}
+  - {name: "Klivvr", link: "https://jobs.lever.co/klivvr", starred: false}
+  - {name: "KPMG", link: "https://slccareers.kpmg.com/"}
+  - {name: "Kuwait Finance House", link: "https://fa-esqe-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1"}
+  - {name: "L'Oréal", link: "https://careers.loreal.com/en_US/jobs/SearchJobs/feed/"}
+  - {name: "Link Development", link: "https://linkdevelopment.com/careers/opportunities/"}
+  - {name: "Maersk", link: "https://maersk.wd3.myworkdayjobs.com/Maersk_Careers?locations=853120f5cc8a10009e423980f6d80000"}
+  - {name: "Majorel", link: "https://www.majorel.com/careers/"}
+  - {name: "Mars", link: "https://careers.mars.com/global/en"}
+  - {name: "Mashreq", link: "https://hcld.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs?location=Egypt&locationId=300000000281972&locationLevel=country"}
+  - {name: "Mastercard", link: "https://careers.mastercard.com/us/en"}
+  - {name: "McKinsey", link: "https://www.mckinsey.com/careers/search-jobs"}
+  - {name: "Microsoft", link: "https://apply.careers.microsoft.com/careers?location=Egypt"}
+  - {name: "MNT-Halan", link: "https://jobs.halan.com/"}
+  - {name: "Mondelez", link: "https://wd3.myworkdaysite.com/recruiting/mdlz/External?locationCountry=d865e83093ad42319653b08e61f7db49"}
+  - {name: "MoneyFellows", link: "https://apply.workable.com/moneyfellows/"}
+  - {name: "Mountain View", link: "https://www.mountainviewegypt.com/careers"}
+  - {name: "Mylerz", link: "https://www.mylerz.com/career"}
+  - {name: "National Bank of Egypt", link: "https://srv.nbe.com.eg/Careers_EN"}
+  - {name: "Nawy", link: "https://apply.workable.com/nawy-real-estate/"}
+  - {name: "Nestlé", link: "https://jobdetails.nestle.com"}
+  - {name: "Nokia", link: "https://jobs.nokia.com/en/sites/CX_1/jobs"}
+  - {name: "noon", link: "https://joinnoon.com/jobs?country=eg"}
+  - {name: "Ooredoo", link: "https://ooredoo.sniperhire.net/qatar"}
+  - {name: "Ora Developers", link: "https://www.ora-egypt.com/career"}
+  - {name: "Oracle", link: "https://careers.oracle.com/en/sites/jobsearch/jobs?location=Egypt&locationId=300000000106827&locationLevel=country"}
+  - {name: "Orange", link: "https://orange.jobs/gb/en"}
+  - {name: "Palm Hills", link: "https://careers.palmhillsdevelopments.com/en/"}
+  - {name: "Paymob", link: "https://paymob.com/en/careers"}
+  - {name: "Paysky", link: "https://paysky.io/jobs/"}
+  - {name: "PepsiCo", link: "https://www.pepsicojobs.com/main/jobs?location=Egypt"}
+  - {name: "Procter & Gamble", link: "https://www.pgcareers.com/global/en"}
+  - {name: "Property Finder", link: "https://propertyfinder.teamtailor.com/jobs.rss"}
+  - {name: "PwC", link: "https://www.pwc.com/gx/en/careers/job-results.html"}
+  - {name: "Qlub", link: "https://jobs.ashbyhq.com/qlub", starred: false}
+  - {name: "QNB", link: "https://qnb.sniperhire.net/"}
+  - {name: "Rabbit", link: "https://www.rabbitmart.com/careers"}
+  - {name: "Raya", link: "https://fa-ewrh-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/RayaCareers"}
+  - {name: "Robusta", link: "https://robustastudio.com/careers"}
+  - {name: "Rology", link: "https://rology.ai/careers/"}
+  - {name: "SAP", link: "https://jobs.sap.com/en/jobs/?country=Egypt"}
+  - {name: "Siemens", link: "https://jobs.siemens.com/careers"}
+  - {name: "SODIC", link: "https://www.sodic.com/careers"}
+  - {name: "SOUM", link: "https://jobs.lever.co/soum", starred: false}
+  - {name: "stc", link: "https://careers.stc.com.sa/"}
+  - {name: "Sumerge", link: "https://www.sumerge.com/job-openings"}
+  - {name: "Sutherland", link: "https://www.jobs.sutherlandglobal.com/job-results#/egypt"}
+  - {name: "Swvl", link: "https://apply.workable.com/swvl/"}
+  - {name: "Sylndr"}
+  - {name: "Sympl"}
+  - {name: "Synapse Analytics", link: "https://synapse-analytics.io/careers"}
+  - {name: "Tabby", link: "https://tabby.ai/en-AE/careers"}
+  - {name: "Talaat Moustafa", link: "https://careers.tmg.com.eg/"}
+  - {name: "talabat", link: "https://careers.talabat.com"}
+  - {name: "Tamara", link: "https://job-boards.greenhouse.io/tamara"}
+  - {name: "Telecom Egypt", link: "https://www.te.eg/web/guest/about-te/careers-and-training/jobs"}
+  - {name: "Teleperformance", link: "https://tpegyptcareers.teleperformance.com.eg/vacancies"}
+  - {name: "Thndr", link: "https://thndr.app/careers"}
+  - {name: "Trella", link: "https://careers.trella.app/jobs.rss"}
+  - {name: "Unilever", link: "https://unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals?locationCountry=d865e83093ad42319653b08e61f7db49"}
+  - {name: "UPS", link: "https://www.jobs-ups.com/imea/en"}
+  - {name: "Valeo", link: "https://valeo.wd3.myworkdayjobs.com/en-US/valeo_jobs?locationCountry=d865e83093ad42319653b08e61f7db49"}
+  - {name: "Valify", link: "https://valify-solutions.zohorecruit.com/jobs/Careers"}
+  - {name: "Valu", link: "https://www.valu.com.eg/careers"}
+  - {name: "Vezeeta", link: "https://app.zenats.com/en/public_job/AdPU-GWxRraSztkxdGJv7g"}
+  - {name: "Visa", link: "https://visa.wd5.myworkdayjobs.com/Visa?locationCountry=d865e83093ad42319653b08e61f7db49"}
+  - {name: "Vodafone", link: "https://jobs.vodafone.com/careers"}
+  - {name: "WE", link: "https://www.te.eg/web/guest/about-te/careers-and-training/jobs"}
+  - {name: "Yodawy"}
+  - {name: "Zain", link: "https://careers.zain.com/"}
+  - {name: "Ziina", link: "https://jobs.ashbyhq.com/ziina", starred: false}

@@ -29,8 +29,8 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import sources
-from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOURS_OLD, NO_FETCH, PLACES, ROLES, in_reach, is_target,
-                     place_of, role_of, too_senior)
+from .config import (DESCRIBE_SECONDS, EXPERIENCE, EXTRACT_SECONDS, HOME, HOURS_OLD, NO_FETCH, PLACES, ROLES, SCHEDULE,
+                     SETTINGS, in_reach, is_target, place_of, role_of, too_senior, words)
 
 ROOT = Path(__file__).resolve().parent.parent
 DAYS = HOURS_OLD // 24
@@ -38,7 +38,19 @@ ROLE_LABEL = {rank: label for rank, label, _, _ in ROLES}
 
 
 def schema(conn) -> None:
+    """The warehouse's tables, then your companies from settings.yaml: a company listed there is set
+    from there (its link and star); one added in the tracker stays as it is. A changed link is read
+    and its platform detected again."""
     conn.execute((ROOT / "sql" / "schema.sql").read_text(encoding="utf-8"))
+    with conn.cursor() as cur:
+        cur.executemany("""
+            INSERT INTO core.company AS c (company, careers_url, starred) VALUES (%(name)s, %(link)s, %(starred)s)
+            ON CONFLICT (company) DO UPDATE SET
+                careers_url = EXCLUDED.careers_url, starred = EXCLUDED.starred,
+                platform   = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.platform END,
+                api        = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.api END,
+                checked_at = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.checked_at END""",
+            [{"name": c["name"], "link": c.get("link"), "starred": c.get("starred", True)} for c in SETTINGS["companies"]])
     conn.commit()
 
 
@@ -298,27 +310,27 @@ def page_description(page: bytes) -> str | None:
 
 
 def email_egypt(conn) -> None:
-    """The Egypt email (Airflow: 12pm and 7pm Cairo time)."""
-    email(conn, egypt=True)
+    """The email of your home's jobs (settings.yaml: home, schedule.home_email)."""
+    email(conn, home=True)
 
 
 def email_abroad(conn) -> None:
-    """The email of the jobs outside Egypt: remote ones and Unknown location (8am and 8pm)."""
-    email(conn, egypt=False)
+    """The email of the jobs everywhere else: remote ones and Unknown location (schedule.abroad_email)."""
+    email(conn, home=False)
 
 
-def email(conn, egypt: bool) -> None:
-    """Email the window's jobs in Egypt (or outside it) not emailed yet, by place, role and
-    employment type, best first in each: target companies, then how many of your skills they ask
-    for; nothing when there is no new job. Each job is marked emailed, so it is never sent twice.
-    Without Gmail settings, write output/digest-<date>.html instead and mark nothing."""
-    name = "Egypt" if egypt else "Outside Egypt"
+def email(conn, home: bool) -> None:
+    """Email the window's jobs at home (or outside it) not emailed yet, by place, experience, role
+    and employment type, best first in each: target companies, then how many of your skills they
+    ask for; nothing when there is no new job. Each job is marked emailed, so it is never sent
+    twice. Without Gmail settings, write output/digest-<date>.html instead and mark nothing."""
+    name = HOME if home else f"Outside {HOME}"
     jobs = conn.cursor(row_factory=dict_row).execute(
         "SELECT s.*, j.description, r.payload->>'job_type' AS job_type FROM mart.job_status s"
         " JOIN core.job j USING (job_id) LEFT JOIN raw.job_posting r ON (r.source, r.job_url) = (s.source, s.job_url)"
-        " WHERE s.emailed_at IS NULL AND s.first_seen >= current_date - %s AND (s.place = 'Egypt') = %s"
+        " WHERE s.emailed_at IS NULL AND s.first_seen >= current_date - %s AND (s.place = %s) = %s"
         " ORDER BY s.role_rank, s.target_company DESC, s.skill_matches DESC, s.date_posted DESC NULLS LAST",
-        (DAYS, egypt)).fetchall()
+        (DAYS, HOME, home)).fetchall()
     if not jobs:
         print(f"email {name}: no new jobs, nothing sent")
         return
@@ -338,12 +350,12 @@ def subject(jobs: list[dict], name: str) -> str:
 # your order, in that one per employment type, one card per job. Cards stop at EMAIL_BYTES, so the
 # email stays under Gmail's ~100 KB clip; the rest are a link away in the tracker.
 EMAIL_BYTES = 70_000
-PLACE_ORDER = list(dict.fromkeys(["Egypt", "Remote", *(place for place, _, _ in PLACES)]))
+PLACE_ORDER = list(dict.fromkeys([HOME, "Remote", *(place for place, _, _ in PLACES)]))
 EMPLOYMENT = ["Full-time", "Part-time", "Contract", "Freelance"]
-# Experience, so the further you scroll the more a job asks for: the title's words first, else the
-# years the description asks for (1 or less: entry and junior, 5 or more: senior), else mid level
-ENTRY = r"\b(intern(ship)?|trainee|graduate|fresh|entry|junior|jr)\b|متدرب|حديث التخرج|مبتدئ"
-SENIOR = r"\b(senior|sr|expert)\b|\biii\b|خبير"
+# Experience (settings.yaml), so the further you scroll the more a job asks for: the title's words
+# first, else the years the description asks for, else mid level
+ENTRY = words(EXPERIENCE["entry"])
+SENIOR = words(EXPERIENCE["senior"])
 YEARS = (r"\b(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*)?\+?\s*(?:years?|yrs?)\b(?=[^.]{0,40}experience)"
          r"|experience[^.]{0,40}?\b(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*)?(?:years?|yrs?)\b"
          r"|خبرة[^.]{0,30}?(\d{1,2})")
@@ -372,7 +384,9 @@ def experience(j: dict) -> tuple[int, int | None]:
         return 0, years
     if re.search(SENIOR, j["title"], re.I):
         return 2, years
-    return (1 if years is None else 0 if years <= 1 else 2 if years >= 5 else 1), years
+    if years is None:
+        return 1, years
+    return (0 if years <= EXPERIENCE["entry_max_years"] else 2 if years >= EXPERIENCE["senior_min_years"] else 1), years
 
 
 def employment(j: dict) -> str:
@@ -417,7 +431,7 @@ def job_card(j: dict) -> str:
 
 def digest(jobs: list[dict], name: str) -> str:
     """One column at most 640 px wide, so it reads the same on a phone and on a laptop: a deep blue
-    header with one summary line and a chip per place, then a band per place (Egypt first), in it
+    header with one summary line and a chip per place, then a band per place (home first), in it
     a section per experience level (entry and junior, mid, senior: the further you scroll, the more
     a job asks for), a heading per role, a job-type line only when a role mixes types, and the cards."""
     for j in jobs:
@@ -425,7 +439,8 @@ def digest(jobs: list[dict], name: str) -> str:
         j["level"], j["years"] = experience(j)
     # fewest years first inside each level (a job that does not say sits with its level's usual
     # years); stable, so the best match stays first among equals
-    jobs = sorted(jobs, key=lambda j: (j["level"], (0, 2, 5)[j["level"]] if j["years"] is None else j["years"]))
+    usual = (0, EXPERIENCE["entry_max_years"] + 1, EXPERIENCE["senior_min_years"])
+    jobs = sorted(jobs, key=lambda j: (j["level"], usual[j["level"]] if j["years"] is None else j["years"]))
     places = sorted({j["place"] for j in jobs},
                     key=lambda p: PLACE_ORDER.index(p) if p in PLACE_ORDER else len(PLACE_ORDER))
     by_place = {place: [j for j in jobs if j["place"] == place] for place in places}
@@ -437,7 +452,7 @@ def digest(jobs: list[dict], name: str) -> str:
     chips = "".join(f'<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 10px;border-radius:12px;'
                     f'background:#184f95;font-size:12px;color:#cde2fb">{html.escape(place)} '
                     f'<b style="color:#ffffff">{len(group)}</b></span>' for place, group in by_place.items()
-                    ) if len(by_place) > 1 else ""  # one place (the Egypt email): the title already names it
+                    ) if len(by_place) > 1 else ""  # one place (the home email): the title already names it
     more = (f'<a href="http://127.0.0.1:8501" style="color:{LINK};text-decoration:none">in your tracker →</a>')
     sections = []
     for place, in_place in by_place.items():
@@ -505,8 +520,13 @@ def digest(jobs: list[dict], name: str) -> str:
             f'color:{INK2}">Entry and junior jobs first, senior last; in each, your companies first, then the best matches. '
             f'Each job is sent once.<br>On your laptop: the <a href="http://127.0.0.1:8501" style="color:{LINK}">'
             f'tracker</a> to mark what you apply to · <a href="http://127.0.0.1:8081" style="color:{LINK}">Airflow'
-            f'</a> collects at 1am, 7am, 11am and 6pm · Egypt email 12pm and 7pm, outside Egypt 8am and 8pm '
-            f'(Cairo time).</td></tr></table></div>')
+            f'</a> collects at {times(SCHEDULE["collect"])} · {HOME} email {times(SCHEDULE["home_email"])}, '
+            f'outside {HOME} {times(SCHEDULE["abroad_email"])} (Cairo time).</td></tr></table></div>')
+
+
+def times(items: list) -> str:
+    """["1am", "7am", "6pm"] -> "1am, 7am and 6pm"."""
+    return " and ".join([", ".join(items[:-1]), items[-1]] if len(items) > 1 else items)
 
 
 def send(body: str, title: str) -> bool:
