@@ -1,5 +1,7 @@
-# job-radar: the warehouse (Postgres), Airflow (`airflow standalone`: LocalExecutor on SQLite, in one
-# container) and the tracker (Streamlit). Everything listens on 127.0.0.1 only.
+# job-radar: the warehouse (Postgres), Airflow (scheduler, DAG processor and API server, LocalExecutor,
+# in one container) and the tracker (Streamlit). Everything listens on 127.0.0.1 only. Airflow keeps
+# its own records in the warehouse's Postgres too (database airflow): on SQLite, its parts writing at
+# once locked the file and the scheduler stopped for good ("database is locked", 2026-10-03).
 #
 #   docker compose up -d --build    # Airflow http://127.0.0.1:8081 (no login), tracker http://127.0.0.1:8501,
 #                                   # warehouse localhost:5433 (psql, any SQL tool)
@@ -32,6 +34,7 @@ services:
       - "127.0.0.1:5433:5432"
     volumes:
       - warehouse-data:/var/lib/postgresql/data
+      - ./sql/airflow-db.sql:/docker-entrypoint-initdb.d/airflow-db.sql:ro  # on a new warehouse only
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U jobradar -d jobradar"]
       interval: 5s
@@ -41,12 +44,18 @@ services:
   airflow:
     build: .
     image: job-radar:3.3.2
-    command: standalone
+    # Airflow's parts as separate processes: when one stops (its database gone for a moment), the
+    # container exits and Docker starts it again. `airflow standalone` kept running with a dead
+    # scheduler, and nothing ran until someone noticed (2026-10-03). While Postgres is still starting,
+    # `db migrate` fails and Docker tries again a little later. No triggerer: no task defers.
+    command: >-
+      bash -c "airflow db migrate && { airflow scheduler & airflow dag-processor & airflow api-server --port 8080 & wait -n; exit 1; }"
     restart: unless-stopped
     environment:
       <<: *job-env
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://jobradar:${WAREHOUSE_PASSWORD:?set in .env}@warehouse:5432/airflow
     ports:
       - "127.0.0.1:8081:8080"
     volumes:

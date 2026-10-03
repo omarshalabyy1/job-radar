@@ -187,6 +187,9 @@ that answers 429 Too Many Requests is left alone for as long as it asks, by ever
 | A `.env` change does nothing | `docker compose up -d` (the containers read `.env` when they are created). |
 | A `settings.yaml` change broke the runs | Airflow shows an import error at the top; fix the line it names (YAML: lists in `[...]`, a space after `:`). |
 | Docker is slow or stuck | `wsl --shutdown`, then restart Docker Desktop. |
+| Tasks fail with "Process timed out" | The Docker VM is starved: another stack on it (another Airflow) is using every CPU. Stop that stack while job-radar runs, or give Docker more CPUs; the next run catches up. |
+| Airflow seems down | It restarts itself: when one of its parts stops, the container exits and Docker starts it again within a minute (`docker ps` shows it restarting). |
+| An older warehouse, set up before Airflow moved to Postgres | Once: `docker exec job-radar-warehouse-1 psql -U jobradar -d jobradar -c "CREATE DATABASE airflow"`, then `docker compose up -d`. |
 
 ## Credits
 
