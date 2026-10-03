@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 150" width="1000" height="150" role="img" aria-label="It finds the jobs, so you can focus on landing one.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="0.55" stop-color="#10213A"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#93C5FD" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#93C5FD" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", -apple-system, Helvetica, Arial, sans-serif; }
+    .wave { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 2 10; animation: flow 6s linear infinite; }
+    @keyframes flow { to { stroke-dashoffset: -120; } }
+    .spin { animation: spin 4s linear infinite; transform-origin: 500px 62px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+
+  <rect width="1000" height="150" rx="22" fill="url(#bg)"/>
+  <path class="wave" stroke="#2DD4BF" stroke-opacity="0.6" d="M30 95 C 160 40, 300 120, 430 70 M570 70 C 700 120, 840 40, 970 75"/>
+  <path class="wave" stroke="#A78BFA" stroke-opacity="0.45" style="animation-duration:9s" d="M30 112 C 200 80, 330 130, 440 95 M560 95 C 680 130, 820 80, 970 100"/>
+  <circle cx="175" cy="70" r="4" fill="#E2E8F0"/>
+  <circle cx="365" cy="88" r="4" fill="#E2E8F0"/>
+  <circle cx="660" cy="92" r="4" fill="#E2E8F0"/>
+  <circle cx="860" cy="66" r="4" fill="#E2E8F0"/>
+
+  <g stroke="#93C5FD" fill="none">
+    <circle cx="500" cy="62" r="34" stroke-opacity="0.85" stroke-width="1.6"/>
+    <circle cx="500" cy="62" r="20" stroke-opacity="0.55" stroke-width="1.4"/>
+  </g>
+  <path class="spin" d="M500 62 L500 28 A34 34 0 0 1 529 45 Z" fill="url(#sweep)"/>
+  <circle cx="512" cy="44" r="3.5" fill="#4ADE80"/>
+  <circle cx="500" cy="62" r="3.5" fill="#93C5FD"/>
+
+  <text x="500" y="130" font-size="14" fill="#CBD5E1" text-anchor="middle">It finds the jobs, so you can focus on landing one.</text>
+</svg>

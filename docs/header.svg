@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" width="1000" height="300" role="img" aria-label="job-radar: data and AI jobs, found for you. A terminal runs a collect over 12 sources and 200 career pages, ranks the jobs by your skills and emails them at 11:30am and 7:30pm; a radar sweeps for new jobs.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="0.55" stop-color="#10213A"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7C3AED" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#7C3AED" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#14B8A6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#14B8A6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2DD4BF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#2DD4BF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .sans { font-family: "Segoe UI", -apple-system, Helvetica, Arial, sans-serif; }
+    .mono { font-family: "Fira Code", Consolas, "Courier New", monospace; font-size: 14px; }
+    .wave { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 2 10; animation: flow 6s linear infinite; }
+    @keyframes flow { to { stroke-dashoffset: -120; } }
+    .blink { animation: blink 1.1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .spin { animation: spin 4s linear infinite; transform-origin: 880px 140px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .blip { animation: blip 2s ease-in-out infinite; }
+    @keyframes blip { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  </style>
+
+  <rect width="1000" height="300" rx="22" fill="url(#bg)"/>
+  <circle cx="880" cy="70" r="190" fill="url(#glowA)"/>
+  <circle cx="160" cy="280" r="170" fill="url(#glowB)"/>
+
+  <path class="wave" stroke="#2DD4BF" stroke-opacity="0.55" d="M0 262 C 150 228, 300 298, 480 262 S 780 234, 1000 258"/>
+  <path class="wave" stroke="#A78BFA" stroke-opacity="0.45" style="animation-duration:9s" d="M0 282 C 180 256, 330 304, 520 278 S 820 254, 1000 276"/>
+
+  <!-- Terminal -->
+  <rect x="50" y="62" width="330" height="168" rx="14" fill="#0F172A" fill-opacity="0.92" stroke="#334155"/>
+  <circle cx="74" cy="84" r="6" fill="#FF5F57"/>
+  <circle cx="94" cy="84" r="6" fill="#FEBC2E"/>
+  <circle cx="114" cy="84" r="6" fill="#28C840"/>
+  <text x="72" y="120" class="mono" fill="#5EEAD4">$ job-radar collect</text>
+  <text x="72" y="145" class="mono" fill="#C4B5FD">-&gt; 12 sources, 200+ career pages</text>
+  <text x="72" y="168" class="mono" fill="#C4B5FD">-&gt; your roles, places, level</text>
+  <text x="72" y="191" class="mono" fill="#C4B5FD">-&gt; ranked by your skills</text>
+  <text x="72" y="214" class="mono" fill="#4ADE80">[ok] emailed 11:30am, 7:30pm</text>
+  <rect x="326" y="202" width="9" height="16" fill="#4ADE80" class="blink"/>
+
+  <!-- Name -->
+  <text x="430" y="135" class="sans" font-size="46" font-weight="700" fill="#FFFFFF">job-radar</text>
+  <text x="432" y="172" class="sans" font-size="20" font-weight="600" fill="#5EEAD4">Data &amp; AI jobs, found for you</text>
+  <text x="432" y="200" class="sans" font-size="15" fill="#CBD5E1">Egypt onsite &#183; remote everywhere else</text>
+  <text x="432" y="224" class="sans" font-size="15" fill="#CBD5E1">Airflow &#183; PostgreSQL &#183; Docker &#183; Claude Code</text>
+
+  <!-- Radar -->
+  <g stroke="#5EEAD4" fill="none">
+    <circle cx="880" cy="140" r="72" stroke-opacity="0.55" stroke-width="1.6"/>
+    <circle cx="880" cy="140" r="48" stroke-opacity="0.4" stroke-width="1.4"/>
+    <circle cx="880" cy="140" r="24" stroke-opacity="0.3" stroke-width="1.2"/>
+    <line x1="808" y1="140" x2="952" y2="140" stroke-opacity="0.2"/>
+    <line x1="880" y1="68" x2="880" y2="212" stroke-opacity="0.2"/>
+  </g>
+  <path class="spin" d="M880 140 L880 68 A72 72 0 0 1 942 104 Z" fill="url(#sweep)"/>
+  <circle cx="903" cy="99" r="5" fill="#4ADE80" class="blip"/>
+  <circle cx="846" cy="166" r="4" fill="#4ADE80" class="blip" style="animation-delay:0.7s"/>
+  <circle cx="918" cy="172" r="3.5" fill="#FBBF24" class="blip" style="animation-delay:1.3s"/>
+  <circle cx="880" cy="140" r="4" fill="#5EEAD4"/>
+</svg>
