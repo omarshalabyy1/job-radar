@@ -1,7 +1,11 @@
-"""job_radar: every 6 hours (01:00, 07:00, 13:00, 19:00 Cairo time), find the new jobs, rank them, email them.
+"""job_radar: at 1am, 7am, 11am and 6pm Cairo time, find the new jobs and rank them; two
+email DAGs send them, each an hour or so after a run:
 
-    schema -> extract_boards, extract_remote, extract_egypt, extract_workable, extract_companies,
-              extract_portals, extract_email (side by side) -> transform -> describe -> match_skills -> export_career_ops, email
+    job_radar               schema -> extract_boards, extract_remote, extract_egypt, extract_workable,
+                            extract_companies, extract_portals, extract_email (side by side) -> transform
+                            -> describe -> match_skills -> export_career_ops
+    job_radar_email_egypt   12pm and 7pm: the Egypt jobs not emailed yet
+    job_radar_email_abroad  8am and 8pm: the jobs outside Egypt (remote, Unknown location) not emailed yet
 
 Each task is one step of `python -m job_radar`, run from the job_radar virtual environment. The
 extract tasks run in parallel, so a run takes about as long as its slowest source.
@@ -39,7 +43,7 @@ def step(name: str, **kwargs) -> BashOperator:
 
 with DAG(
     dag_id="job_radar",
-    schedule="0 1,7,13,19 * * *",
+    schedule="0 1,7,11,18 * * *",
     start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
     catchup=False,
     max_active_runs=1,
@@ -51,4 +55,12 @@ with DAG(
     step("schema") >> extracts
     matched = step("match_skills", trigger_rule="all_done")
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=80)) >> matched
-    matched >> [step("export_career_ops"), step("email")]
+    matched >> step("export_career_ops")
+
+# your two emails, each at its own times (a laptop asleep at a time sends once it is back)
+for dag_id, name, schedule in (("job_radar_email_egypt", "email_egypt", "0 12,19 * * *"),
+                               ("job_radar_email_abroad", "email_abroad", "0 8,20 * * *")):
+    with DAG(dag_id=dag_id, schedule=schedule, start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
+             catchup=False, max_active_runs=1, is_paused_upon_creation=False,
+             default_args={"retries": 0, "execution_timeout": timedelta(seconds=120)}):
+        step(name)

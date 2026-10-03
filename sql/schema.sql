@@ -54,7 +54,8 @@ CREATE INDEX IF NOT EXISTS job_first_seen ON core.job (first_seen);
 -- here every run: a place added to config.PLACES only needs adding to this list.
 ALTER TABLE core.job DROP CONSTRAINT IF EXISTS job_place_check;
 ALTER TABLE core.job ADD CONSTRAINT job_place_check
-    CHECK (place IN ('Egypt', 'UAE', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'USA', 'Europe', 'Remote'));
+    CHECK (place IN ('Egypt', 'UAE', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'USA', 'Europe', 'Remote',
+                     'Unknown location'));
 
 -- Your companies: a starred one's jobs are starred from any source, and a careers page, when given,
 -- is read at most once a day. Add them in the tracker (Companies tab). The platform is detected on

@@ -28,8 +28,8 @@ import requests
 from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 
-from .config import (BAYT_PLACES, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, PHENOM_SEARCHES, PLACES, REMOTE_OPEN_TO,
-                     RESPECT_ROBOTS, ROLES, TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
+from .config import (BAYT_PLACES, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, ONSITE_PLACES, PHENOM_SEARCHES, PLACES,
+                     REMOTE_OPEN_TO, RESPECT_ROBOTS, ROLES, TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
 
 STARTED = time.monotonic()  # each step is its own process: its time budget counts from here
 
@@ -43,7 +43,8 @@ IMAP_HOSTS = {"gmail.com": "imap.gmail.com", "googlemail.com": "imap.gmail.com",
               "outlook.com": "outlook.office365.com", "hotmail.com": "outlook.office365.com",
               "live.com": "outlook.office365.com"}
 # an email is opened only when its sender or its subject looks like a job
-JOB_SENDERS = (r"jobalerts|jobs-listings|jobs-noreply|indeed|wuzzuf|bayt|glassdoor|naukrigulf|gulftalent"
+# any LinkedIn email (alerts, "you may be a fit", "is hiring", recruiters): only its job links are read
+JOB_SENDERS = (r"linkedin|jobalerts|jobs-listings|jobs-noreply|indeed|wuzzuf|bayt|glassdoor|naukrigulf|gulftalent"
                r"|akhtaboot|tanqeeb|forasna|jooble|himalayas|remotive|weworkremotely|wellfound|recruit"
                r"|talent|careers?@|hiring")
 JOB_SUBJECTS = r"\bjobs?\b|vacanc|opening|opportunit|position|hiring|وظيف|وظائف"
@@ -72,8 +73,9 @@ def get(url: str, **params) -> requests.Response:
 
 
 def job_boards() -> list[dict]:
-    """Indeed and Bayt through JobSpy: every role in every place, one board and place per call (one
-    down is a short day). Indeed, which does not rate-limit, searches 6 places at a time; Bayt, which
+    """Indeed and Bayt through JobSpy: every role in every place, remote jobs only outside Egypt
+    (ONSITE_PLACES), one board and place per call (one down is a short day). Indeed, which does not
+    rate-limit, searches 6 places at a time; Bayt, which
     has jobs only in Egypt and the Gulf, one search at a time. 3 seconds between a call's searches.
     LinkedIn jobs come only from your LinkedIn job-alert emails. Searches stop at the step's time
     budget; Bayt's places after Egypt come in a new order each run, so none is always the one cut."""
@@ -94,8 +96,9 @@ def board(site: str, places: list[tuple]) -> list[dict]:
                 return rows
             time.sleep(3)
             try:
-                df = scrape_jobs(site_name=site, search_term=term, location=location,
-                                 country_indeed=country, hours_old=HOURS_OLD, results_wanted=30, verbose=0)
+                df = scrape_jobs(site_name=site, search_term=term, location=location, country_indeed=country,
+                                 is_remote=place not in ONSITE_PLACES, hours_old=HOURS_OLD, results_wanted=30,
+                                 verbose=0)
             except Exception as e:
                 print(f"WARNING {site} {label} / {location}: {e!r}"[:300])
                 continue
@@ -160,12 +163,13 @@ def jooble() -> list[dict]:
 
 def workable_jobs() -> list[dict]:
     """Workable's public job search, across every company on Workable (startups and small and mid
-    companies above all): each keyword in each place, posted in the last day, 4 searches at a time
-    (8 at a time drew 429 Too Many Requests)."""
+    companies above all): each keyword in each place (remote jobs only outside Egypt), posted in the
+    last day, 4 searches at a time (8 at a time drew 429 Too Many Requests)."""
     def search(args: tuple) -> list[dict]:
         keyword, (place, location, _) = args
         rows = []
-        for j in get("https://jobs.workable.com/api/v1/jobs", query=keyword, location=location, day_range=1).json()["jobs"]:
+        for j in get("https://jobs.workable.com/api/v1/jobs", query=keyword, location=location, day_range=1,
+                     workplace=None if place in ONSITE_PLACES else "remote").json()["jobs"]:
             where = j.get("location") or {}
             location_text = ", ".join(filter(None, [where.get("city"), where.get("countryName")]))
             text = BeautifulSoup(f"{j.get('description', '')} {j.get('requirementsSection', '')}", "html.parser")
@@ -412,16 +416,16 @@ def ashby(company: str, slug: str) -> list[dict]:
 
 def career_page(company: str, url: str) -> list[dict]:
     """A careers page on no known platform, rendered with Playwright: every link on it whose words
-    are one of the roles. A job with no place on the page is taken as in Egypt (the companies you
-    add are)."""
+    are one of the roles, in a place its title or the text around it names (a job naming no place
+    is left out: many of your companies hire abroad too)."""
     soup = BeautifulSoup(rendered(url), "html.parser")
     rows, urls = [], set()
     for a in soup.find_all("a", href=True):
         title, job_url = a.get_text(" ", strip=True), urljoin(url, a["href"])
-        if role_of(title) and job_url not in urls:
+        context = a.parent.get_text(" ", strip=True) if a.parent else ""
+        if role_of(title) and place_of(context) and job_url not in urls:
             urls.add(job_url)
-            context = a.parent.get_text(" ", strip=True) if a.parent else ""
-            rows.append(row(company.lower(), place_of(context) or "Egypt", title, company, context[:200], job_url,
+            rows.append(row(company.lower(), None, title, company, context[:200], job_url,
                             None, None, {"title": title, "context": context[:500]}))
     return rows
 
@@ -447,9 +451,10 @@ def phenom(company: str, base: str) -> list[dict]:
 
 
 def successfactors(company: str, base: str) -> list[dict]:
-    """A SuccessFactors career site (Nestlé): its newest jobs in each place, one page per place."""
+    """A SuccessFactors career site (Nestlé): its newest jobs in Egypt (no remote filter), one page
+    per place."""
     rows = []
-    for _, location, _ in PLACES:
+    for _, location, _ in [p for p in PLACES if p[0] in ONSITE_PLACES]:
         soup = BeautifulSoup(get(f"{base}/search/", q="", locationsearch=location, sortColumn="referencedate",
                                  sortDirection="desc").text, "html.parser")
         for tr in soup.select("tr.data-row"):
@@ -499,7 +504,7 @@ READERS = {"workable": workable, "greenhouse": greenhouse, "lever": lever, "ashb
 
 
 def mailboxes(seen: set[str]) -> list[dict]:
-    """Job alerts (LinkedIn, Indeed, Wuzzuf, Bayt ...) from your inboxes, over IMAP and read-only:
+    """Job alerts (LinkedIn, Indeed, Wuzzuf, Bayt ...) from your inboxes and spam folders, over IMAP and read-only:
     nothing is marked read, moved or deleted, and nothing leaves the laptop. Only an email whose
     sender or subject looks like a job is opened. An email already read (its Message-ID in `seen`)
     is not read again.
@@ -525,36 +530,42 @@ def read_mailbox(address: str, password: str, host: str, seen: set[str]) -> list
     rows = []
     with imaplib.IMAP4_SSL(host) as imap:
         imap.login(address, password)
-        imap.select("INBOX", readonly=True)
+        # the inbox, then the spam folder: the one the server flags \Junk (Gmail's [Gmail]/Spam)
+        spam = [re.search(r'"?([^"]*)"?$', line.decode()).group(1) for line in imap.list()[1] if b"\\Junk" in line]
         since_day = (date.today() - timedelta(hours=HOURS_OLD)).strftime("%d-%b-%Y")
-        for uid in imap.uid("search", None, "SINCE", since_day)[1][0].split():
-            head = imap.uid("fetch", uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID DATE)])")[1][0][1]
-            h = email.message_from_bytes(head, policy=email.policy.default)
-            message_id = str(h["Message-ID"] or f"{address}/{uid.decode()}")
-            if message_id in seen or not (re.search(JOB_SENDERS, str(h["From"]), re.I)
-                                          or re.search(JOB_SUBJECTS, str(h["Subject"]), re.I)):
-                continue
-            msg = email.message_from_bytes(imap.uid("fetch", uid, "(BODY.PEEK[])")[1][0][1],
-                                           policy=email.policy.default)
-            body = msg.get_body(preferencelist=("html",))
-            jobs = jobs_in_email(body.get_content()) if body else []
-            posted = str(parsedate_to_datetime(str(h["Date"])).date()) if h["Date"] else None
-            meta = {"mailbox": address, "message_id": message_id, "from": str(h["From"]), "subject": str(h["Subject"])}
-            for title, company, location, url in jobs:
-                # an alert you subscribed to is for your region unless its location says otherwise
-                rows.append(row("email", place_of(location) or "Egypt", title, company, location, url, posted,
-                                None, {**meta, "title": title, "company": company, "location": location, "url": url}))
-            print(f"email {address}: {h['Subject']!s:.60} -> {len(jobs)} jobs")
+        for folder in ["INBOX", *spam]:
+            imap.select(f'"{folder}"', readonly=True)
+            for uid in imap.uid("search", None, "SINCE", since_day)[1][0].split():
+                head = imap.uid("fetch", uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID DATE)])")[1][0][1]
+                h = email.message_from_bytes(head, policy=email.policy.default)
+                message_id = str(h["Message-ID"] or f"{address}/{folder}/{uid.decode()}")
+                # job radar's own digest is not a job alert
+                if message_id in seen or str(h["Subject"]).startswith("Job radar") or not (
+                        re.search(JOB_SENDERS, str(h["From"]), re.I) or re.search(JOB_SUBJECTS, str(h["Subject"]), re.I)):
+                    continue
+                msg = email.message_from_bytes(imap.uid("fetch", uid, "(BODY.PEEK[])")[1][0][1],
+                                               policy=email.policy.default)
+                body = msg.get_body(preferencelist=("html",))
+                jobs = jobs_in_email(body.get_content()) if body else []
+                posted = str(parsedate_to_datetime(str(h["Date"])).date()) if h["Date"] else None
+                meta = {"mailbox": address, "folder": folder, "message_id": message_id, "from": str(h["From"]),
+                        "subject": str(h["Subject"])}
+                for title, company, location, url in jobs:
+                    # the place comes from the location or the title in transform, else "Unknown location"
+                    rows.append(row("email", None, title, company, location, url, posted,
+                                    None, {**meta, "title": title, "company": company, "location": location, "url": url}))
+                print(f"email {address} {folder}: {h['Subject']!s:.60} -> {len(jobs)} jobs")
     return rows
 
 
 def jobs_in_email(page: str) -> list[tuple[str, str, str, str]]:
     """(title, company, location, url) of each link in a job email whose words are one of the roles.
-    Job alerts put the company and location on the line under the title ("Company · Location")."""
+    Job alerts put the company and location on the line under the title ("Company · Location");
+    a LinkedIn alert puts the whole card in one link: title, "Company · Location", then extras."""
     soup = BeautifulSoup(page, "html.parser")
     links = []
     for a in soup.find_all("a", href=True):
-        links.append((a.get_text(" ", strip=True), a["href"]))
+        links.append((a.get_text("\n", strip=True), a["href"]))
         a.replace_with(f"\n@@{len(links) - 1}@@\n")
     lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
     jobs, urls = [], set()
@@ -562,16 +573,18 @@ def jobs_in_email(page: str) -> list[tuple[str, str, str, str]]:
         link = re.fullmatch(r"@@(\d+)@@", line)
         if not link:
             continue
-        title, url = links[int(link.group(1))]
+        text, url = links[int(link.group(1))]
+        title, _, card = text.partition("\n")
         url = canonical_url(url)
-        if not role_of(title) or url in urls:
+        # from LinkedIn only its job pages (not profiles, posts or searches)
+        if not role_of(title) or url in urls or ("linkedin.com" in url and "/jobs/view/" not in url):
             continue
         urls.add(url)
-        after = lines[i + 1] if i + 1 < len(lines) else ""
+        after = card.split("\n")[0] if card else lines[i + 1] if i + 1 < len(lines) else ""
         if (next_link := re.fullmatch(r"@@(\d+)@@", after)):  # the company is a link of its own
-            after = links[int(next_link.group(1))][0]
-        company, location = (re.split(r"\s+[·•|–-]\s+", after, maxsplit=1) + [""])[:2]
-        if not location and i + 2 < len(lines) and not lines[i + 2].startswith("@@"):
+            after = links[int(next_link.group(1))][0].split("\n")[0]
+        company, location = (part.strip(" -") for part in (re.split(r"\s+[·•|–-]\s+", after, maxsplit=1) + [""])[:2])
+        if not location and not card and i + 2 < len(lines) and not lines[i + 2].startswith("@@"):
             location = lines[i + 2]  # the location on a line of its own
         jobs.append((title, company if not role_of(company) else "", location, url))
     return jobs

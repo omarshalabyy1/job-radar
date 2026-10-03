@@ -29,8 +29,8 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import sources
-from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOURS_OLD, NO_FETCH, ROLES, is_target, place_of, role_of,
-                     too_senior)
+from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOURS_OLD, NO_FETCH, PLACES, ROLES, in_reach, is_target,
+                     place_of, role_of, too_senior)
 
 ROOT = Path(__file__).resolve().parent.parent
 DAYS = HOURS_OLD // 24
@@ -160,12 +160,12 @@ def job_key(title: str, company: str, job_url: str) -> str:
 
 
 def transform(conn) -> None:
-    """raw -> core.job: the window's postings with a role, not above senior, and in a place in scope,
-    one row per job (job_key: the same job on several boards, or reposted, is one job). Re-running
-    it changes nothing."""
+    """raw -> core.job: the window's postings with a role, not above senior, in a place in scope and
+    in reach (remote, or onsite/hybrid in Cairo or Giza), one row per job (job_key: the same job on
+    several boards, or reposted, is one job). Re-running it changes nothing."""
     postings = conn.cursor(row_factory=dict_row).execute(
-        "SELECT run_date, source, searched_for, title, company, location, job_url, date_posted, description"
-        " FROM raw.job_posting WHERE run_date >= current_date - %s"
+        "SELECT run_date, source, searched_for, title, company, location, job_url, date_posted, description,"
+        " payload->>'is_remote' = 'true' AS is_remote FROM raw.job_posting WHERE run_date >= current_date - %s"
         " ORDER BY posting_id", (DAYS,)).fetchall()
     # your companies: a name of 4+ letters as a whole word ("Vodafone Egypt" is Vodafone); a shorter
     # one only as the whole company name, or "ag" and "db" would star "Siemens AG" and "DB Schenker"
@@ -177,8 +177,11 @@ def transform(conn) -> None:
     jobs: dict[str, dict] = {}
     for p in postings:
         rank = role_of(p["title"] or "")
-        place = p["searched_for"] or place_of(p["location"] or "")
-        if not (rank and place and p["job_url"]) or too_senior(p["title"]):
+        # the place searched, else the location's, else the title's ("Data Engineer - Cairo"); a job
+        # whose place none of them gives (only job alerts get this far) is "Unknown location"
+        place = p["searched_for"] or place_of(p["location"] or "") or place_of(p["title"] or "") or "Unknown location"
+        if (not (rank and place and p["job_url"]) or too_senior(p["title"])
+                or not in_reach(place, p["location"] or "", p["title"], bool(p["is_remote"]))):
             continue
         key = job_key(p["title"], p["company"], p["job_url"])
         job = jobs.setdefault(key, {
@@ -294,104 +297,216 @@ def page_description(page: bytes) -> str | None:
     return None
 
 
-def email(conn) -> None:
-    """Email the window's jobs not emailed yet, best first: role rank, target companies, then how
-    many of your skills they ask for; nothing when there is no new job. Each job is marked
-    emailed, so it is never sent twice. Without Gmail settings, write output/digest-<date>.html
-    instead and mark nothing."""
+def email_egypt(conn) -> None:
+    """The Egypt email (Airflow: 12pm and 7pm Cairo time)."""
+    email(conn, egypt=True)
+
+
+def email_abroad(conn) -> None:
+    """The email of the jobs outside Egypt: remote ones and Unknown location (8am and 8pm)."""
+    email(conn, egypt=False)
+
+
+def email(conn, egypt: bool) -> None:
+    """Email the window's jobs in Egypt (or outside it) not emailed yet, by place, role and
+    employment type, best first in each: target companies, then how many of your skills they ask
+    for; nothing when there is no new job. Each job is marked emailed, so it is never sent twice.
+    Without Gmail settings, write output/digest-<date>.html instead and mark nothing."""
+    name = "Egypt" if egypt else "Outside Egypt"
     jobs = conn.cursor(row_factory=dict_row).execute(
-        "SELECT * FROM mart.job_status WHERE emailed_at IS NULL AND first_seen >= current_date - %s"
-        " ORDER BY role_rank, target_company DESC, skill_matches DESC, date_posted DESC NULLS LAST",
-        (DAYS,)).fetchall()
+        "SELECT s.*, j.description, r.payload->>'job_type' AS job_type FROM mart.job_status s"
+        " JOIN core.job j USING (job_id) LEFT JOIN raw.job_posting r ON (r.source, r.job_url) = (s.source, s.job_url)"
+        " WHERE s.emailed_at IS NULL AND s.first_seen >= current_date - %s AND (s.place = 'Egypt') = %s"
+        " ORDER BY s.role_rank, s.target_company DESC, s.skill_matches DESC, s.date_posted DESC NULLS LAST",
+        (DAYS, egypt)).fetchall()
     if not jobs:
-        print("email: no new jobs, nothing sent")
+        print(f"email {name}: no new jobs, nothing sent")
         return
-    if send(digest(jobs), subject(jobs)):
+    if send(digest(jobs, name), subject(jobs, name)):
         conn.execute("UPDATE core.job SET emailed_at = now() WHERE job_id = ANY(%s)", ([j["job_id"] for j in jobs],))
         conn.commit()
 
 
-def subject(jobs: list[dict]) -> str:
+def subject(jobs: list[dict], name: str) -> str:
     starred = sum(j["target_company"] for j in jobs)
-    return (f"Job radar · {len(jobs)} new job{'s' * (len(jobs) != 1)}"
+    return (f"Job radar · {name} · {len(jobs)} new job{'s' * (len(jobs) != 1)}"
             f"{f' · ⭐ {starred} at your companies' if starred else ''} · {date.today():%d %b}")
 
 
 # The email is plain HTML with inline styles only, the one form every mail client (Gmail first)
-# shows as designed: a header with today's numbers, then one section per role, one card per job.
-# Each role shows its best EMAIL_PER_ROLE jobs, so the email stays under Gmail's ~100 KB clip;
-# the rest are a link away in the tracker.
-EMAIL_PER_ROLE = 6
-FONT = "font-family:Segoe UI,Helvetica,Arial,sans-serif"
-INK, MUTED, LINE, ACCENT = "#0f172a", "#64748b", "#e2e8f0", "#2563eb"
+# shows as designed: a header with the numbers, then a section per place, in it one per role in
+# your order, in that one per employment type, one card per job. Cards stop at EMAIL_BYTES, so the
+# email stays under Gmail's ~100 KB clip; the rest are a link away in the tracker.
+EMAIL_BYTES = 70_000
+PLACE_ORDER = list(dict.fromkeys(["Egypt", "Remote", *(place for place, _, _ in PLACES)]))
+EMPLOYMENT = ["Full-time", "Part-time", "Contract", "Freelance"]
+# Experience, so the further you scroll the more a job asks for: the title's words first, else the
+# years the description asks for (1 or less: entry and junior, 5 or more: senior), else mid level
+ENTRY = r"\b(intern(ship)?|trainee|graduate|fresh|entry|junior|jr)\b|متدرب|حديث التخرج|مبتدئ"
+SENIOR = r"\b(senior|sr|expert)\b|\biii\b|خبير"
+YEARS = (r"\b(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*)?\+?\s*(?:years?|yrs?)\b(?=[^.]{0,40}experience)"
+         r"|experience[^.]{0,40}?\b(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*)?(?:years?|yrs?)\b"
+         r"|خبرة[^.]{0,30}?(\d{1,2})")
+LEVELS = ["Entry & junior", "Mid level", "Senior"]
+INDEED_TYPES = {"fulltime": "Full-time", "parttime": "Part-time", "contract": "Contract", "temporary": "Contract"}
+# the title's words, then only plain statements in the description ("smart contracts" is no contract job)
+TYPE_IN_TITLE = {"Freelance": r"freelanc|عمل حر", "Part-time": r"part[- ]?time|دوام جزئي",
+                 "Contract": r"\bcontract(or)?\b|fixed[- ]term|\btemp(orary)?\b"}
+TYPE_IN_TEXT = {"Freelance": r"\bfreelanc", "Part-time": r"\bpart[- ]time\b",
+                "Contract": r"\bcontract (role|position|basis|assignment)|\d+[- ]months? contract|fixed[- ]term"}
+# Colours from the dataviz skill's reference palette: text in ink tokens, a deep blue shell, a
+# tinted tag per job type.
+FONT = "font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+INK, INK2, LINE, PLANE = "#0b0b0b", "#52514e", "#e1e0d9", "#f4f4f1"
+SHELL, LINK, TINT = "#0d366b", "#1c5cab", "#eef4fc"
+TYPE_TAG = {"Part-time": ("#ece9fb", "#3b2e8a"), "Contract": ("#fdeee6", "#9a3b12"), "Freelance": ("#e3f6ee", "#0e6b49")}
 
 
-def badge(text: str, color: str, background: str) -> str:
-    return (f'<span style="display:inline-block;padding:2px 8px;margin:2px 4px 2px 0;border-radius:10px;'
-            f'font-size:12px;color:{color};background:{background};{FONT}">{html.escape(text)}</span>')
+def experience(j: dict) -> tuple[int, int | None]:
+    """(level, years): level 0 entry or junior, 1 mid level, 2 senior; years, the least the
+    description asks for, None when it does not say."""
+    m = re.search(YEARS, j.get("description") or "", re.I)
+    years = int(next(g for g in m.groups() if g)) if m else None
+    years = years if years is not None and years <= 15 else None  # "founded 50 years ago" is no requirement
+    if re.search(ENTRY, j["title"], re.I):
+        return 0, years
+    if re.search(SENIOR, j["title"], re.I):
+        return 2, years
+    return (1 if years is None else 0 if years <= 1 else 2 if years >= 5 else 1), years
+
+
+def employment(j: dict) -> str:
+    """Full-time, Part-time, Contract or Freelance: Indeed's job type (full-time first when it gives
+    two), else the title, else the description; Full-time when none says."""
+    indeed = {INDEED_TYPES.get(kind) for kind in (j.get("job_type") or "").split(", ")}
+    for kind in EMPLOYMENT:
+        if kind in indeed:
+            return kind
+    for patterns, text in ((TYPE_IN_TITLE, j["title"]), (TYPE_IN_TEXT, j.get("description") or "")):
+        for kind, pattern in patterns.items():
+            if re.search(pattern, text, re.I):
+                return kind
+    return "Full-time"
+
+
+def tag(text: str, background: str, color: str) -> str:
+    return (f'<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;'
+            f'background:{background};color:{color}">{text}</span>')
 
 
 def job_card(j: dict) -> str:
-    skills = [s for s in (j["skills_matched"] or "").split(", ") if s]
-    star = "⭐ " if j["target_company"] else ""
-    posted = badge(f"posted {j['date_posted']:%d %b}", "#334155", "#f1f5f9") if j["date_posted"] else ""
-    if j.get("cv_coverage") is not None:
-        posted += badge(f"your CV covers {j['cv_coverage']:.0f}%", "#5b21b6", "#ede9fe")
-    meta =" · ".join(html.escape(str(x)) for x in (j["company"], j["location"] or j["place"]) if x)
-    skill_line = ("".join(badge(s, "#065f46", "#d1fae5") for s in skills[:10])
-                  + (badge(f"+{len(skills) - 10} more", "#065f46", "#ecfdf5") if len(skills) > 10 else "")
-                  if skills else f'<span style="font-size:12px;color:{MUTED};{FONT}">'
-                  f'{"none of your skills named" if j["described"] else "no description yet: open the job"}</span>')
-    count = (f'<span style="float:right;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;'
-             f'color:#ffffff;background:{"#059669" if len(skills) >= 5 else "#10b981" if skills else "#94a3b8"};{FONT}">'
-             f'{len(skills)} skill{"s" * (len(skills) != 1)}</span>')
-    return (f'<tr><td style="padding:14px 16px;border-bottom:1px solid {LINE};'
-            f'{"background:#fffbeb;" if star else ""}">{count}'
-            f'<a href="{html.escape(j["job_url"])}" style="font-size:16px;font-weight:600;color:{ACCENT};'
-            f'text-decoration:none;{FONT}">{star}{html.escape(j["title"])}</a>'
-            f'<div style="margin:4px 0 6px;font-size:13px;color:{INK};{FONT}">{meta}</div>'
-            f'<div>{badge(j["place"], "#1e3a8a", "#dbeafe")}{badge(j["source"], "#334155", "#f1f5f9")}'
-            f'{posted}</div>'
-            f'<div style="margin-top:6px">{skill_line}</div></td></tr>')
+    """The title (the link), company · location and a quiet meta line. A job at your companies gets
+    a warm ground and a "⭐ Your company" tag."""
+    star = j["target_company"]
+    kind = j.get("employment", "Full-time")
+    source = "your job alerts" if j["source"] == "email" else html.escape(j["source"][:1].upper() + j["source"][1:])
+    meta = " · ".join(x for x in (
+        tag("⭐ Your company", "#fdf0c4", "#7a5200") if star else "",
+        tag(kind, *TYPE_TAG[kind]) if kind in TYPE_TAG else "",
+        f"{j['years']}+ yrs" if j.get("years") is not None else "",
+        f"via {source}",
+        f"{j['date_posted']:%d %b}" if j["date_posted"] else "",
+        f"CV {j['cv_coverage']:.0f}%" if j.get("cv_coverage") is not None else "") if x)
+    where = " · ".join(html.escape(x) for x in (str(j["company"] or "").strip(" -"), str(j["location"] or "").strip(" -")) if x)
+    return (f'<tr><td style="padding:14px 20px;border-top:1px solid {LINE};{"background:#fffaeb;" if star else ""}">'
+            f'<a href="{html.escape(j["job_url"])}" style="font-size:16px;line-height:22px;font-weight:600;color:{LINK};'
+            f'text-decoration:none">{html.escape(j["title"])}</a>'
+            f'<div style="margin-top:2px;font-size:14px;line-height:20px;color:{INK}">{where}</div>'
+            f'<div style="margin-top:4px;font-size:12px;line-height:20px;color:{INK2}">{meta}</div></td></tr>')
 
 
-def digest(jobs: list[dict]) -> str:
-    by_place: dict[str, int] = defaultdict(int)
+def digest(jobs: list[dict], name: str) -> str:
+    """One column at most 640 px wide, so it reads the same on a phone and on a laptop: a deep blue
+    header with one summary line and a chip per place, then a band per place (Egypt first), in it
+    a section per experience level (entry and junior, mid, senior: the further you scroll, the more
+    a job asks for), a heading per role, a job-type line only when a role mixes types, and the cards."""
     for j in jobs:
-        by_place[j["place"]] += 1
+        j["employment"] = employment(j)
+        j["level"], j["years"] = experience(j)
+    # fewest years first inside each level (a job that does not say sits with its level's usual
+    # years); stable, so the best match stays first among equals
+    jobs = sorted(jobs, key=lambda j: (j["level"], (0, 2, 5)[j["level"]] if j["years"] is None else j["years"]))
+    places = sorted({j["place"] for j in jobs},
+                    key=lambda p: PLACE_ORDER.index(p) if p in PLACE_ORDER else len(PLACE_ORDER))
+    by_place = {place: [j for j in jobs if j["place"] == place] for place in places}
     starred = sum(j["target_company"] for j in jobs)
-    numbers = "".join(
-        f'<td align="center" style="padding:10px 6px"><div style="font-size:24px;font-weight:700;color:#ffffff;{FONT}">'
-        f'{value}</div><div style="font-size:12px;color:#cbd5e1;{FONT}">{html.escape(label)}</div></td>'
-        for value, label in [(len(jobs), "new jobs"), (starred, "⭐ your companies"),
-                             *sorted(((n, p) for p, n in by_place.items()), reverse=True)[:3]])
+    summary = f"{len(jobs)} new job{'s' * (len(jobs) != 1)}{f' · ⭐ {starred} at your companies' if starred else ''}"
+    first = by_place[places[0]][0]
+    # the inbox preview line under the subject
+    preheader = f"{summary} · top: {first['title']} at {first['company']}"
+    chips = "".join(f'<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 10px;border-radius:12px;'
+                    f'background:#184f95;font-size:12px;color:#cde2fb">{html.escape(place)} '
+                    f'<b style="color:#ffffff">{len(group)}</b></span>' for place, group in by_place.items()
+                    ) if len(by_place) > 1 else ""  # one place (the Egypt email): the title already names it
+    more = (f'<a href="http://127.0.0.1:8501" style="color:{LINK};text-decoration:none">in your tracker →</a>')
     sections = []
-    for rank, label in ROLE_LABEL.items():
-        group = [j for j in jobs if j["role_rank"] == rank]
-        if group:
+    for place, in_place in by_place.items():
+        if len(by_place) > 1:
             sections.append(
-                f'<tr><td style="padding:22px 16px 8px;border-bottom:2px solid {ACCENT}">'
-                f'<span style="font-size:13px;font-weight:700;letter-spacing:.5px;color:{ACCENT};{FONT}">'
-                f'{rank} · {html.escape(label.upper())}</span>'
-                f'<span style="float:right;font-size:13px;color:{MUTED};{FONT}">{len(group)}</span></td></tr>'
-                + "".join(job_card(j) for j in group[:EMAIL_PER_ROLE])
-                + (f'<tr><td style="padding:10px 16px;font-size:13px;{FONT}"><a href="http://127.0.0.1:8501" '
-                   f'style="color:{ACCENT};text-decoration:none">+ {len(group) - EMAIL_PER_ROLE} more in your tracker'
-                   f'</a></td></tr>' if len(group) > EMAIL_PER_ROLE else ""))
-    return (f'<div style="margin:0;padding:24px 0;background:#f1f5f9">'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;'
-            f'margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid {LINE}">'
-            f'<tr><td style="padding:24px 16px 8px;background:{INK}">'
-            f'<div style="font-size:22px;font-weight:700;color:#ffffff;{FONT}">Job radar</div>'
-            f'<div style="font-size:13px;color:#cbd5e1;{FONT}">{date.today():%A %d %B %Y} · best match first: '
-            f'your role order, ⭐ your companies, then how many of your skills each job asks for</div></td></tr>'
-            f'<tr><td style="background:{INK};padding:0 10px 16px"><table role="presentation" width="100%">'
-            f'<tr>{numbers}</tr></table></td></tr>'
+                f'<tr><td style="padding:16px 20px 14px;background:{TINT};border-top:1px solid {LINE}">'
+                f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+                f'<td style="font-size:20px;line-height:26px;font-weight:700;color:{INK}">{html.escape(place)}</td>'
+                f'<td align="right" style="font-size:13px;color:{INK2};white-space:nowrap">{len(in_place)} '
+                f'job{"s" * (len(in_place) != 1)}</td></tr></table></td></tr>')
+        for lvl, level_name in enumerate(LEVELS):
+            in_level = [j for j in in_place if j["level"] == lvl]
+            if not in_level:
+                continue
+            sections.append(
+                f'<tr><td style="padding:22px 20px 6px;border-bottom:2px solid {SHELL}"><table role="presentation" '
+                f'width="100%" cellpadding="0" cellspacing="0"><tr><td style="font-size:16px;line-height:22px;'
+                f'font-weight:700;color:{SHELL}">{html.escape(level_name)}</td><td align="right" style="font-size:13px;'
+                f'color:{INK2}">{len(in_level)}</td></tr></table></td></tr>')
+            for rank, label in ROLE_LABEL.items():
+                in_role = [j for j in in_level if j["role_rank"] == rank]
+                if not in_role:
+                    continue
+                sections.append(
+                    f'<tr><td style="padding:16px 20px 8px"><table role="presentation" width="100%" cellpadding="0" '
+                    f'cellspacing="0"><tr><td style="font-size:12px;font-weight:700;letter-spacing:.6px;color:{LINK}">'
+                    f'{html.escape(label.upper())}</td><td align="right" style="font-size:12px;color:{INK2}">{len(in_role)}'
+                    f'</td></tr></table></td></tr>')
+                if sum(map(len, sections)) >= EMAIL_BYTES:  # no room left: one line for the whole role
+                    counts = " · ".join(f"{kind} {n}" for kind in EMPLOYMENT
+                                        if (n := sum(j["employment"] == kind for j in in_role)))
+                    sections.append(f'<tr><td style="padding:0 20px 14px;font-size:13px;color:{INK2}">{counts} · {more}'
+                                    f'</td></tr>')
+                    continue
+                mixed = len({j["employment"] for j in in_role}) > 1
+                for kind in EMPLOYMENT:
+                    group = [j for j in in_role if j["employment"] == kind]
+                    if not group:
+                        continue
+                    # cards stop at EMAIL_BYTES, the rest wait in the tracker
+                    cards = []
+                    for j in group:
+                        if sum(map(len, sections)) + sum(map(len, cards)) >= EMAIL_BYTES:
+                            break
+                        cards.append(job_card(j))
+                    shown = group[:len(cards)]
+                    sections.append(
+                        (f'<tr><td style="padding:8px 20px 8px">{tag(f"{kind} · {len(group)}", *TYPE_TAG.get(kind, (PLANE, INK2)))}'
+                         f'</td></tr>' if mixed else "")
+                        + "".join(cards)
+                        + (f'<tr><td style="padding:10px 20px 14px;border-top:1px solid {LINE};font-size:13px;color:{INK2}">'
+                           f'+ {len(group) - len(shown)} more {kind.lower()} {more}</td></tr>'
+                           if len(group) > len(shown) else ""))
+    return (f'<div style="margin:0;padding:16px 8px;background:{PLANE};{FONT}">'
+            f'<div style="display:none;max-height:0;overflow:hidden;opacity:0">{html.escape(preheader)}</div>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;'
+            f'margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid {LINE};{FONT}">'
+            f'<tr><td style="padding:24px 20px 18px;background:{SHELL}">'
+            f'<div style="font-size:24px;line-height:30px;font-weight:700;color:#ffffff">Job radar · {html.escape(name)}</div>'
+            f'<div style="margin-top:2px;font-size:13px;line-height:18px;color:#9ec5f4">{date.today():%A %d %B %Y}</div>'
+            f'<div style="margin:14px 0 12px;font-size:16px;line-height:22px;font-weight:600;color:#ffffff">'
+            f'{html.escape(summary)}</div>{chips}</td></tr>'
             + "".join(sections)
-            + f'<tr><td style="padding:18px 16px;font-size:12px;color:{MUTED};{FONT}">'
-            f'Mark what you apply to in the <a href="http://127.0.0.1:8501" style="color:{ACCENT}">tracker</a> · '
-            f'runs in <a href="http://127.0.0.1:8081" style="color:{ACCENT}">Airflow</a> every 6 hours · '
-            f'each job is sent once</td></tr></table></div>')
+            + f'<tr><td style="padding:18px 20px 22px;border-top:1px solid {LINE};font-size:12px;line-height:18px;'
+            f'color:{INK2}">Entry and junior jobs first, senior last; in each, your companies first, then the best matches. '
+            f'Each job is sent once.<br>On your laptop: the <a href="http://127.0.0.1:8501" style="color:{LINK}">'
+            f'tracker</a> to mark what you apply to · <a href="http://127.0.0.1:8081" style="color:{LINK}">Airflow'
+            f'</a> collects at 1am, 7am, 11am and 6pm · Egypt email 12pm and 7pm, outside Egypt 8am and 8pm '
+            f'(Cairo time).</td></tr></table></div>')
 
 
 def send(body: str, title: str) -> bool:

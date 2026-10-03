@@ -29,7 +29,8 @@ ROLES = [
     (4, "BI Developer",
      '"BI Developer" OR "Power BI" OR "Business Intelligence" OR "Data Visualization" OR "MIS Specialist"'
      ' OR "Reporting Developer"',
-     [r"\bbi\b|business intelligence|power ?bi|tableau|qlik|looker|ssrs|\bmis\b|data visuali[sz]ation|dashboard"
+     [r"\bbi\b|business intelligence|power ?bi|tableau|qlik|looker|ssrs|\bmis\b|data visuali[sz]ation"
+      r"|dashboards? (developer|designer|specialist|engineer|analyst)"
       r"|report(ing)? (developer|specialist|engineer)|ذكاء الأعمال|باور بي"]),
     (5, "Data Analyst",
      '"Data Analyst" OR "Reporting Analyst" OR "Business Analyst" OR "Analytics Specialist" OR "Product Analyst"',
@@ -91,6 +92,18 @@ PLACE_PATTERNS = {
                r"|czech republic|prague|romania|bucharest|greece|athens|europe|european union)\b"),
 }
 REMOTE_OPEN_TO = r"worldwide|anywhere|global|emea|mena|africa|middle east|egypt"
+# Your rule (2026-10-03): an onsite or hybrid job only in Cairo or Giza; anywhere else only remote.
+# An Egypt job is dropped only when its location names another Egyptian city (no city: kept).
+CAIRO_GIZA = (r"cairo|giza|القاهرة|الجيزة|heliopolis|maadi|nasr city|zamalek|mohandessin|dokki|6th of october"
+              r"|october city|sheikh zayed|smart village|fifth settlement|5th settlement")
+OTHER_EGYPT = (r"alexandria|\balex\b|الإسكندرية|mansoura|tanta|assiut|asyut|suez|ismailia|port said|damietta"
+               r"|hurghada|sharm|sinai|aswan|luxor|zagazig|minya|sohag|beni suef|fayoum|faiyum|sokhna"
+               r"|(10th|tenth) of ramadan|sadat city|bahariya|marsa alam|gouna|matrouh|alamein|qena|banha|benha"
+               r"|obour|badr city|menoufia|monufia|sharqia|dakahlia|beheira|gharbia|red sea|new valley")
+REMOTE = r"remote|work from home|\bwfh\b|عن بعد"
+# so the boards (Indeed, Bayt, Workable) search every other place for remote jobs only, and a site
+# with no remote filter is searched in these places only
+ONSITE_PLACES = {"Egypt"}
 # job pages never fetched: LinkedIn (its jobs come only from your alert emails)
 NO_FETCH = r"linkedin\.com"
 # Your choice (2026-10-03): read public careers pages even when their robots.txt asks crawlers to
@@ -104,16 +117,12 @@ TARGET_COMPANIES =(r"vodafone|\b_?vois\b|\borange\b|pwc|pricewaterhouse|deloitte
 
 # The companies whose own career sites are read live in core.company: add them in the tracker
 # (Companies tab) or in sql/schema.sql. A Phenom site searches by keywords only, so each search
-# names a place.
-PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst")
-                   for where in ("Egypt", "Dubai", "Abu Dhabi", "Riyadh", "Jeddah", "Doha", "Kuwait", "Bahrain",
-                                 "Muscat", "United Kingdom", "Germany", "Netherlands", "France", "Spain", "Poland",
-                                 "United States")]
+# names a place: Egypt, or remote.
+PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst") for where in ("Egypt", "remote")]
 
 # Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and the job
-# pages its robots.txt allows (no ?keywords searches)
-TANQEEB_SITES = {"egypt": "Egypt", "uae": "UAE", "saudi": "Saudi Arabia", "qatar": "Qatar", "kuwait": "Kuwait",
-                 "bahrain": "Bahrain", "oman": "Oman"}
+# pages its robots.txt allows (no ?keywords searches). It has no remote filter, so Egypt only.
+TANQEEB_SITES = {"egypt": "Egypt"}
 TANQEEB_PAGES = ["it-jobs", "data-analyst-jobs", "business-analyst-jobs", "python-developer-jobs", "internship-jobs"]
 
 
@@ -143,6 +152,18 @@ def place_of(location: str) -> str | None:
     if re.search(r"remote", location, re.I) and re.search(REMOTE_OPEN_TO, location, re.I):
         return "Remote"
     return None
+
+
+def in_reach(place: str, location: str, title: str, remote: bool = False) -> bool:
+    """A remote job (not hybrid) in any place; an onsite or hybrid one only in Cairo or Giza.
+    remote: the board says so (JobSpy's is_remote), even when the location names only a city."""
+    text = f"{location} {title}"
+    if remote or place == "Remote" or (re.search(REMOTE, text, re.I) and not re.search(r"hybrid", text, re.I)):
+        return True
+    if place == "Unknown location":  # kept, unless it says onsite or hybrid (then it is not Cairo or Giza)
+        return re.search(r"hybrid|on-?site", text, re.I) is None
+    return place == "Egypt" and (re.search(CAIRO_GIZA, location, re.I) is not None
+                                 or re.search(OTHER_EGYPT, location, re.I) is None)
 
 
 def is_target(company: str) -> bool:

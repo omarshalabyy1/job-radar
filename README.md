@@ -1,6 +1,6 @@
 # job-radar
 
-Every 6 hours, job-radar collects the new data and AI jobs in Egypt, the Gulf, Europe, the USA and
+Four times a day, job-radar collects the new data and AI jobs in Egypt, the Gulf, Europe, the USA and
 remote from job boards, company career sites and your own inbox's job alerts. It ranks them by how
 many of your skills they ask for, stores them in a Postgres warehouse, and emails you only the ones
 you have not seen. It runs on your laptop with Docker and Airflow, and costs nothing.
@@ -18,7 +18,7 @@ flowchart LR
         W[Workable<br/>every company on it]
         G[Your Gmail<br/>LinkedIn and Wuzzuf alerts]
     end
-    subgraph A[Airflow, every 6 hours]
+    subgraph A[Airflow, four times a day]
         E[Extract<br/>7 tasks side by side] --> T[Transform<br/>rank, place, dedupe] --> D[Describe<br/>job pages] --> M[Match skills<br/>jobs and CVs]
     end
     subgraph P[Postgres warehouse]
@@ -47,10 +47,12 @@ flowchart LR
     schema --> portals[extract_portals<br/>28k-company feed]
     schema --> mail[extract_email<br/>Gmail alerts]
     boards & remote & egypt & wk & comp & portals & mail --> transform --> describe --> match_skills
-    match_skills --> email & export_career_ops
+    match_skills --> export_career_ops
 ```
 
-- Runs at 01:00, 07:00, 13:00 and 19:00 Cairo time. A run missed while the laptop was asleep or
+- Collects at 1am, 7am, 11am and 6pm Cairo time; the Egypt email goes at 12pm and 7pm
+  (DAG job_radar_email_egypt), the email of the jobs outside Egypt at 8am and 8pm
+  (job_radar_email_abroad). A run missed while the laptop was asleep or
   off runs once as soon as it is back, Trigger in Airflow runs it now, and every run backfills
   the last 24 hours.
 - Runs never overlap. A run takes about as long as its slowest source, because the seven extract
@@ -80,7 +82,7 @@ is emailed once. Two runs back to back add nothing the second time.
 | | |
 |---|---|
 | **Roles**, best fit first | 1 AI & Data Engineer · 2 Data Engineer · 3 AI Engineer (NLP, LLM, agents, RAG) · 4 BI Developer (Power BI, Excel) · 5 Data Analyst, with their title variants in English and Arabic |
-| **Places** | Egypt; the Gulf (UAE, Saudi Arabia, Qatar, Kuwait, Bahrain, Oman); Europe (UK, Germany, Netherlands, Ireland, France, Spain, Poland, Sweden, Switzerland, Portugal and the rest); the USA; and remote jobs open to someone in Egypt |
+| **Places** | Onsite or hybrid jobs in Cairo or Giza only; remote jobs from the Gulf (UAE, Saudi Arabia, Qatar, Kuwait, Bahrain, Oman), Europe (UK, Germany, Netherlands, Ireland, France, Spain, Poland, Sweden, Switzerland, Portugal and the rest), the USA, and remote jobs open to someone in Egypt; a job alert whose place cannot be told (from its location or title) is under Unknown location |
 | **Level** | entry, mid and senior, and jobs that state no years of experience. Lead, principal, head, manager, director and architect titles are left out |
 | **Left out** | data entry, MLOps, DevOps, SRE, QA, technician, teaching, recruiting, accounting |
 | **⭐ Your companies** | starred and listed first from any source: your list plus the companies in the same sectors (telecom, Big 4 and consulting, banking, logistics, FMCG, real estate, IT services, fintech). Add more in the tracker |
@@ -91,8 +93,8 @@ is emailed once. Two runs back to back add nothing the second time.
 | Source | How |
 |---|---|
 | Wuzzuf | the JSON API its own web app calls: every job in Egypt posted in the window, with its full description |
-| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy), as a guest: Indeed in every country, 6 at a time; Bayt in Egypt and the Gulf |
-| Bayt, Forasna, NaukriGulf, GulfTalent | [Tanqeeb](https://egypt.tanqeeb.com), which gathers them: its IT, data analyst, business analyst, Python and internship pages, newest first |
+| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy), as a guest: Indeed in every country, 6 at a time; Bayt in Egypt and the Gulf; remote jobs only outside Egypt |
+| Bayt, Forasna, NaukriGulf, GulfTalent | [Tanqeeb](https://egypt.tanqeeb.com), which gathers them: its Egypt site's IT, data analyst, business analyst, Python and internship pages, newest first |
 | Every company on Workable (startups and small and mid companies above all) | Workable's public job search |
 | LinkedIn | your LinkedIn job-alert emails only: nothing ever contacts LinkedIn |
 | Himalayas, We Work Remotely | public search API, RSS feed |
@@ -107,8 +109,10 @@ robots.txt asks crawlers to stay away is your choice (`RESPECT_ROBOTS` in `job_r
 
 ## What you see
 
-- **Email**, after each run with new jobs: the run's numbers, one section per role, one card per
-  job with ⭐, place, source, date, your matched skills and your CV's coverage.
+- **Two emails**, Egypt and outside Egypt, each with only its new jobs: a section per place
+  (Unknown location last), in it entry and junior, mid level and senior (the further you scroll,
+  the more experience a job asks for), in each your roles in order and full-time, part-time,
+  contract and freelance, one card per job with ⭐, job type, years asked, source and date.
 - **Tracker**, http://127.0.0.1:8501: filter jobs and set saved / applied / interview / offer /
   rejected; skills in demand per role; your companies (add a name and its careers page); your CVs
   (upload a PDF).
