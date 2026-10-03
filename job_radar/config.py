@@ -106,12 +106,11 @@ def place_of(location: str) -> str | None:
 
 def in_reach(place: str, location: str, title: str, remote: bool = False) -> bool:
     """A remote job (not hybrid) in any place; an onsite or hybrid one only at home, in onsite_areas.
+    Outside home, and where the place is unknown, only remote: no hybrid, no onsite.
     remote: the board says so (JobSpy's is_remote), even when the location names only a city."""
     text = f"{location} {title}"
     if remote or place == "Remote" or (re.search(REMOTE, text, re.I) and not re.search(r"hybrid", text, re.I)):
         return True
-    if place == "Unknown location":  # kept, unless it says onsite or hybrid (then it is not at home)
-        return re.search(r"hybrid|on-?site", text, re.I) is None
     return place == HOME and (re.search(CAIRO_GIZA, location, re.I) is not None
                               or re.search(OTHER_EGYPT, location, re.I) is None)
 

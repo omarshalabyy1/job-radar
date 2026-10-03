@@ -5,7 +5,7 @@ settings.yaml (schedule), Cairo time; as shipped:
                             extract_workable, extract_companies, extract_portals, extract_email (side by
                             side) -> transform -> describe -> match_skills -> export_career_ops
     job_radar_email_egypt   12pm and 7pm: your home's jobs (Egypt) not emailed yet
-    job_radar_email_abroad  8am and 8pm: the jobs everywhere else (remote, Unknown location) not emailed yet
+    job_radar_email_abroad  8am and 8pm: the jobs everywhere else (remote only: no hybrid, no onsite) not emailed yet
 
 Each task is one step of `python -m job_radar`, run from the job_radar virtual environment. The
 extract tasks run in parallel, so a run takes about as long as its slowest source.

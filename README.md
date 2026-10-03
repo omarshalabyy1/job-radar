@@ -151,7 +151,7 @@ Three Airflow DAGs share the work:
 - **Roles:** a title must fit one of your roles; titles above your level or never yours are left out.
 - **Places:** onsite or hybrid only in Egypt, in your onsite areas; anywhere else the job must be
   remote. The place comes from the search, else the location, else the title; a job alert whose
-  place cannot be told goes under *Unknown location*.
+  place cannot be told goes under *Unknown location* only when it says remote.
 - **No duplicates:** a posting is stored once (source + link); a job is one row (its normalized
   title + company), so the same job on three boards, or reposted, is one job; each job is emailed once.
 - **Fast:** a run finishes in under 5 minutes; each step stops at its time budget and leaves the

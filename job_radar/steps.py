@@ -314,7 +314,7 @@ def email_egypt(conn) -> None:
 
 
 def email_abroad(conn) -> None:
-    """The email of the jobs everywhere else: remote ones and Unknown location (schedule.abroad_email)."""
+    """The email of the jobs everywhere else: remote only, no hybrid or onsite (schedule.abroad_email)."""
     email(conn, home=False)
 
 
