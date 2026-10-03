@@ -2,7 +2,7 @@
 # container) and the tracker (Streamlit). Everything listens on 127.0.0.1 only.
 #
 #   docker compose up -d --build    # Airflow http://127.0.0.1:8081 (no login), tracker http://127.0.0.1:8501,
-#                                   # warehouse localhost:5433 (Power BI, psql)
+#                                   # warehouse localhost:5433 (psql, any SQL tool)
 #   docker compose down             # stops everything; the volumes (warehouse, run history) stay
 #
 # Settings come from .env (gitignored; see .env.example).

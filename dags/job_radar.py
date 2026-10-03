@@ -1,7 +1,7 @@
 """job_radar: every 6 hours (01:00, 07:00, 13:00, 19:00 Cairo time), find the new jobs, rank them, email them.
 
-    schema -> extract_boards, extract_remote, extract_egypt, extract_companies, extract_portals,
-              extract_email (side by side) -> transform -> describe -> match_skills -> export_career_ops, email
+    schema -> extract_boards, extract_remote, extract_egypt, extract_workable, extract_companies,
+              extract_portals, extract_email (side by side) -> transform -> describe -> match_skills -> export_career_ops, email
 
 Each task is one step of `python -m job_radar`, run from the job_radar virtual environment. The
 extract tasks run in parallel, so a run takes about as long as its slowest source.
@@ -15,8 +15,12 @@ extract tasks run in parallel, so a run takes about as long as its slowest sourc
   scheduled one, or a retry adds nothing twice.
 
 A source that fails is a warning in its task's log and the task stays green; a failed task (the
-warehouse down, the email not sent) is retried once after 10 minutes, and the tasks after it
-still run on what is there (all_done).
+warehouse down, no network, the email not sent) is not retried: the next run catches up, and the
+tasks after it still run on what is there (all_done).
+
+A run finishes in under 300 seconds: each step stops itself at its time budget (config: extracts
+150 s side by side, describe 60 s) and leaves the rest for the next run; execution_timeout stops
+a step that hangs anyway.
 """
 
 from __future__ import annotations
@@ -40,11 +44,11 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False,
-    default_args={"retries": 1, "retry_delay": timedelta(minutes=10), "execution_timeout": timedelta(hours=1)},
+    default_args={"retries": 0, "execution_timeout": timedelta(seconds=170)},
 ):
-    extracts = [step(name) for name in ("extract_boards", "extract_remote", "extract_egypt", "extract_companies",
-                                        "extract_portals", "extract_email")]
+    extracts = [step(name) for name in ("extract_boards", "extract_remote", "extract_egypt", "extract_workable",
+                                        "extract_companies", "extract_portals", "extract_email")]
     step("schema") >> extracts
     matched = step("match_skills", trigger_rule="all_done")
-    extracts >> step("transform", trigger_rule="all_done") >> step("describe") >> matched
+    extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=80)) >> matched
     matched >> [step("export_career_ops"), step("email")]

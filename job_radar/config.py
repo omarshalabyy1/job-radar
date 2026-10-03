@@ -3,6 +3,10 @@
 import re
 
 HOURS_OLD = 24  # every run looks back this far: a run after the laptop was asleep or off backfills the last day
+# A whole run stays under 300 seconds: each extract step (they run side by side) gets 150 seconds
+# and describe 60; what does not fit waits for the next run.
+EXTRACT_SECONDS = 150
+DESCRIBE_SECONDS = 60
 
 # (rank, label, Indeed/Bayt search term, title patterns that must all match), English and Arabic
 ROLES = [
@@ -36,7 +40,8 @@ ROLES = [
 KEYWORDS = ["data engineer", "analytics engineer", "ETL developer", "databricks", "AI engineer",
             "machine learning engineer", "NLP engineer", "LLM engineer", "generative AI", "data scientist",
             "BI developer", "power bi", "data analyst"]
-TOO_SENIOR =r"\b(senior|sr|lead|principal|staff|head|director|manager|vp|chief|architect)\b"
+# entry, mid and senior are yours; above senior is not
+TOO_SENIOR = r"\b(lead|principal|staff|head|director|manager|vp|chief|architect)\b"
 # titles that are never yours, whatever else they say
 NOT_RELEVANT = (r"\b(data entry|mlops|llmops|devops|sre|site reliability|technician|teacher|tutor|instructor"
                 r"|lecturer|recruiter|accountant|cyber ?security|quality (assurance|control|inspector))\b"
@@ -48,13 +53,42 @@ PLACES = [
     ("UAE", "United Arab Emirates", "united arab emirates"),
     ("Saudi Arabia", "Saudi Arabia", "saudi arabia"),
     ("Qatar", "Qatar", "qatar"),
+    ("Kuwait", "Kuwait", "kuwait"),
+    ("Bahrain", "Bahrain", "bahrain"),
+    ("Oman", "Oman", "oman"),
+    ("Europe", "United Kingdom", "uk"),
+    ("Europe", "Germany", "germany"),
+    ("Europe", "Netherlands", "netherlands"),
+    ("Europe", "Ireland", "ireland"),
+    ("Europe", "France", "france"),
+    ("Europe", "Spain", "spain"),
+    ("Europe", "Poland", "poland"),
+    ("Europe", "Sweden", "sweden"),
+    ("Europe", "Switzerland", "switzerland"),
+    ("Europe", "Portugal", "portugal"),
+    ("USA", "United States", "usa"),
 ]
-# a free-text location -> place, for the sources that do not search by place
+BAYT_PLACES = {"Egypt", "UAE", "Saudi Arabia", "Qatar", "Kuwait", "Bahrain", "Oman"}  # where Bayt has jobs
+# a free-text location -> place, for the sources that do not search by place (first match wins)
 PLACE_PATTERNS = {
     "Egypt": r"egypt|cairo|giza",
     "UAE": r"\buae\b|united arab emirates|dubai|abu dhabi|sharjah",
     "Saudi Arabia": r"saudi|\bksa\b|riyadh|jeddah|dammam|khobar",
     "Qatar": r"qatar|doha",
+    "Kuwait": r"kuwait",
+    "Bahrain": r"bahrain|manama",
+    "Oman": r"\boman\b|muscat",
+    # before Europe: Dublin, OH is in the USA. State codes are upper case, at the end, and not after
+    # another code ("Toronto, ON, CA" is Canada); IN and DE are left out (India, Germany).
+    "USA": (r"united states|\bu\.s\.a?\b|(?-i:\bUSA?\b)|\b(new york|san francisco|seattle|austin|boston|chicago"
+            r"|los angeles|denver|atlanta|dallas|houston|miami|washington|san jose|san diego)\b"
+            r"|(?-i:(?<!, [A-Z]{2}), (AL|AK|AZ|AR|CA|CO|CT|FL|GA|HI|ID|IL|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE"
+            r"|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)$)"),
+    "Europe": (r"\b(united kingdom|uk|england|scotland|wales|london|manchester|germany|berlin|munich|hamburg"
+               r"|frankfurt|netherlands|amsterdam|rotterdam|ireland|dublin|france|paris|spain|madrid|barcelona"
+               r"|poland|warsaw|krakow|sweden|stockholm|switzerland|zurich|geneva|portugal|lisbon|porto|belgium"
+               r"|brussels|austria|vienna|denmark|copenhagen|norway|oslo|finland|helsinki|italy|milan|rome|czechia"
+               r"|czech republic|prague|romania|bucharest|greece|athens|europe|european union)\b"),
 }
 REMOTE_OPEN_TO = r"worldwide|anywhere|global|emea|mena|africa|middle east|egypt"
 # job pages never fetched: LinkedIn (its jobs come only from your alert emails)
@@ -72,11 +106,14 @@ TARGET_COMPANIES =(r"vodafone|\b_?vois\b|\borange\b|pwc|pricewaterhouse|deloitte
 # (Companies tab) or in sql/schema.sql. A Phenom site searches by keywords only, so each search
 # names a place.
 PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst")
-                   for where in ("Egypt", "Dubai", "Abu Dhabi", "Riyadh", "Jeddah", "Doha")]
+                   for where in ("Egypt", "Dubai", "Abu Dhabi", "Riyadh", "Jeddah", "Doha", "Kuwait", "Bahrain",
+                                 "Muscat", "United Kingdom", "Germany", "Netherlands", "France", "Spain", "Poland",
+                                 "United States")]
 
 # Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and the job
 # pages its robots.txt allows (no ?keywords searches)
-TANQEEB_SITES = {"egypt": "Egypt", "uae": "UAE", "saudi": "Saudi Arabia", "qatar": "Qatar"}
+TANQEEB_SITES = {"egypt": "Egypt", "uae": "UAE", "saudi": "Saudi Arabia", "qatar": "Qatar", "kuwait": "Kuwait",
+                 "bahrain": "Bahrain", "oman": "Oman"}
 TANQEEB_PAGES = ["it-jobs", "data-analyst-jobs", "business-analyst-jobs", "python-developer-jobs", "internship-jobs"]
 
 
@@ -96,7 +133,10 @@ def too_senior(title: str) -> bool:
 
 
 def place_of(location: str) -> str | None:
-    """Egypt, UAE, Saudi Arabia, Qatar, Remote (open to Egypt), or None when out of scope."""
+    """Egypt, a Gulf country, USA, Europe, Remote (open to Egypt), or None when out of scope. A
+    remote job open worldwide is Remote; one tied to a country takes that country."""
+    if re.search(r"remote", location, re.I) and re.search(r"worldwide|anywhere|global", location, re.I):
+        return "Remote"
     for place, pattern in PLACE_PATTERNS.items():
         if re.search(pattern, location, re.I):
             return place

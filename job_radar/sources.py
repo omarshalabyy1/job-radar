@@ -13,10 +13,12 @@ import gzip
 import imaplib
 import json
 import os
+import random
 import re
+import threading
 import time
 import xml.etree.ElementTree as ET
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
@@ -26,8 +28,14 @@ import requests
 from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 
-from .config import (HOURS_OLD, KEYWORDS, PHENOM_SEARCHES, PLACES, REMOTE_OPEN_TO, RESPECT_ROBOTS, ROLES,
-                     TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
+from .config import (BAYT_PLACES, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, PHENOM_SEARCHES, PLACES, REMOTE_OPEN_TO,
+                     RESPECT_ROBOTS, ROLES, TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
+
+STARTED = time.monotonic()  # each step is its own process: its time budget counts from here
+
+
+def time_left(budget: float) -> float:
+    return STARTED + budget - time.monotonic()
 
 PORTAL_FEED = "https://feashliaa.github.io/job-board-data/data/chunks"
 IMAP_HOSTS = {"gmail.com": "imap.gmail.com", "googlemail.com": "imap.gmail.com",
@@ -52,6 +60,7 @@ def row(source, searched_for, title, company, location, job_url, date_posted, de
             "description": description, "payload": payload}
 
 
+BROWSERS = threading.local()  # one headless Chromium per worker thread, see rendered()
 BROWSER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
                          "Chrome/129.0 Safari/537.36"}
 
@@ -63,25 +72,34 @@ def get(url: str, **params) -> requests.Response:
 
 
 def job_boards() -> list[dict]:
-    """Indeed and Bayt through JobSpy, side by side: every role in every place, one board per call
-    (one board down is a short day), 3 seconds apart on each board. LinkedIn jobs come only from
-    your LinkedIn job-alert emails."""
-    with ThreadPoolExecutor(2) as pool:
-        return [r for rows in pool.map(board, ["indeed", "bayt"]) for r in rows]
+    """Indeed and Bayt through JobSpy: every role in every place, one board and place per call (one
+    down is a short day). Indeed, which does not rate-limit, searches 6 places at a time; Bayt, which
+    has jobs only in Egypt and the Gulf, one search at a time. 3 seconds between a call's searches.
+    LinkedIn jobs come only from your LinkedIn job-alert emails. Searches stop at the step's time
+    budget; Bayt's places after Egypt come in a new order each run, so none is always the one cut."""
+    bayt_places = [p for p in PLACES if p[0] in BAYT_PLACES]
+    bayt_places = bayt_places[:1] + random.sample(bayt_places[1:], len(bayt_places) - 1)
+    with ThreadPoolExecutor(7) as pool:
+        bayt = pool.submit(board, "bayt", bayt_places)
+        indeed = pool.map(lambda place: board("indeed", [place]), PLACES)
+        return [r for rows in [*indeed, bayt.result()] for r in rows]
 
 
-def board(site: str) -> list[dict]:
+def board(site: str, places: list[tuple]) -> list[dict]:
     rows = []
-    for _, label, term, _ in ROLES:
-        for place, location, country in PLACES:
+    for place, location, country in places:
+        for _, label, term, _ in ROLES:
+            if time_left(EXTRACT_SECONDS) < 15:  # room left for one more search and the load
+                print(f"{site}: time budget reached, the rest waits for the next run")
+                return rows
             time.sleep(3)
             try:
                 df = scrape_jobs(site_name=site, search_term=term, location=location,
                                  country_indeed=country, hours_old=HOURS_OLD, results_wanted=30, verbose=0)
             except Exception as e:
-                print(f"WARNING {site} {label} / {place}: {e!r}"[:300])
+                print(f"WARNING {site} {label} / {location}: {e!r}"[:300])
                 continue
-            print(f"{site} {label} / {place}: {len(df)}")
+            print(f"{site} {label} / {location}: {len(df)}")
             for j in json.loads(df.to_json(orient="records", date_format="iso")):
                 rows.append(row(site, place, j["title"], j["company"], j["location"], j["job_url"],
                                 (j["date_posted"] or "")[:10] or None, j.get("description"), j))
@@ -127,24 +145,23 @@ def jooble() -> list[dict]:
     if not key:
         print("jooble: no JOOBLE_API_KEY, skipped")
         return []
-    rows = []
-    for keyword in KEYWORDS:
-        for place, location, _ in PLACES:
-            r = requests.post(f"https://jooble.org/api/{key}", json={"keywords": keyword, "location": location},
-                              timeout=60)
-            r.raise_for_status()
-            for j in r.json().get("jobs", []):
-                posted = (j.get("updated") or "")[:10]
-                if posted >= since() and role_of(j["title"]):
-                    rows.append(row("jooble", place, j["title"], j.get("company"), j.get("location"), j["link"],
-                                    posted, j.get("snippet"), j))
-            time.sleep(1)
-    return rows
+
+    def search(args: tuple) -> list[dict]:
+        keyword, (place, location, _) = args
+        r = requests.post(f"https://jooble.org/api/{key}", json={"keywords": keyword, "location": location}, timeout=60)
+        r.raise_for_status()
+        return [row("jooble", place, j["title"], j.get("company"), j.get("location"), j["link"],
+                    (j.get("updated") or "")[:10], j.get("snippet"), j)
+                for j in r.json().get("jobs", []) if (j.get("updated") or "")[:10] >= since() and role_of(j["title"])]
+
+    with ThreadPoolExecutor(4) as pool:
+        return [r for rows in pool.map(search, [(k, p) for k in KEYWORDS for p in PLACES]) for r in rows]
 
 
 def workable_jobs() -> list[dict]:
     """Workable's public job search, across every company on Workable (startups and small and mid
-    companies above all): each keyword in each place, posted in the last day, 4 searches at a time."""
+    companies above all): each keyword in each place, posted in the last day, 4 searches at a time
+    (8 at a time drew 429 Too Many Requests)."""
     def search(args: tuple) -> list[dict]:
         keyword, (place, location, _) = args
         rows = []
@@ -218,13 +235,13 @@ def wuzzuf() -> list[dict]:
 def tanqeeb() -> list[dict]:
     """Tanqeeb, which gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ... for Egypt and the
     Gulf: its job pages that robots.txt allows (TANQEEB_PAGES), newest first, each card's title,
-    company, place, date and the board it came from."""
+    company, place, date and the board it came from; its country sites side by side."""
     def text(card, css: str) -> str:
         element = card.select_one(css)
         return element.get_text(" ", strip=True) if element else ""
 
-    rows = []
-    for site, place in TANQEEB_SITES.items():
+    def read_site(site: str, place: str) -> list[dict]:
+        rows = []
         for page in TANQEEB_PAGES:
             soup = BeautifulSoup(get(f"https://{site}.tanqeeb.com/s/jobs/{page}", order_by="most_recent").text,
                                  "html.parser")
@@ -237,7 +254,10 @@ def tanqeeb() -> list[dict]:
                                     f"https://{site}.tanqeeb.com{link['href']}", str(posted), None,
                                     {"board": text(card, ".search-job-source"), "card": card.get_text(" | ", strip=True)}))
             time.sleep(1)
-    return rows
+        return rows
+
+    with ThreadPoolExecutor(len(TANQEEB_SITES)) as pool:
+        return [r for rows in pool.map(read_site, TANQEEB_SITES, TANQEEB_SITES.values()) for r in rows]
 
 
 def tanqeeb_date(text: str) -> date | None:
@@ -262,8 +282,8 @@ def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
         note = None
         if platform in (None, "blocked", "forbidden", "unreachable"):
             platform, api, note = detect(url)
-        if platform in ("blocked", "forbidden", "unreachable"):
-            print(f"{company}: {platform} ({note})")
+        if platform in (None, "blocked", "forbidden", "unreachable", "covered"):
+            print(f"{company}: {platform or 'not reached, tried again next run'} ({note})")
             return [], (platform, api, note, company)
         try:
             rows = READERS[platform](company, api)
@@ -273,11 +293,19 @@ def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
         print(f"{company} ({platform}): {len(rows)}")
         return rows, (platform, api, note, company)
 
-    with ThreadPoolExecutor(8) as pool:
-        results = list(pool.map(read, sites))
+    # Each may start a browser: more starves the task's heartbeat. A batch ends 60 seconds before the
+    # step's time budget: a site still loading (a page can take a minute) finishes in that time,
+    # since the step waits for it before it exits. A site not done by then is left for the next run.
+    pool = ThreadPoolExecutor(4)
+    done, _ = wait([pool.submit(read, site) for site in sites], timeout=max(0, time_left(EXTRACT_SECONDS) - 60))
+    pool.shutdown(wait=False, cancel_futures=True)
+    results = [f.result() for f in done]
     return [r for rows, _ in results for r in rows], [found for _, found in results]
 
 
+# boards another source already reads in bulk, so no browser is spent on them every run
+COVERED = [(r"myworkdayjobs\.com|bamboohr\.com", "the 28,000-company feed (extract_portals)"),
+           (r"jobs\.workable\.com/company/", "the Workable job search (extract_workable)")]
 # a careers page -> its platform: the platform's address in the page's URL or code
 ATS_PATTERNS = [
     ("workable", r"(?:apply\.workable\.com/|workable\.com/api/v1/widget/accounts/)(?!api\b)([\w-]+)"),
@@ -290,27 +318,36 @@ ATS_PATTERNS = [
 def detect(url: str) -> tuple[str, str | None, str | None]:
     """(platform, what its reader calls, note) for a careers page: 'forbidden' when its robots.txt
     does not allow reading it, 'blocked' when it turns scripts away, 'page' when no known
-    platform shows, even once Playwright has run the page's JavaScript (its links are read)."""
+    platform shows, even once Playwright has run the page's JavaScript (its links are read);
+    None when the network failed, so the next run tries again."""
     parts = urlsplit(url)
-    robots = RobotFileParser()
-    try:
-        robots.parse(requests.get(f"{parts.scheme}://{parts.netloc}/robots.txt", headers=BROWSER, timeout=20)
-                     .text.splitlines())
-    except requests.RequestException:
-        pass
-    if RESPECT_ROBOTS and not robots.can_fetch("*", url):
-        return "forbidden", None, "its robots.txt forbids reading it"
+    for platform, pattern in ATS_PATTERNS:  # the URL itself names the platform: nothing to fetch
+        if m := re.search(pattern, url):
+            return platform, m.group(1), None
+    for pattern, reader in COVERED:
+        if re.search(pattern, url):
+            return "covered", None, f"its jobs come through {reader}"
+    if RESPECT_ROBOTS:
+        robots = RobotFileParser()
+        try:
+            robots.parse(requests.get(f"{parts.scheme}://{parts.netloc}/robots.txt", headers=BROWSER, timeout=20)
+                         .text.splitlines())
+        except requests.RequestException:
+            pass
+        if not robots.can_fetch("*", url):
+            return "forbidden", None, "its robots.txt forbids reading it"
     try:
         r = requests.get(url, headers=BROWSER, timeout=30)
     except requests.RequestException as e:
-        return "blocked", None, f"unreachable: {e!r}"[:200]
+        return None, None, f"network error: {e!r}"[:200]
     page = r.text
-    if r.status_code in (401, 403, 429) or re.search(r"Just a moment|cf-chl-|challenge-platform|Access Denied", page[:20000]):
+    # a bot check's own page, not the passive Cloudflare script many ordinary pages carry
+    if r.status_code in (401, 403, 429) or re.search(r"<title>(Just a moment|Access Denied)|cf-chl-", page[:20000]):
         return "blocked", None, f"it turns scripts away (HTTP {r.status_code})"
     if r.status_code >= 400:
         return "unreachable", None, f"page not found (HTTP {r.status_code}): check the careers URL"
     for platform, pattern in ATS_PATTERNS:
-        if m := re.search(pattern, f"{url} {page}"):
+        if m := re.search(pattern, page):
             return platform, m.group(1), None
     if re.search(r"phenompeople|phApp\.", page):
         return "phenom", re.split(r"/search-results|/job/", url)[0].rstrip("/"), None
@@ -443,18 +480,18 @@ def rss(company: str, feed: str) -> list[dict]:
 
 def rendered(url: str) -> str:
     """The page's HTML after its JavaScript ran, in a headless Chromium (Playwright): for career
-    pages that build their job list in the browser. It does not get past bot checks, and is not
-    meant to."""
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        try:
-            page = browser.new_page(user_agent=BROWSER["User-Agent"])
-            page.goto(url, wait_until="networkidle", timeout=45000)
-            return page.content()
-        finally:
-            browser.close()
+    pages that build their job list in the browser. Each worker thread starts one Chromium and
+    reuses it for every page (Playwright is one instance per thread); it ends with the step. It
+    does not get past bot checks, and is not meant to."""
+    if not hasattr(BROWSERS, "chromium"):
+        from playwright.sync_api import sync_playwright
+        BROWSERS.chromium = sync_playwright().start().chromium.launch()
+    page = BROWSERS.chromium.new_page(user_agent=BROWSER["User-Agent"])
+    try:
+        page.goto(url, wait_until="networkidle", timeout=30000)
+        return page.content()
+    finally:
+        page.close()
 
 
 READERS = {"workable": workable, "greenhouse": greenhouse, "lever": lever, "ashby": ashby, "phenom": phenom,

@@ -5,7 +5,7 @@
 --   core.application  your status for a job, set in the tracker
 --   core.skill        your skills: the Data Engineering and Generative AI courses, as patterns
 --   core.job_skill    which of your skills each job asks for, stored once by match_skills
---   mart.*            gold: views for the email, the tracker and Power BI
+--   mart.*            gold: views for the email and the tracker
 
 CREATE SCHEMA IF NOT EXISTS raw;
 CREATE SCHEMA IF NOT EXISTS core;
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS core.job (
     title          text     NOT NULL,
     company        text     NOT NULL,
     location       text     NOT NULL,
-    place          text     NOT NULL CHECK (place IN ('Egypt', 'UAE', 'Saudi Arabia', 'Qatar', 'Remote')),
+    place          text     NOT NULL,         -- one of the places in job_place_check below
     source         text     NOT NULL,         -- the first source that found it
     job_url        text     NOT NULL,
     role_rank      smallint NOT NULL CHECK (role_rank BETWEEN 1 AND 5),
@@ -50,11 +50,16 @@ CREATE TABLE IF NOT EXISTS core.job (
     emailed_at     timestamptz                -- set once: a job is never emailed twice
 );
 CREATE INDEX IF NOT EXISTS job_first_seen ON core.job (first_seen);
+-- CREATE TABLE IF NOT EXISTS never changes a table that is already there, so the places are set
+-- here every run: a place added to config.PLACES only needs adding to this list.
+ALTER TABLE core.job DROP CONSTRAINT IF EXISTS job_place_check;
+ALTER TABLE core.job ADD CONSTRAINT job_place_check
+    CHECK (place IN ('Egypt', 'UAE', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'USA', 'Europe', 'Remote'));
 
--- Your companies: each one's jobs are starred from any source, and its careers page, when given,
--- is read every run. Add them in the tracker (Companies tab). The platform is detected on the
--- next run; 'forbidden' (robots.txt), 'blocked' (turns scripts away) and 'unreachable' (page not
--- found) sites are retried daily.
+-- Your companies: a starred one's jobs are starred from any source, and a careers page, when given,
+-- is read at most once a day. Add them in the tracker (Companies tab). The platform is detected on
+-- the next run; 'forbidden' (robots.txt), 'blocked' (turns scripts away) and 'unreachable' (page
+-- not found) sites are retried daily.
 CREATE TABLE IF NOT EXISTS core.company (
     company     text PRIMARY KEY,
     careers_url text,         -- its careers page or portal; empty = starred only
@@ -63,8 +68,10 @@ CREATE TABLE IF NOT EXISTS core.company (
     api         text,         -- what the platform's reader calls (an account, a feed, the page)
     note        text,         -- why a site cannot be read
     checked_at  timestamptz,
-    added_at    timestamptz NOT NULL DEFAULT now()
+    added_at    timestamptz NOT NULL DEFAULT now(),
+    starred     boolean NOT NULL DEFAULT true  -- false: its site is read, its jobs are not starred
 );
+ALTER TABLE core.company ADD COLUMN IF NOT EXISTS starred boolean NOT NULL DEFAULT true;
 INSERT INTO core.company (company, careers_url) VALUES
     ('Nawy', 'https://apply.workable.com/nawy-real-estate/'),
     ('Sumerge', 'https://www.sumerge.com/job-openings'),

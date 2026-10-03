@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 from . import steps
 from .db import connect
 
-STEPS = ["schema", "extract_boards", "extract_remote", "extract_egypt", "extract_companies", "extract_portals",
-         "extract_email", "transform", "describe", "match_skills", "export_career_ops", "email"]
+STEPS = ["schema", "extract_boards", "extract_remote", "extract_egypt", "extract_workable", "extract_companies",
+         "extract_portals", "extract_email", "transform", "describe", "match_skills", "export_career_ops", "email"]
 
 
 def main() -> None:
