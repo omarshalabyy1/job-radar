@@ -322,7 +322,7 @@ def workable_jobs() -> list[dict]:
     companies above all): each keyword in each place (remote jobs only outside Egypt), posted in the
     last day, 4 searches at a time. Workable allows few searches a day (after 3 runs of these 234
     in a morning it answered 429 with a 21-hour Retry-After), and each search covers the whole last
-    day: so one round a day, held for 20 hours after it (one of the four daily collects runs it), and
+    day: so one round a day, held for 20 hours after it (one of the daily collects runs it), and
     a 429 holds it for as long as Workable asks."""
     host = "jobs.workable.com"
     if left := waiting(host):

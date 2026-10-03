@@ -29,8 +29,8 @@ Runs on your laptop · costs nothing · never logs in anywhere · no duplicates,
 
 | Email | When (Cairo time) | What is in it |
 |---|---|---|
-| Home (Egypt) | 12pm and 7pm | onsite and hybrid jobs in Cairo or Giza, and Egypt's remote jobs |
-| Outside Egypt | 8am and 8pm | remote jobs in the Gulf, Europe, the USA and worldwide |
+| Home (Egypt) | 11:30am and 7:30pm | onsite and hybrid jobs in Cairo or Giza, and Egypt's remote jobs |
+| Outside Egypt | 11:30am and 7:30pm | remote jobs in the Gulf, Europe, the USA and worldwide |
 
 Inside each email, the further you scroll the more experience a job asks for:
 **Entry & junior → Mid level → Senior**, then your roles in your order, then full-time,
@@ -82,7 +82,7 @@ and the next run uses it. A schedule change shows in Airflow within a minute.
 
 | Section | What it changes |
 |---|---|
-| `schedule` | when it collects and when each email goes (Egypt's, and everywhere else's), written `8am`, `12pm`, `7pm` |
+| `schedule` | when it collects and when each email goes (Egypt's, and everywhere else's), written `11am`, `7pm`, `"7:30pm"` |
 | `roles` | the jobs you want, **in your order** (the email follows it): the words a title needs, and what the job boards are searched for |
 | `search_words` | the plain search words for Himalayas, Workable and Jooble |
 | `too_senior`, `never` | titles to leave out: above your level, or never yours |
@@ -142,9 +142,9 @@ Three Airflow DAGs share the work:
 
 | DAG | When | Does |
 |---|---|---|
-| `job_radar` | 1am, 7am, 11am, 6pm | extract → transform → describe → match_skills → export_career_ops |
-| `job_radar_email_egypt` | 12pm, 7pm | emails Egypt's new jobs |
-| `job_radar_email_abroad` | 8am, 8pm | emails everywhere else's new jobs |
+| `job_radar` | 11am, 7pm | extract → transform → describe → match_skills → export_career_ops |
+| `job_radar_email_egypt` | 11:30am, 7:30pm | emails Egypt's new jobs |
+| `job_radar_email_abroad` | 11:30am, 7:30pm | emails everywhere else's new jobs |
 
 **The rules that decide what reaches you**
 
@@ -176,7 +176,7 @@ that answers 429 Too Many Requests is left alone for as long as it asks, by ever
 | Himalayas, We Work Remotely | public search API, RSS feed | 1 second between pages |
 | [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart (its robots.txt allows them) |
 | [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
-| Your companies | each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read | each once a day |
+| Your companies | `settings.yaml` (companies): your starred ones, plus 73 remote-first companies hiring worldwide from the [remote-in-tech](https://github.com/remoteintech/remote-jobs) list; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
 | Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
 | Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 4 emails a day of 500 |

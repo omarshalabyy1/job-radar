@@ -10,11 +10,12 @@
 # Egypt is home: onsite and hybrid jobs are kept only there, in onsite_areas below; anywhere else a
 # job must be remote. Egypt gets its own email, and every other place shares the second one.
 
-# When it runs, Cairo time, 12-hour style: 1am, 7am, 11am, 6pm, 12pm ...
+# When it runs, Cairo time, 12-hour style: 11am, 7pm, "7:30pm" ... (the times of one line share
+# their minutes). No AI runs on this schedule: Claude only works when you call /job-radar.
 schedule:
-  collect: [1am, 7am, 11am, 6pm]   # find new jobs
-  home_email: [12pm, 7pm]          # the email of Egypt's jobs
-  abroad_email: [8am, 8pm]         # the email of the remote jobs everywhere else
+  collect: [11am, 7pm]                  # find new jobs
+  home_email: ["11:30am", "7:30pm"]     # the email of Egypt's jobs, right after each collect
+  abroad_email: ["11:30am", "7:30pm"]   # the email of the remote jobs everywhere else
 
 # The jobs you want, in your order: the email lists them in this order, and a title takes the
 # first role it fits.
@@ -283,3 +284,79 @@ companies:
   - {name: "Yodawy"}
   - {name: "Zain", link: "https://careers.zain.com/"}
   - {name: "Ziina", link: "https://jobs.ashbyhq.com/ziina", starred: false}
+
+  # Remote-first companies hiring worldwide (the remote-in-tech list, 2026-10-03): their job boards
+  # are read every day; their jobs are not starred. Those the 28,000-company feed has are left out.
+  - {name: "10up", link: "https://apply.workable.com/10up/", starred: false}
+  - {name: "17hats", link: "https://apply.workable.com/17hats/", starred: false}
+  - {name: "42 Technologies", link: "https://apply.workable.com/42technologies/", starred: false}
+  - {name: "acct", link: "https://apply.workable.com/acct/", starred: false}
+  - {name: "Adzuna", link: "https://apply.workable.com/adzuna/", starred: false}
+  - {name: "Aha!", link: "https://boards.greenhouse.io/aha", starred: false}
+  - {name: "ALICE", link: "https://apply.workable.com/alice/", starred: false}
+  - {name: "Alight Solutions", link: "https://apply.workable.com/alight/", starred: false}
+  - {name: "argyle", link: "https://apply.workable.com/argyle/", starred: false}
+  - {name: "ARK", link: "https://boards.greenhouse.io/ark", starred: false}
+  - {name: "Aula Education", link: "https://apply.workable.com/aula-education/", starred: false}
+  - {name: "Automattic", link: "https://apply.workable.com/automattic/", starred: false}
+  - {name: "Axelerant", link: "https://apply.workable.com/axelerant/", starred: false}
+  - {name: "Bairesdev", link: "https://apply.workable.com/bairesdev/", starred: false}
+  - {name: "Balena", link: "https://apply.workable.com/balena/", starred: false}
+  - {name: "Bandcamp", link: "https://apply.workable.com/bandcamp/", starred: false}
+  - {name: "BandLab", link: "https://apply.workable.com/bandlab/", starred: false}
+  - {name: "Bandzoogle", link: "https://boards.greenhouse.io/bandzoogle", starred: false}
+  - {name: "Baremetrics", link: "https://apply.workable.com/baremetrics/", starred: false}
+  - {name: "Basecamp", link: "https://apply.workable.com/basecamp/", starred: false}
+  - {name: "Bit Zesty", link: "https://apply.workable.com/bit-zesty/", starred: false}
+  - {name: "Bonsai", link: "https://apply.workable.com/hellobonsai/", starred: false}
+  - {name: "Brainstorm Force", link: "https://apply.workable.com/brainstorm-force/", starred: false}
+  - {name: "Calibre", link: "https://jobs.ashbyhq.com/calibre", starred: false}
+  - {name: "CareCru", link: "https://apply.workable.com/carecru/", starred: false}
+  - {name: "CareMessage", link: "https://jobs.lever.co/caremessage", starred: false}
+  - {name: "CartStack", link: "https://apply.workable.com/cartstack/", starred: false}
+  - {name: "Celsius", link: "https://apply.workable.com/celsius/", starred: false}
+  - {name: "CircleCI", link: "https://boards.greenhouse.io/circleci", starred: false}
+  - {name: "CivicActions", link: "https://boards.greenhouse.io/civicactions", starred: false}
+  - {name: "Clevertech", link: "https://apply.workable.com/clevertech/", starred: false}
+  - {name: "Coalition Technologies", link: "https://apply.workable.com/coalition-technologies/", starred: false}
+  - {name: "CodeSandbox", link: "https://apply.workable.com/codesandbox/", starred: false}
+  - {name: "Codeship", link: "https://apply.workable.com/codeship/", starred: false}
+  - {name: "Coinbase", link: "https://boards.greenhouse.io/coinbase", starred: false}
+  - {name: "Compose", link: "https://apply.workable.com/compose/", starred: false}
+  - {name: "Connexa", link: "https://apply.workable.com/connexa/", starred: false}
+  - {name: "Datadog", link: "https://boards.greenhouse.io/datadog", starred: false}
+  - {name: "Dropbox", link: "https://boards.greenhouse.io/dropbox", starred: false}
+  - {name: "Elastic", link: "https://boards.greenhouse.io/elastic", starred: false}
+  - {name: "Ergeon", link: "https://boards.greenhouse.io/ergeon", starred: false}
+  - {name: "Eyeo (Adblock Plus)", link: "https://boards.greenhouse.io/eyeo", starred: false}
+  - {name: "Fastly", link: "https://boards.greenhouse.io/fastly", starred: false}
+  - {name: "Fly.io", link: "https://jobs.lever.co/fly", starred: false}
+  - {name: "Ghost Foundation", link: "https://boards.greenhouse.io/ghost", starred: false}
+  - {name: "Glitch", link: "https://jobs.ashbyhq.com/glitch", starred: false}
+  - {name: "GoDaddy", link: "https://boards.greenhouse.io/godaddy", starred: false}
+  - {name: "GoHiring", link: "https://boards.greenhouse.io/gohiring", starred: false}
+  - {name: "Graylog", link: "https://jobs.lever.co/graylog", starred: false}
+  - {name: "Grou.ps", link: "https://jobs.ashbyhq.com/build", starred: false}
+  - {name: "IQVIA", link: "https://jobs.ashbyhq.com/jobs", starred: false}
+  - {name: "Kaggle", link: "https://boards.greenhouse.io/kaggle", starred: false}
+  - {name: "Kona", link: "https://boards.greenhouse.io/kona", starred: false}
+  - {name: "Kraken", link: "https://jobs.lever.co/kraken", starred: false}
+  - {name: "Litmus", link: "https://jobs.ashbyhq.com/litmus", starred: false}
+  - {name: "Mindful", link: "https://jobs.lever.co/mindful", starred: false}
+  - {name: "Mixmax", link: "https://boards.greenhouse.io/mixmax", starred: false}
+  - {name: "MongoDB", link: "https://boards.greenhouse.io/mongodb", starred: false}
+  - {name: "Netris", link: "https://jobs.ashbyhq.com/netris", starred: false}
+  - {name: "Octopus Deploy", link: "https://boards.greenhouse.io/octopusdeploy", starred: false}
+  - {name: "Okta", link: "https://boards.greenhouse.io/okta", starred: false}
+  - {name: "OpenZeppelin", link: "https://boards.greenhouse.io/openzeppelin", starred: false}
+  - {name: "Platform.sh", link: "https://boards.greenhouse.io/platformsh", starred: false}
+  - {name: "Rackspace", link: "https://jobs.lever.co/rackspace", starred: false}
+  - {name: "ReCharge", link: "https://jobs.ashbyhq.com/recharge", starred: false}
+  - {name: "Scandit", link: "https://boards.greenhouse.io/scandit", starred: false}
+  - {name: "SmugMug", link: "https://boards.greenhouse.io/smugmug", starred: false}
+  - {name: "Stack Exchange", link: "https://boards.greenhouse.io/stackexchange", starred: false}
+  - {name: "Status", link: "https://boards.greenhouse.io/status", starred: false}
+  - {name: "StreamNative", link: "https://boards.greenhouse.io/streamnative", starred: false}
+  - {name: "Stripe", link: "https://boards.greenhouse.io/stripe", starred: false}
+  - {name: "TestGorilla", link: "https://jobs.ashbyhq.com/testgorilla", starred: false}
+  - {name: "Wizeline", link: "https://boards.greenhouse.io/wizeline", starred: false}

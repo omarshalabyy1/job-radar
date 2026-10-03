@@ -1,12 +1,15 @@
 """job_radar: find the new jobs and rank them; two email DAGs send them. The times are in
 settings.yaml (schedule), Cairo time; as shipped:
 
-    job_radar               1am, 7am, 11am, 6pm: schema -> extract_boards, extract_remote, extract_egypt,
+    job_radar               11am and 7pm: schema -> extract_boards, extract_remote, extract_egypt,
                             extract_workable, extract_freehire, extract_companies, extract_portals,
                             extract_email (side by side) -> transform -> describe -> match_skills
                             -> export_career_ops
-    job_radar_email_egypt   12pm and 7pm: your home's jobs (Egypt) not emailed yet
-    job_radar_email_abroad  8am and 8pm: the jobs everywhere else (remote only: no hybrid, no onsite) not emailed yet
+    job_radar_email_egypt   11:30am and 7:30pm: your home's jobs (Egypt) not emailed yet
+    job_radar_email_abroad  11:30am and 7:30pm: the jobs everywhere else (remote only) not emailed yet
+
+No AI runs on this schedule. Claude works only when you call /job-radar in Claude Code: it runs
+this DAG, reviews the matches against your CV and tailors applications (the job-radar skill).
 
 Each task is one step of `python -m job_radar`, run from the job_radar virtual environment. The
 extract tasks run in parallel, so a run takes about as long as its slowest source.
@@ -27,13 +30,14 @@ A run finishes in under 300 seconds: each step stops itself at its time budget (
 150 s side by side, describe 60 s) and leaves the rest for the next run; execution_timeout stops
 a step that hangs anyway.
 
-Four collects a day stay inside every source's limits (README: Sources): a site that answers 429
-is left alone for as long as it asks, in every run, and Workable, which allows few searches a day,
-is searched in one of the four. A manual Trigger keeps to the same limits.
+The collects stay inside every source's limits (README: Sources): a site that answers 429 is left
+alone for as long as it asks, in every run, and Workable, which allows few searches a day, is
+searched in one collect a day. A manual Trigger keeps to the same limits.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -46,9 +50,13 @@ SCHEDULE = yaml.safe_load(Path("/opt/job-radar/settings.yaml").read_text(encodin
 
 
 def cron(times: list) -> str:
-    """["12pm", "7pm"] -> "0 12,19 * * *": on the hour, 12am is midnight."""
-    hours = sorted(int(t[:-2]) % 12 + (12 if t.lower().endswith("pm") else 0) for t in times)
-    return f"0 {','.join(map(str, hours))} * * *"
+    """["11:30am", "7:30pm"] -> "30 11,19 * * *"; 12am is midnight. One cron line has one minute, so
+    the times of a list share theirs."""
+    found = [re.fullmatch(r"(\d{1,2})(?::(\d\d))?\s*([ap]m)", str(t).strip().lower()) for t in times]
+    if not all(found) or len({m[2] for m in found}) != 1:
+        raise ValueError(f"settings.yaml schedule: {times} - write times like 7am or 7:30pm, one minute per line")
+    hours = sorted(int(m[1]) % 12 + (12 if m[3] == "pm" else 0) for m in found)
+    return f"{int(found[0][2] or 0)} {','.join(map(str, hours))} * * *"
 
 
 def step(name: str, **kwargs) -> BashOperator:
