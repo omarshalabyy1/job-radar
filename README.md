@@ -163,16 +163,21 @@ tried again a day later.
 
 ## Sources
 
-| Source | How |
-|---|---|
-| Wuzzuf | the JSON API its web app calls: every job in Egypt in the window, with its description |
-| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy) as a guest; remote jobs only outside Egypt |
-| Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt site's IT, data, business analyst, Python and internship pages |
-| Workable | its public job search, every company on it; remote only outside Egypt |
-| Himalayas, We Work Remotely | public search API, RSS feed |
-| Your companies | each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read every run |
-| 28,000+ career pages | the daily crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) |
-| Your Gmail | read-only IMAP, inbox and spam: the job links in job-alert emails (any LinkedIn email, Indeed, Wuzzuf, Bayt ...) |
+Every source stays inside its limits, so none has a reason to block your internet address. A site
+that answers 429 Too Many Requests is left alone for as long as it asks, by every step and run
+(one file per site in `output/waits/`; delete it to lift the hold early).
+
+| Source | How | Within its limits |
+|---|---|---|
+| Wuzzuf | the JSON API its web app calls: every job in Egypt from the last 24 hours, newest first, with its description | a few calls a run, 1 second apart |
+| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy) as a guest; remote jobs only outside Egypt | 3 seconds between a board's searches; a 403 or 429 stops that board for 6 hours |
+| Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt site's IT, data, business analyst, Python and internship pages | 5 pages a run, 1 second apart |
+| Workable | its public job search, every company on it; remote only outside Egypt | one round a day: it allows few searches a day, and each covers the whole day |
+| Himalayas, We Work Remotely | public search API, RSS feed | 1 second between pages |
+| Your companies | each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read | each once a day |
+| 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
+| Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
+| Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 4 emails a day of 500 |
 
 ## Troubleshooting
 

@@ -232,8 +232,8 @@ def transform(conn) -> None:
 def describe(conn) -> None:
     """Read the page of each new job that came without a description, for its schema.org
     JobPosting (Greenhouse, Lever, Workday, Workable ...); never a NO_FETCH page. Sites side by
-    side, each site's pages 1 second apart; a site that answers 429, and every page left when the
-    step's 60 seconds are up, waits for the next run."""
+    side, each site's pages 1 second apart; a site that answers 429 is left alone for as long as it
+    asks (sources.fetch), and every page left when the step's 60 seconds are up waits for the next run."""
     todo = conn.execute(
         "SELECT job_id, job_url FROM core.job WHERE description IS NULL AND described_at IS NULL"
         " AND job_url LIKE 'http%%' AND job_url !~ %s AND first_seen >= current_date - %s"
@@ -249,14 +249,12 @@ def describe(conn) -> None:
                 break
             time.sleep(1)
             try:
-                r = requests.get(url, headers=sources.BROWSER,
-                                 timeout=max(5, min(30, sources.time_left(DESCRIBE_SECONDS) - 5)))
-            except requests.RequestException:
-                continue
-            if r.status_code == 429:
+                r = sources.fetch("GET", url, timeout=max(5, min(30, sources.time_left(DESCRIBE_SECONDS) - 5)))
+            except sources.Held:  # the site asked us to wait: none of its pages this run
                 break
-            if r.status_code == 200:  # bytes: the page's own charset decides, not a guess
-                read.append((page_description(r.content), job_id))
+            except requests.RequestException:  # not read: tried again next run
+                continue
+            read.append((page_description(r.content), job_id))  # bytes: the page's own charset decides
         return read
 
     with ThreadPoolExecutor(8) as pool:

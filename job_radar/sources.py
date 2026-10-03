@@ -1,8 +1,8 @@
 """The job sources. Each returns rows for raw.job_posting, kept to the roles and places in scope.
 
-No login anywhere: public search pages through JobSpy, public APIs and feeds. The worst a board
-can do is rate-limit the run's internet address for a while, which costs that board's results
-for the day and nothing else.
+No login anywhere: public search pages through JobSpy, public APIs and feeds. Every source stays
+inside its limits, so no board ever has a reason to block the laptop's internet address: see
+fetch() (a host that answers 429 is left alone for as long as it asks) and the README's limits.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import email.policy
 import gzip
 import imaplib
 import json
+import logging
 import os
 import random
 import re
@@ -29,7 +30,7 @@ from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 
 from .config import (BAYT_PLACES, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, ONSITE_PLACES, PHENOM_SEARCHES, PLACES,
-                     REMOTE_OPEN_TO, RESPECT_ROBOTS, ROLES, TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
+                     REMOTE_OPEN_TO, RESPECT_ROBOTS, ROLES, ROOT, TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
 
 STARTED = time.monotonic()  # each step is its own process: its time budget counts from here
 
@@ -52,6 +53,11 @@ JOB_PAGE = (r"/jobs?/|/careers?/|/vacanc|/positions?/|viewjob|job-?listing|[?&]j
             r"|ashbyhq\.com|workable\.com")
 # a link that only says "Learn more" under a job card (Wellfound): the card is the text above it
 GENERIC_LINK = r"learn more|view job|see job|view details|more details|apply|apply now|see more"
+# an email bigger than this carries attachments, not job alerts: skipped, to spare Gmail's daily
+# IMAP download allowance (2,500 MB)
+MAIL_BYTES = 5_000_000
+# the feed's last_updated when it was last read: it is downloaded again only once it changes
+FEED_READ = ROOT / "output" / "feed-last-updated.txt"
 
 
 def since() -> str:
@@ -70,19 +76,85 @@ BROWSER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
                          "Chrome/129.0 Safari/537.36"}
 
 
-def get(url: str, **params) -> requests.Response:
-    r = requests.get(url, params=params, headers=BROWSER, timeout=60)
+# Every request a source makes goes through fetch(). A host that answers 429 Too Many Requests (or 503
+# with a Retry-After) is asked nothing more, by any step or run, until the time it gives (an hour
+# when it gives none); a host can also be held on our side (Workable: one round a day). One file per
+# host in output/waits/ holds the time, as the extract steps are separate processes side by side.
+WAITS = ROOT / "output" / "waits"
+
+
+class Held(Exception):
+    """A host not to be asked yet."""
+
+
+def waiting(host: str) -> float:
+    """Seconds left before `host` may be asked again; 0 when it may be asked now."""
+    try:
+        return max(0.0, float((WAITS / host).read_text()) - time.time())
+    except (OSError, ValueError):
+        return 0.0
+
+
+def hold(host: str, seconds: float) -> None:
+    """Ask `host` nothing for `seconds`, in every step and run."""
+    WAITS.mkdir(parents=True, exist_ok=True)
+    (WAITS / host).write_text(str(time.time() + seconds))
+
+
+def retry_after(value: str | None) -> float:
+    """A Retry-After header in seconds (it gives seconds or a date); an hour when there is none."""
+    if value and value.strip().isdigit():
+        return float(value)
+    try:
+        return max(60.0, (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return 3600.0
+
+
+def duration(seconds: float) -> str:
+    return f"{seconds / 60:.0f} minutes" if seconds < 3600 else f"{seconds / 3600:.1f} hours"
+
+
+def fetch(method: str, url: str, **kwargs) -> requests.Response:
+    host = urlsplit(url).hostname
+    if left := waiting(host):
+        raise Held(f"{host} is held for {duration(left)} more")
+    r = requests.request(method, url, **{"headers": BROWSER, "timeout": 60, **kwargs})
+    if r.status_code == 429 or (r.status_code == 503 and "Retry-After" in r.headers):
+        hold(host, retry_after(r.headers.get("Retry-After")))
+        raise Held(f"{host} answered {r.status_code}: held for {duration(waiting(host))}")
     r.raise_for_status()
     return r
 
 
+def get(url: str, **params) -> requests.Response:
+    return fetch("GET", url, params=params)
+
+
+class Blocked(logging.Handler):
+    """JobSpy logs a board's 403 or 429 and returns no jobs: this notes which board it was."""
+    def __init__(self) -> None:
+        super().__init__()
+        self.boards: set[str] = set()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if re.search(r"status code (403|429)", record.getMessage()):
+            self.boards.add(record.name.split(":")[-1].lower())
+
+
+BLOCKED = Blocked()
+for _board in ("Indeed", "Bayt"):
+    logging.getLogger(f"JobSpy:{_board}").addHandler(BLOCKED)
+
+
 def job_boards() -> list[dict]:
     """Indeed and Bayt through JobSpy: every role in every place, remote jobs only outside Egypt
-    (ONSITE_PLACES), one board and place per call (one down is a short day). Indeed, which does not
-    rate-limit, searches 6 places at a time; Bayt, which
-    has jobs only in Egypt and the Gulf, one search at a time. 3 seconds between a call's searches.
-    LinkedIn jobs come only from your LinkedIn job-alert emails. Searches stop at the step's time
-    budget; Bayt's places after Egypt come in a new order each run, so none is always the one cut."""
+    (ONSITE_PLACES), one board and place per call (one down is a short day). Indeed searches 6
+    places at a time; Bayt, which has jobs only in Egypt and the Gulf, one search at a time. 3
+    seconds between a call's searches. A board that answers 403 or 429 gets no more searches for
+    6 hours (JobSpy gives no Retry-After). LinkedIn jobs come only from your LinkedIn job-alert
+    emails. Searches stop at the step's time budget; Bayt's places after Egypt come in a new order
+    each run, so none is always the one cut."""
     bayt_places = [p for p in PLACES if p[0] in BAYT_PLACES]
     bayt_places = bayt_places[:1] + random.sample(bayt_places[1:], len(bayt_places) - 1)
     with ThreadPoolExecutor(7) as pool:
@@ -95,6 +167,9 @@ def board(site: str, places: list[tuple]) -> list[dict]:
     rows = []
     for place, location, country in places:
         for _, label, term, _ in ROLES:
+            if site in BLOCKED.boards or waiting(site):
+                print(f"{site}: held for {duration(waiting(site))} more, the rest waits")
+                return rows
             if time_left(EXTRACT_SECONDS) < 15:  # room left for one more search and the load
                 print(f"{site}: time budget reached, the rest waits for the next run")
                 return rows
@@ -106,6 +181,10 @@ def board(site: str, places: list[tuple]) -> list[dict]:
             except Exception as e:
                 print(f"WARNING {site} {label} / {location}: {e!r}"[:300])
                 continue
+            if site in BLOCKED.boards:  # its 403 or 429: leave it alone, this run and the next
+                hold(site, 6 * 3600)
+                print(f"{site} answered 403 or 429: held for 6 hours")
+                return rows
             print(f"{site} {label} / {location}: {len(df)}")
             for j in json.loads(df.to_json(orient="records", date_format="iso")):
                 rows.append(row(site, place, j["title"], j["company"], j["location"], j["job_url"],
@@ -118,8 +197,12 @@ def himalayas() -> list[dict]:
     rows = []
     for keyword in KEYWORDS:
         for offset in range(0, 100, 20):
-            jobs = get("https://himalayas.app/jobs/api/search", q=keyword, country="EG", sort="recent",
-                       offset=offset).json()["jobs"]
+            try:
+                jobs = get("https://himalayas.app/jobs/api/search", q=keyword, country="EG", sort="recent",
+                           offset=offset).json()["jobs"]
+            except Held as e:  # keep what the searches before it found
+                print(f"himalayas: {e}")
+                return rows
             for j in jobs:
                 posted = str(datetime.fromtimestamp(int(j["pubDate"]), timezone.utc).date())
                 if posted >= since() and role_of(j["title"]):
@@ -155,8 +238,7 @@ def jooble() -> list[dict]:
 
     def search(args: tuple) -> list[dict]:
         keyword, (place, location, _) = args
-        r = requests.post(f"https://jooble.org/api/{key}", json={"keywords": keyword, "location": location}, timeout=60)
-        r.raise_for_status()
+        r = fetch("POST", f"https://jooble.org/api/{key}", json={"keywords": keyword, "location": location})
         return [row("jooble", place, j["title"], j.get("company"), j.get("location"), j["link"],
                     (j.get("updated") or "")[:10], j.get("snippet"), j)
                 for j in r.json().get("jobs", []) if (j.get("updated") or "")[:10] >= since() and role_of(j["title"])]
@@ -168,12 +250,27 @@ def jooble() -> list[dict]:
 def workable_jobs() -> list[dict]:
     """Workable's public job search, across every company on Workable (startups and small and mid
     companies above all): each keyword in each place (remote jobs only outside Egypt), posted in the
-    last day, 4 searches at a time (8 at a time drew 429 Too Many Requests)."""
-    def search(args: tuple) -> list[dict]:
+    last day, 4 searches at a time. Workable allows few searches a day (after 3 runs of these 234
+    in a morning it answered 429 with a 21-hour Retry-After), and each search covers the whole last
+    day: so one round a day, held for 20 hours after it (one of the four daily collects runs it), and
+    a 429 holds it for as long as Workable asks."""
+    host = "jobs.workable.com"
+    if left := waiting(host):
+        print(f"workable: held for {duration(left)} more")
+        return []
+
+    def search(args: tuple) -> list[dict] | None:
         keyword, (place, location, _) = args
+        try:
+            jobs = get(f"https://{host}/api/v1/jobs", query=keyword, location=location, day_range=1,
+                       workplace=None if place in ONSITE_PLACES else "remote").json()["jobs"]
+        except Held:
+            return None  # its 429: this search and the ones after it wait for the hold
+        except requests.RequestException as e:  # one search down is a short day
+            print(f"WARNING workable {keyword} / {location}: {e!r}"[:200])
+            return []
         rows = []
-        for j in get("https://jobs.workable.com/api/v1/jobs", query=keyword, location=location, day_range=1,
-                     workplace=None if place in ONSITE_PLACES else "remote").json()["jobs"]:
+        for j in jobs:
             where = j.get("location") or {}
             location_text = ", ".join(filter(None, [where.get("city"), where.get("countryName")]))
             text = BeautifulSoup(f"{j.get('description', '')} {j.get('requirementsSection', '')}", "html.parser")
@@ -184,58 +281,85 @@ def workable_jobs() -> list[dict]:
         return rows
 
     with ThreadPoolExecutor(4) as pool:
-        return [r for rows in pool.map(search, [(k, p) for k in KEYWORDS for p in PLACES]) for r in rows]
+        found = list(pool.map(search, [(k, p) for k in KEYWORDS for p in PLACES]))
+    if None in found:  # the hold is Workable's own Retry-After: never shortened by ours
+        print(f"workable: 429 after {sum(rows is not None for rows in found)} of {len(found)} searches, "
+              f"held for {duration(waiting(host))}")
+    else:
+        hold(host, 20 * 3600)
+    return [r for rows in found if rows for r in rows]
 
 
 def company_portals() -> list[dict]:
     """28,000+ companies' own career pages (Greenhouse, Lever, Ashby, Workday, BambooHR, iCIMS,
     Paylocity) from job-board-aggregator's daily crawl (by Riley Dorrington, data CC BY-NC 4.0):
-    one ~75 MB download, 8 chunks at a time, instead of 28,000 calls. Kept: first seen in the
-    window, a role, a place in scope."""
+    one ~75 MB download, 8 chunks at a time, instead of 28,000 calls, and only when the feed has
+    changed since it was last read (its manifest's last_updated). Kept: first seen in the window, a
+    role, a place in scope."""
     def chunk(name: str) -> list[dict]:
         return json.loads(gzip.decompress(get(f"{PORTAL_FEED}/{name}").content))
 
+    manifest = get(f"{PORTAL_FEED}/jobs_manifest.json").json()
+    updated = str(manifest.get("last_updated") or "")
+    if updated and FEED_READ.exists() and FEED_READ.read_text() == updated:
+        print(f"company_portals: the feed is unchanged since {updated}, nothing to download")
+        return []
     rows = []
     with ThreadPoolExecutor(8) as pool:
-        for jobs in pool.map(chunk, get(f"{PORTAL_FEED}/jobs_manifest.json").json()["chunks"]):
+        for jobs in pool.map(chunk, manifest["chunks"]):
             for j in jobs:
                 if ((j.get("first_seen") or "")[:10] >= since() and j.get("title") and j.get("url")
                         and role_of(j["title"]) and place_of(j.get("location") or "")):
                     rows.append(row(j.get("ats", "portal").lower(), None, j["title"], j.get("company"),
                                     j["location"], j["url"], j["first_seen"][:10], None, j))
+    # marked read before the rows are saved: if saving fails, these jobs come with the feed's next update
+    FEED_READ.parent.mkdir(parents=True, exist_ok=True)
+    FEED_READ.write_text(updated)
     return rows
 
 
 def wuzzuf() -> list[dict]:
     """Wuzzuf, through the JSON API its own web app calls (robots.txt allows it; only its search
-    page sits behind Cloudflare's challenge, and this does not touch it): every job posted in the
-    last 24 hours, all of Egypt, all companies, 50 a page; then their details, 20 per call. The
-    title rules keep yours."""
+    page sits behind Cloudflare's challenge, and this does not touch it): every job in Egypt,
+    newest first, 50 a page with their details 20 per call, until a page has no job from the last
+    HOURS_OLD hours (its own "last 24 hours" filter stops at 50 jobs, too few on a busy day). The
+    window is counted from Wuzzuf's newest job, so its time zone does not matter; 1 second between
+    calls. The title rules keep yours."""
     api = {**BROWSER, "Content-Type": "application/vnd.api+json", "Accept": "application/vnd.api+json"}
-    companies: dict[str, str] = {}
-    start, total = 0, 1
-    while start < total:
-        body = {"startIndex": start, "pageSize": 50, "longitude": "0", "latitude": "0", "query": "",
-                "searchFilters": {"post_date": ["within_24_hours"]}}
-        r = requests.post("https://wuzzuf.net/api/search/job", data=json.dumps(body), headers=api, timeout=30)
-        r.raise_for_status()
-        found = r.json()
-        for hit in found.get("data", []):
-            fields = {f["name"]: f["value"] for f in hit["attributes"].get("computedFields", [])}
-            companies.setdefault(hit["id"], (fields.get("company_name") or [""])[0].strip())
-        start, total = start + 50, min(found.get("meta", {}).get("totalResultsCount", 0), 2000)
-        time.sleep(1)
-    ids, rows = list(companies), []
-    for i in range(0, len(ids), 20):
-        for job in requests.get("https://wuzzuf.net/api/job", params={"filter[other][ids]": ",".join(ids[i:i + 20])},
-                                headers=api, timeout=30).json().get("data", []):
+    rows, cutoff = [], None
+    for start in range(0, 2000, 50):
+        if time_left(EXTRACT_SECONDS) < 60:  # Tanqeeb comes after it in the same step
+            print("wuzzuf: time budget reached, the rest waits for the next run")
+            break
+        body = {"startIndex": start, "pageSize": 50, "longitude": "0", "latitude": "0", "query": "", "searchFilters": {}}
+        try:
+            hits = fetch("POST", "https://wuzzuf.net/api/search/job", data=json.dumps(body), headers=api,
+                         timeout=30).json().get("data", [])
+            companies = {hit["id"]: ({f["name"]: f["value"] for f in hit["attributes"].get("computedFields", [])}
+                                     .get("company_name") or [""])[0].strip() for hit in hits}
+            ids, jobs = list(companies), []
+            for i in range(0, len(ids), 20):
+                time.sleep(1)
+                jobs += fetch("GET", "https://wuzzuf.net/api/job", params={"filter[other][ids]": ",".join(ids[i:i + 20])},
+                              headers=api, timeout=30).json().get("data", [])
+        except Held as e:  # keep what the pages before it found
+            print(f"wuzzuf: {e}")
+            break
+        posted_at = {job["id"]: datetime.strptime(job["attributes"]["postedAt"], "%m/%d/%Y %H:%M:%S")
+                     for job in jobs if job["attributes"].get("postedAt")}
+        if not posted_at:
+            break
+        cutoff = cutoff or max(posted_at.values()) - timedelta(hours=HOURS_OLD)
+        recent = [job for job in jobs if posted_at.get(job["id"], cutoff) > cutoff]
+        for job in recent:
             a, where = job["attributes"], job["attributes"].get("location") or {}
             location = ", ".join(filter(None, [(where.get("city") or {}).get("name"), (where.get("country") or {}).get("name")]))
             if role_of(a["title"]) and place_of(location):
                 text = BeautifulSoup(f"{a.get('description') or ''} {a.get('requirements') or ''}", "html.parser")
-                posted = str(datetime.strptime(a["postedAt"], "%m/%d/%Y %H:%M:%S").date()) if a.get("postedAt") else None
                 rows.append(row("wuzzuf", None, a["title"], companies[job["id"]], location, f"https://wuzzuf.net/{a['uri']}",
-                                posted, text.get_text(" ", strip=True), job))
+                                str(posted_at[job["id"]].date()), text.get_text(" ", strip=True), job))
+        if not recent:  # newest first: a page with nothing from the window ends it
+            break
         time.sleep(1)
     return rows
 
@@ -540,11 +664,12 @@ def read_mailbox(address: str, password: str, host: str, seen: set[str]) -> list
         for folder in ["INBOX", *spam]:
             imap.select(f'"{folder}"', readonly=True)
             for uid in imap.uid("search", None, "SINCE", since_day)[1][0].split():
-                head = imap.uid("fetch", uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID DATE)])")[1][0][1]
+                info, head = imap.uid("fetch", uid, "(RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID DATE)])")[1][0]
                 h = email.message_from_bytes(head, policy=email.policy.default)
                 message_id = str(h["Message-ID"] or f"{address}/{folder}/{uid.decode()}")
-                if message_id in seen or str(h["Subject"]).startswith("Job radar"):  # its own digest is no alert
-                    continue
+                size = int(re.search(rb"RFC822\.SIZE (\d+)", info).group(1))
+                if message_id in seen or str(h["Subject"]).startswith("Job radar") or size > MAIL_BYTES:
+                    continue  # read before, its own digest, or attachments
                 msg = email.message_from_bytes(imap.uid("fetch", uid, "(BODY.PEEK[])")[1][0][1],
                                                policy=email.policy.default)
                 body = msg.get_body(preferencelist=("html",))

@@ -25,6 +25,10 @@ tasks after it still run on what is there (all_done).
 A run finishes in under 300 seconds: each step stops itself at its time budget (config: extracts
 150 s side by side, describe 60 s) and leaves the rest for the next run; execution_timeout stops
 a step that hangs anyway.
+
+Four collects a day stay inside every source's limits (README: Sources): a site that answers 429
+is left alone for as long as it asks, in every run, and Workable, which allows few searches a day,
+is searched in one of the four. A manual Trigger keeps to the same limits.
 """
 
 from __future__ import annotations
