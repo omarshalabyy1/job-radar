@@ -176,6 +176,7 @@ What to expect, step by step:
 | Airflow or the tracker won't open | Is Docker Desktop running? Then `docker compose up -d`. |
 | Everything is slow | Another Docker stack may be using every CPU; stop it, or restart Docker Desktop. |
 | A site seems skipped | It asked job-radar to wait (a file in `output/waits/`); it comes back by itself. |
+| A company shows *blocked* | Its site shows a bot check: run `.venv\Scripts\python scripts\open_blocked.py`, get past the check in the window, press Enter. Its session is saved for the next runs. |
 
 More in the README's [Troubleshooting](README.md).
 

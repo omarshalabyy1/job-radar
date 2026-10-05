@@ -1,8 +1,12 @@
 """The job sources. Each returns rows for raw.job_posting, kept to the roles and places in scope.
 
-No login anywhere: public search pages through JobSpy, public APIs and feeds. Every source stays
-inside its limits, so no board ever has a reason to block the laptop's internet address: see
-fetch() (a host that answers 429 is left alone for as long as it asks) and the README's limits.
+Every public page is read, whatever a site's robots.txt or terms say (your rule, 2026-10-05: you
+take the risk), as a browser asks for it: a site that turns requests away is asked again with a
+real Chrome's TLS handshake (request()). The code never logs in and never gets past a bot check: a
+site that shows one is opened by you once (scripts/open_blocked.py) and read with your saved
+session from then on. Every source stays inside its limits, so no board has a reason to block the
+laptop's internet address: see fetch() (a host that answers 429 is left alone for as long as it
+asks) and the README's limits. LinkedIn is never opened: its jobs come from your alert emails.
 """
 
 from __future__ import annotations
@@ -23,15 +27,14 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlsplit, urlunsplit
-from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests as chrome_requests  # requests' API, with a real Chrome's TLS handshake
 from jobspy import scrape_jobs
 
 from .config import (BAYT_PLACES, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, ONSITE_PLACES, PHENOM_SEARCHES, PLACES,
-                     RELOMOTE_PAGES, REMOTE_OPEN_TO, RESPECT_ROBOTS, ROLES, ROOT, TANQEEB_PAGES, TANQEEB_SITES,
-                     place_of, role_of)
+                     RELOMOTE_PAGES, REMOTE_OPEN_TO, ROLES, ROOT, TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of)
 
 STARTED = time.monotonic()  # each step is its own process: its time budget counts from here
 
@@ -79,9 +82,16 @@ BROWSER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 
 # Every request a source makes goes through fetch(). A host that answers 429 Too Many Requests (or 503
 # with a Retry-After) is asked nothing more, by any step or run, until the time it gives (an hour
-# when it gives none); a host can also be held on our side (Workable: one round a day). One file per
-# host in output/waits/ holds the time, as the extract steps are separate processes side by side.
+# when it gives none); one that still answers 401 or 403 to a real Chrome's handshake, for 6 hours;
+# a host can also be held on our side (Workable: one round a day). One file per host in output/waits/
+# holds the time, as the extract steps are separate processes side by side.
 WAITS = ROOT / "output" / "waits"
+# Seconds between two requests to one host, across a step's threads (request()): 1, unless named here.
+# Workable's search is limited by the day, not the second (one round a day); the 28,000-company feed
+# is files on GitHub's servers.
+GAP = {"jobs.workable.com": 0.25, "feashliaa.github.io": 0.0}
+NEXT_TURN: dict[str, float] = {}
+TURNS = threading.Lock()
 
 
 class Held(Exception):
@@ -116,19 +126,71 @@ def duration(seconds: float) -> str:
     return f"{seconds / 60:.0f} minutes" if seconds < 3600 else f"{seconds / 3600:.1f} hours"
 
 
-def fetch(method: str, url: str, **kwargs) -> requests.Response:
+# A site you opened by hand (scripts/open_blocked.py): its cookies and that browser's user agent
+SESSIONS = ROOT / "output" / "sessions"
+# A request that failed, from either client
+ERRORS = (requests.RequestException, chrome_requests.exceptions.RequestException)
+# A bot check's own page, not the passive Cloudflare script many ordinary pages carry
+CHALLENGE = r"<title>(Just a moment|Access Denied|Attention Required)|cf-chl-"
+
+
+def session(host: str) -> dict | None:
+    """The session saved for `host` (user_agent, cookies), or None."""
+    try:
+        return json.loads((SESSIONS / f"{host}.json").read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def pace(host: str) -> None:
+    """Wait for `host`'s turn: GAP seconds after the request before it, whichever thread made it."""
+    with TURNS:
+        turn = max(time.monotonic(), NEXT_TURN.get(host, 0.0))
+        NEXT_TURN[host] = turn + GAP.get(host, 1.0)
+    time.sleep(max(0.0, turn - time.monotonic()))
+
+
+def request(method: str, url: str, **kwargs):
+    """One request, as a browser makes it, at the host's pace: with requests first, and when the site
+    turns it away (401, 403) or never answers, once more with curl_cffi, whose TLS handshake is a
+    real Chrome's - the check many bot filters make (it opened 5 of the 6 career sites that refused
+    requests, 2026-10-05; Bain is the other way round, hence requests first). A site you opened by
+    hand gets your session's cookies and user agent."""
+    host = urlsplit(url).hostname
+    pace(host)
+    headers = {**BROWSER, **kwargs.pop("headers", {})}
+    if saved := session(host):
+        headers["User-Agent"] = saved["user_agent"]
+        kwargs["cookies"] = {c["name"]: c["value"] for c in saved["cookies"]}
+    kwargs.setdefault("timeout", 60)
+    try:
+        r = requests.request(method, url, headers=headers, **kwargs)
+        if r.status_code not in (401, 403):
+            return r
+    except requests.Timeout:
+        pass
+    if not saved:  # curl_cffi sends the user agent of the Chrome it imitates
+        del headers["User-Agent"]
+    pace(host)
+    return chrome_requests.request(method, url, headers=headers, impersonate="chrome", **kwargs)
+
+
+def fetch(method: str, url: str, **kwargs):
     host = urlsplit(url).hostname
     if left := waiting(host):
         raise Held(f"{host} is held for {duration(left)} more")
-    r = requests.request(method, url, **{"headers": BROWSER, "timeout": 60, **kwargs})
+    r = request(method, url, **kwargs)
     if r.status_code == 429 or (r.status_code == 503 and "Retry-After" in r.headers):
         hold(host, retry_after(r.headers.get("Retry-After")))
         raise Held(f"{host} answered {r.status_code}: held for {duration(waiting(host))}")
+    if r.status_code in (401, 403):  # turned away even as a real Chrome: asking again soon risks a ban
+        hold(host, 6 * 3600)
+        raise Held(f"{host} answered {r.status_code}: held for 6 hours")
     r.raise_for_status()
     return r
 
 
-def get(url: str, **params) -> requests.Response:
+def get(url: str, **params):
     return fetch("GET", url, params=params)
 
 
@@ -268,10 +330,9 @@ def relomote() -> list[dict]:
 
 
 def freehire() -> list[dict]:
-    """freehire.me's public job API (no key; its robots.txt lets all but Googlebot use /api/): each
-    keyword, posted in the last day, remote anywhere and any job in Egypt, the 100 most relevant of
-    each with the full description. Only jobs it rates fresh: not old ones posted again, and not
-    falsely refreshed. 1 second apart."""
+    """freehire.me's public job API (no key): each keyword, posted in the last day, remote anywhere
+    and any job in Egypt, the 100 most relevant of each with the full description. Only jobs it
+    rates fresh: not old ones posted again, and not falsely refreshed. 1 second apart."""
     rows = []
     for keyword in KEYWORDS:
         for where in ({"work_mode": "remote"}, {"countries": "eg"}):
@@ -335,8 +396,8 @@ def workable_jobs() -> list[dict]:
             jobs = get(f"https://{host}/api/v1/jobs", query=keyword, location=location, day_range=1,
                        workplace=None if place in ONSITE_PLACES else "remote").json()["jobs"]
         except Held:
-            return None  # its 429: this search and the ones after it wait for the hold
-        except requests.RequestException as e:  # one search down is a short day
+            return None  # its 429 or 403: this search and the ones after it wait for the hold
+        except ERRORS as e:  # one search down is a short day
             print(f"WARNING workable {keyword} / {location}: {e!r}"[:200])
             return []
         rows = []
@@ -352,8 +413,8 @@ def workable_jobs() -> list[dict]:
 
     with ThreadPoolExecutor(4) as pool:
         found = list(pool.map(search, [(k, p) for k in KEYWORDS for p in PLACES]))
-    if None in found:  # the hold is Workable's own Retry-After: never shortened by ours
-        print(f"workable: 429 after {sum(rows is not None for rows in found)} of {len(found)} searches, "
+    if None in found:  # the hold is Workable's own Retry-After (or 6 hours after a 403): never shortened by ours
+        print(f"workable: refused after {sum(rows is not None for rows in found)} of {len(found)} searches, "
               f"held for {duration(waiting(host))}")
     else:
         hold(host, 20 * 3600)
@@ -389,9 +450,9 @@ def company_portals() -> list[dict]:
 
 
 def wuzzuf() -> list[dict]:
-    """Wuzzuf, through the JSON API its own web app calls (robots.txt allows it; only its search
-    page sits behind Cloudflare's challenge, and this does not touch it): every job in Egypt,
-    newest first, 50 a page with their details 20 per call, until a page has no job from the last
+    """Wuzzuf, through the JSON API its own web app calls (its search page sits behind Cloudflare's
+    check; the API does not): every job in Egypt, newest first, 50 a page with their details 20 per
+    call, until a page has no job from the last
     HOURS_OLD hours (its own "last 24 hours" filter stops at 50 jobs, too few on a busy day). The
     window is counted from Wuzzuf's newest job, so its time zone does not matter; 1 second between
     calls. The title rules keep yours."""
@@ -436,7 +497,7 @@ def wuzzuf() -> list[dict]:
 
 def tanqeeb() -> list[dict]:
     """Tanqeeb, which gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ... for Egypt and the
-    Gulf: its job pages that robots.txt allows (TANQEEB_PAGES), newest first, each card's title,
+    Gulf: its job pages by field (TANQEEB_PAGES), newest first, each card's title,
     company, place, date and the board it came from; its country sites side by side."""
     def text(card, css: str) -> str:
         element = card.select_one(css)
@@ -518,10 +579,10 @@ ATS_PATTERNS = [
 
 
 def detect(url: str) -> tuple[str, str | None, str | None]:
-    """(platform, what its reader calls, note) for a careers page: 'forbidden' when its robots.txt
-    does not allow reading it, 'blocked' when it turns scripts away, 'page' when no known
-    platform shows, even once Playwright has run the page's JavaScript (its links are read);
-    None when the network failed, so the next run tries again."""
+    """(platform, what its reader calls, note) for a careers page: 'blocked' when it shows a bot
+    check even to a real Chrome's handshake and a browser (you open it once: scripts/open_blocked.py),
+    'page' when no known platform shows, even once Playwright has run the page's JavaScript (its
+    links are read); None when the network failed, so the next run tries again."""
     parts = urlsplit(url)
     for platform, pattern in ATS_PATTERNS:  # the URL itself names the platform: nothing to fetch
         if m := re.search(pattern, url):
@@ -529,23 +590,13 @@ def detect(url: str) -> tuple[str, str | None, str | None]:
     for pattern, reader in COVERED:
         if re.search(pattern, url):
             return "covered", None, f"its jobs come through {reader}"
-    if RESPECT_ROBOTS:
-        robots = RobotFileParser()
-        try:
-            robots.parse(requests.get(f"{parts.scheme}://{parts.netloc}/robots.txt", headers=BROWSER, timeout=20)
-                         .text.splitlines())
-        except requests.RequestException:
-            pass
-        if not robots.can_fetch("*", url):
-            return "forbidden", None, "its robots.txt forbids reading it"
     try:
-        r = requests.get(url, headers=BROWSER, timeout=30)
-    except requests.RequestException as e:
+        r = request("GET", url, timeout=30)
+    except ERRORS as e:
         return None, None, f"network error: {e!r}"[:200]
     page = r.text
-    # a bot check's own page, not the passive Cloudflare script many ordinary pages carry
-    if r.status_code in (401, 403, 429) or re.search(r"<title>(Just a moment|Access Denied)|cf-chl-", page[:20000]):
-        return "blocked", None, f"it turns scripts away (HTTP {r.status_code})"
+    if r.status_code in (401, 403, 429) or re.search(CHALLENGE, page[:20000]):
+        return "blocked", None, f"it shows a bot check (HTTP {r.status_code}): run scripts/open_blocked.py"
     if r.status_code >= 400:
         return "unreachable", None, f"page not found (HTTP {r.status_code}): check the careers URL"
     for platform, pattern in ATS_PATTERNS:
@@ -559,8 +610,8 @@ def detect(url: str) -> tuple[str, str | None, str | None]:
         return "rss", url, None
     try:  # a job board its JavaScript loads (an embedded Greenhouse or Workable list ...)
         page = rendered(url)
-    except Exception as e:
-        return "page", url, f"could not render: {e!r}"[:200]
+    except Exception as e:  # a browser turned away (McKinsey's site drops headless Chromium) or a bot check
+        return "blocked", None, f"its page did not open in a browser ({e!r}"[:160] + "): run scripts/open_blocked.py"
     for platform, pattern in ATS_PATTERNS:
         if m := re.search(pattern, page):
             return platform, m.group(1), None
@@ -684,17 +735,30 @@ def rss(company: str, feed: str) -> list[dict]:
 def rendered(url: str) -> str:
     """The page's HTML after its JavaScript ran, in a headless Chromium (Playwright): for career
     pages that build their job list in the browser. Each worker thread starts one Chromium and
-    reuses it for every page (Playwright is one instance per thread); it ends with the step. It
-    does not get past bot checks, and is not meant to."""
+    reuses it for every page (Playwright is one instance per thread); it ends with the step. The
+    page is read once it has loaded and gone quiet, or 10 seconds after it loaded: busy sites (IBM,
+    Bain, Capgemini) never go quiet, and waiting for it timed them out. A site you opened by hand
+    gets your session; a page that still shows a bot check raises, for you to open."""
+    from playwright.sync_api import TimeoutError as PageTimeout, sync_playwright
     if not hasattr(BROWSERS, "chromium"):
-        from playwright.sync_api import sync_playwright
         BROWSERS.chromium = sync_playwright().start().chromium.launch()
-    page = BROWSERS.chromium.new_page(user_agent=BROWSER["User-Agent"])
+    saved = session(urlsplit(url).hostname)
+    context = BROWSERS.chromium.new_context(
+        user_agent=saved["user_agent"] if saved else BROWSER["User-Agent"],
+        storage_state={"cookies": saved["cookies"], "origins": []} if saved else None)
     try:
-        page.goto(url, wait_until="networkidle", timeout=30000)
-        return page.content()
+        page = context.new_page()
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        try:
+            page.wait_for_load_state("networkidle", timeout=10000)
+        except PageTimeout:  # still busy: what has loaded is read
+            pass
+        html = page.content()
     finally:
-        page.close()
+        context.close()
+    if re.search(CHALLENGE, html[:20000]):
+        raise RuntimeError("the page shows a bot check")
+    return html
 
 
 READERS = {"workable": workable, "greenhouse": greenhouse, "lever": lever, "ashby": ashby, "phenom": phenom,
@@ -784,8 +848,10 @@ def jobs_in_email(page: str) -> list[tuple[str, str, str, str]]:
                 continue
             title, card = above[first], "\n".join(above[first + 1:])
         url = canonical_url(url)
-        # from LinkedIn only its job pages (not profiles, posts or searches)
-        if not role_of(title) or url in urls or ("linkedin.com" in url and "/jobs/view/" not in url):
+        # from LinkedIn only its job pages (not profiles, posts or searches), each kept whatever its
+        # title: LinkedIn chose it for your alert
+        linkedin_job = "linkedin.com/jobs/view/" in url
+        if not role_of(title, alert=linkedin_job) or url in urls or ("linkedin.com" in url and not linkedin_job):
             continue
         urls.add(url)
         after = card.split("\n")[0] if card else lines[i + 1] if i + 1 < len(lines) else ""

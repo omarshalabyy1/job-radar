@@ -20,7 +20,6 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlsplit
 
-import requests
 from bs4 import BeautifulSoup
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -192,7 +191,8 @@ def transform(conn) -> None:
     yours = re.compile("|".join(rf"\b{re.escape(n)}\b" for n in names if len(letters(n)) > 3) or r"(?!)", re.I)
     jobs: dict[str, dict] = {}
     for p in postings:
-        rank = role_of(p["title"] or "")
+        rank = role_of(p["title"] or "",
+                       alert=p["source"] == "email" and "linkedin.com/jobs/view/" in (p["job_url"] or ""))
         # the place searched, else the location's, else the title's ("Data Engineer - Cairo"); a job
         # whose place none of them gives (only job alerts get this far) is "Unknown location"
         place = p["searched_for"] or place_of(p["location"] or "") or place_of(p["title"] or "") or "Unknown location"
@@ -256,7 +256,7 @@ def describe(conn) -> None:
                 r = sources.fetch("GET", url, timeout=max(5, min(30, sources.time_left(DESCRIBE_SECONDS) - 5)))
             except sources.Held:  # the site asked us to wait: none of its pages this run
                 break
-            except requests.RequestException:  # not read: tried again next run
+            except sources.ERRORS:  # not read: tried again next run
                 continue
             read.append((page_description(r.content), job_id))  # bytes: the page's own charset decides
         return read

@@ -8,3 +8,4 @@ python-dotenv
 requests
 streamlit
 pyyaml
+curl_cffi

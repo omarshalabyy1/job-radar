@@ -64,6 +64,7 @@ freelance. Jobs at your companies get a ⭐.
 <br>
 
 - **Roles:** a title must fit one of your roles; titles above your level or never yours are left out.
+  A LinkedIn alert's jobs are all kept (LinkedIn chose them for your alert), after your roles.
 - **Places:** onsite or hybrid only in Egypt, in your onsite areas (Cairo, Giza ...); anywhere else
   the job must be remote: hybrid, onsite and "not remote" never count as remote. The place comes
   from the search, else the location, else the title; a job alert whose place cannot be told
@@ -72,9 +73,11 @@ freelance. Jobs at your companies get a ⭐.
   title + company), so the same job on three boards, or reposted, is one job; each job is emailed once.
 - **Fast:** a collect finishes in under 5 minutes; each step stops at its time budget and leaves the
   rest for the next run. A collect missed while the laptop slept runs once it wakes.
-- **Never done:** logging in to a job site, or getting past a bot check. LinkedIn is only read
-  through your own alert emails. A careers page that cannot be read shows why in the tracker and is
-  tried again a day later.
+- **Every public page is read**, whatever a site's robots.txt says; a site that turns scripts away
+  is asked again with a real Chrome's handshake. The code never logs in and never gets past a bot
+  check: a site that shows one is opened by you once (`scripts/open_blocked.py`) and read with your
+  saved session after that. LinkedIn is never opened: its jobs come only from your alert emails. A
+  careers page that cannot be read shows why in the tracker and is tried again a day later.
 
 </details>
 
@@ -126,9 +129,11 @@ through LinkedIn or Indeed: their terms ban automation, and accounts get banned 
   <img src="https://img.shields.io/badge/Your_Gmail_alerts-1E293B?style=flat-square" alt="Your Gmail alerts">
 </p>
 
-Every source stays inside its limits, so none has a reason to block your internet address. A site
-that answers 429 Too Many Requests is left alone for as long as it asks, by every step and run
-(one file per site in `output/waits/`; delete it to lift the hold early).
+Every source stays inside its limits, so none has a reason to block your internet address. One
+request a second at most to any site (Workable's search, limited by the day instead, a little
+faster). A site that answers 429 Too Many Requests is left alone for as long as it asks, and one
+that still answers 403 to a real Chrome's handshake for 6 hours, by every step and run (one file
+per site in `output/waits/`; delete it to lift the hold early).
 
 | Source | How | Within its limits |
 |---|---|---|
@@ -137,9 +142,9 @@ that answers 429 Too Many Requests is left alone for as long as it asks, by ever
 | Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt site's IT, data, business analyst, Python and internship pages | 5 pages a run, 1 second apart |
 | Workable | its public job search, every company on it; remote only outside Egypt | one round a day: it allows few searches a day, and each covers the whole day |
 | Himalayas, We Work Remotely | public search API, RSS feed | 1 second between pages |
-| [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart (its robots.txt allows them) |
+| [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart |
 | [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
-| Your companies | `settings.yaml` (companies): your starred ones, plus 73 remote-first companies hiring worldwide from the [remote-in-tech](https://github.com/remoteintech/remote-jobs) list; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read | each once a day |
+| Your companies | `settings.yaml` (companies): your starred ones, plus 73 remote-first companies hiring worldwide from the [remote-in-tech](https://github.com/remoteintech/remote-jobs) list; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
 | Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
 | Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 4 emails a day of 500 |
@@ -228,6 +233,7 @@ in the tracker, and keep Docker Desktop running. The first emails arrive at the 
 | A `settings.yaml` change broke the runs | Airflow shows an import error at the top; fix the line it names (YAML: lists in `[...]`, a space after `:`). |
 | Docker is slow or stuck | `wsl --shutdown`, then restart Docker Desktop. |
 | Tasks fail with "Process timed out" | The Docker VM is starved: another stack on it (another Airflow) is using every CPU. Stop that stack while job-radar runs, or give Docker more CPUs; the next run catches up. |
+| A company shows *blocked* in the tracker | Its site shows a bot check: run `.venv\Scripts\python scripts\open_blocked.py` on the laptop, get past the check (or log in, or accept the cookies) in the window it opens and press Enter; the next run reads it with your session. Run it again when a session expires. |
 | Airflow seems down | It restarts itself: when one of its parts stops, the container exits and Docker starts it again within a minute (`docker ps` shows it restarting). |
 | An older warehouse, set up before Airflow moved to Postgres | Once: `docker exec job-radar-warehouse-1 psql -U jobradar -d jobradar -c "CREATE DATABASE airflow"`, then `docker compose up -d`. |
 

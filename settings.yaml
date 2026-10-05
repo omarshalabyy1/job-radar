@@ -134,7 +134,7 @@ places:
 # Onsite and hybrid jobs at home: kept in these areas, and when the location names no city;
 # left out when it names one of other_home_cities.
 onsite_areas: [cairo*, giza*, القاهرة*, الجيزة*, heliopolis*, maadi*, nasr city*, zamalek*, mohandessin*, dokki*,
-               6th of october*, october city*, sheikh zayed*, smart village*, fifth settlement*, 5th settlement*]
+               6th of october*, 6 october*, october city*, sheikh zayed*, smart village*, fifth settlement*, 5th settlement*]
 other_home_cities: [alexandria*, alex, الإسكندرية*, mansoura*, tanta*, assiut*, asyut*, suez*, ismailia*,
                     port said*, damietta*, hurghada*, sharm*, sinai*, aswan*, luxor*, zagazig*, minya*, sohag*,
                     beni suef*, fayoum*, faiyum*, sokhna*, 10th of ramadan*, tenth of ramadan*, sadat city*,

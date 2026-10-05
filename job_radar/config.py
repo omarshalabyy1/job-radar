@@ -30,6 +30,10 @@ HOME = "Egypt"  # onsite and hybrid jobs only here, and its own email
 ROLES = [(rank, role["name"], " OR ".join(f'"{term}"' for term in role["search"]),
           [words(need) for need in role["title_needs"]]) for rank, role in enumerate(SETTINGS["roles"], 1)]
 ROLE_LABEL = {rank: label for rank, label, _, _ in ROLES}
+# a job in a LinkedIn alert whose title is none of your roles: LinkedIn chose it for your alert, so it
+# is kept, listed after your roles
+ALERT_RANK = len(ROLES) + 1
+ROLE_LABEL[ALERT_RANK] = "More from your LinkedIn alerts"
 # plain keywords for the sources that take no OR syntax (Himalayas, Workable, Jooble)
 KEYWORDS = SETTINGS["search_words"]
 # entry, mid and senior are yours; above senior is not
@@ -68,9 +72,6 @@ EXPERIENCE = SETTINGS["experience"]
 SCHEDULE = SETTINGS["schedule"]
 # job pages never fetched: LinkedIn (its jobs come only from your alert emails)
 NO_FETCH = r"linkedin\.com"
-# Your choice (2026-10-03): read public careers pages even when their robots.txt asks crawlers to
-# stay away (a few requests a run, no login). Pages behind a bot check are never read either way.
-RESPECT_ROBOTS = False
 
 # companies whose jobs are starred and listed first, from any source (with every company in core.company)
 TARGET_COMPANIES = words(SETTINGS["your_companies"])
@@ -80,23 +81,25 @@ TARGET_COMPANIES = words(SETTINGS["your_companies"])
 # remote.
 PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst") for where in ("Egypt", "remote")]
 
-# Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and the job
-# pages its robots.txt allows (no ?keywords searches). It has no remote filter, so Egypt only.
+# Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and its job
+# pages by field (its keyword search shows a script no jobs, 2026-10-05). It has no remote filter,
+# so Egypt only.
 TANQEEB_SITES = {"egypt": "Egypt"}
 TANQEEB_PAGES = ["it-jobs", "data-analyst-jobs", "business-analyst-jobs", "python-developer-jobs", "internship-jobs"]
 
-# Relomote's pages of remote jobs open to someone in Egypt, by field (its robots.txt allows them)
+# Relomote's pages of remote jobs open to someone in Egypt, by field
 RELOMOTE_PAGES = ["data-analytics-in-egypt", "engineering-development-in-egypt"]
 
 
-def role_of(title: str) -> int | None:
-    """The rank of the first role whose patterns all match the title, seniority aside."""
-    if re.search(NOT_RELEVANT, title, re.I):
+def role_of(title: str, alert: bool = False) -> int | None:
+    """The rank of the first role whose patterns all match the title, seniority aside; for a job in
+    a LinkedIn alert (alert) that matches none, ALERT_RANK. A title never yours has no rank."""
+    if not title.strip() or re.search(NOT_RELEVANT, title, re.I):
         return None
     for rank, _, _, patterns in ROLES:
         if all(re.search(p, title, re.I) for p in patterns):
             return rank
-    return None
+    return ALERT_RANK if alert else None
 
 
 def too_senior(title: str) -> bool:

@@ -1,0 +1,14 @@
+# Overlay d'intégration privé — NE JAMAIS publier
+references/integration-private.md
+
+# Artefacts de crawl / checkpoints Scrapling
+*_crawl/
+crawl_data/
+*.jsonl
+output.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
