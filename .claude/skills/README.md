@@ -13,5 +13,11 @@ collect does (the `/job-radar` skill sends Claude here when you call it). Start 
 | crawl4ai | [brettdavies/crawl4ai-skill](https://github.com/brettdavies/crawl4ai-skill) | MIT or Apache-2.0 |
 | playwright-skill | lackeyjb's playwright-skill | MIT (its package.json); run `npm install` in it before first use |
 
+In job-radar, rate limits come first, to avoid bans: every request goes through
+`job_radar/sources.py` `fetch()` (one a second per site, a 429 held for its Retry-After, a 403 for
+6 hours), whatever the orchestrator says about speed. A site behind a check is opened with
+`scripts/open_blocked.py`, which saves the session the Airflow runs use (the orchestrator's
+`unlock.py` keeps a profile for local scrapers only). LinkedIn is never opened.
+
 The orchestrator also names a `scraping` skill; it carries no license, so it is not copied here.
 In crawl4ai's SDK reference, an example API key is replaced with a placeholder.
