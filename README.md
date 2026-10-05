@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1200&color=2DD4BF&center=true&vCenter=true&width=760&lines=Data+%26+AI+jobs%2C+found+for+you;Collect.+Rank.+Email.+Apply.;Egypt+onsite.+Remote+everywhere+else.;Twice+a+day.+Each+job+once.+No+bans." alt="Data and AI jobs, found for you">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1200&color=2DD4BF&center=true&vCenter=true&width=760&lines=Data+%26+AI+jobs%2C+found+for+you;Collect.+Rank.+Email.+Apply.;Egypt+onsite.+Remote+everywhere+else.;Every+day.+Each+job+once.+No+bans." alt="Data and AI jobs, found for you">
 </p>
 
 <p align="center">
