@@ -550,9 +550,10 @@ def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
             return [], (platform, api, note, company)
         try:
             rows = READERS[platform](company, api)
-        except Exception as e:  # one site down is a short day
+        except Exception as e:  # one site down is a short day; detected again next run, so a site
+            # whose saved session expired shows as blocked again, for scripts/open_blocked.py
             print(f"WARNING {company}: {e!r}"[:300])
-            return [], (platform, api, f"read failed: {e!r}"[:200], company)
+            return [], (None, api, f"read failed: {e!r}"[:200], company)
         print(f"{company} ({platform}): {len(rows)}")
         return rows, (platform, api, note, company)
 
