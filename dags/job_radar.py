@@ -27,8 +27,9 @@ warehouse down, no network, the email not sent) is not retried: the next run cat
 tasks after it still run on what is there (all_done).
 
 A run finishes in under 300 seconds: each step stops itself at its time budget (config: extracts
-150 s side by side, describe 60 s) and leaves the rest for the next run; execution_timeout stops
-a step that hangs anyway.
+150 s side by side, describe 60 s) and leaves the rest for the next run. execution_timeout stops a
+step that hangs anyway; it allows 90 s more than the budget, because on a busy laptop a task can
+need over a minute just to start Python (2026-10-05: tasks killed at 170 s before their work began).
 
 The collects stay inside every source's limits (README: Sources): a site that answers 429 is left
 alone for as long as it asks, in every run, and Workable, which allows few searches a day, is
@@ -71,14 +72,14 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False,
-    default_args={"retries": 0, "execution_timeout": timedelta(seconds=170)},
+    default_args={"retries": 0, "execution_timeout": timedelta(seconds=240)},
 ):
     extracts = [step(name) for name in ("extract_boards", "extract_bayt", "extract_remote", "extract_egypt",
                                         "extract_gulf", "extract_workable", "extract_freehire", "extract_companies",
                                         "extract_portals", "extract_email")]
     step("schema") >> extracts
     matched = step("match_skills", trigger_rule="all_done")
-    extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=80)) >> matched
+    extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=150)) >> matched
     matched >> step("export_career_ops")
 
 # your two emails, each at its own times (a laptop asleep at a time sends once it is back)
@@ -86,5 +87,5 @@ for dag_id, name, schedule in (("job_radar_email_egypt", "email_egypt", cron(SCH
                                ("job_radar_email_abroad", "email_abroad", cron(SCHEDULE["abroad_email"]))):
     with DAG(dag_id=dag_id, schedule=schedule, start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
              catchup=False, max_active_runs=1, is_paused_upon_creation=False,
-             default_args={"retries": 0, "execution_timeout": timedelta(seconds=120)}):
+             default_args={"retries": 0, "execution_timeout": timedelta(seconds=240)}):
         step(name)
