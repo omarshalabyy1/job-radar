@@ -217,14 +217,13 @@ companies:
   - {name: "Klivvr", link: "https://jobs.lever.co/klivvr", starred: false}
   - {name: "KPMG", link: "https://slccareers.kpmg.com/"}
   - {name: "Kuwait Finance House", link: "https://fa-esqe-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1"}
-  - {name: "L'Oréal", link: "https://careers.loreal.com/en_US/jobs/SearchJobs/feed/"}
+  - {name: "L'Oréal", link: "https://careers.loreal.com/en/search-jobs/data"}
   - {name: "Link Development", link: "https://linkdevelopment.com/careers/opportunities/"}
   - {name: "Maersk", link: "https://maersk.wd3.myworkdayjobs.com/Maersk_Careers?locations=853120f5cc8a10009e423980f6d80000"}
   - {name: "Majorel", link: "https://www.majorel.com/careers/"}
   - {name: "Mars", link: "https://careers.mars.com/global/en"}
   - {name: "Mashreq", link: "https://hcld.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs?location=Egypt&locationId=300000000281972&locationLevel=country"}
   - {name: "Mastercard", link: "https://careers.mastercard.com/us/en"}
-  - {name: "McKinsey", link: "https://www.mckinsey.com/careers/search-jobs"}
   - {name: "Microsoft", link: "https://apply.careers.microsoft.com/careers?location=Egypt"}
   - {name: "MNT-Halan", link: "https://jobs.halan.com/"}
   - {name: "Mondelez", link: "https://wd3.myworkdaysite.com/recruiting/mdlz/External?locationCountry=d865e83093ad42319653b08e61f7db49"}

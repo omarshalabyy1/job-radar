@@ -135,7 +135,7 @@ through LinkedIn or Indeed: their terms ban automation, and accounts get banned 
   <img src="https://img.shields.io/badge/GulfTalent-1E293B?style=flat-square" alt="GulfTalent">
   <img src="https://img.shields.io/badge/Dubizzle_Jobs-1E293B?style=flat-square" alt="Dubizzle Jobs">
   <img src="https://img.shields.io/badge/28%2C000_career_pages-1E293B?style=flat-square" alt="28,000 career pages">
-  <img src="https://img.shields.io/badge/Your_205_companies-1E293B?style=flat-square" alt="Your 205 companies">
+  <img src="https://img.shields.io/badge/Your_204_companies-1E293B?style=flat-square" alt="Your 204 companies">
   <img src="https://img.shields.io/badge/Your_Gmail_alerts-1E293B?style=flat-square" alt="Your Gmail alerts">
 </p>
 
