@@ -8,14 +8,14 @@ breaks (a refusal, a falling count, empty fields), because these facts belong to
 - **Goal:** the new data and AI jobs in your roles, in your places: Egypt (onsite or hybrid only in
   your Cairo and Giza areas), anywhere else remote only. Most sources are read as an *observation*
   (their newest jobs per search), not a full count of the site; the coverage column says which.
-- **Run:** an Airflow task, at 11am and 7pm (Cairo); the extract tasks run side by side, each within a
+- **Run:** an Airflow task, once a day at 12pm (Cairo); the extract tasks run side by side, each within a
   150-second budget, and the whole run under 300 seconds. What does not fit waits for the next run.
 - **Storage:** every posting as it came (its JSON in `raw.job_posting.payload`), once per source and
   link; then one row per job in `core.job` (the same job on several boards is one job).
 - **Checks:** each task logs `<source>: N postings, M new`; dedup by link (raw) and by normalized
   title and company (core); a source that fails is a warning, not a failed run.
 - **Limits first, to avoid bans:** one request a second per site, a 429 held for its Retry-After, a
-  403 after the real-Chrome retry held 6 hours (`job_radar/sources.py`, `fetch()` and `request()`).
+  403 after the real-Chrome retry held 6 hours (`job_radar/sources/base.py`, `fetch()` and `request()`).
 - **Ladder when a site refuses:** plain `requests`, then `curl_cffi` with a real Chrome handshake,
   then a headless browser (Playwright), then your saved session (`scripts/open_blocked.py`). Never a
   CAPTCHA solved by the code, never a password typed by it. LinkedIn is never opened.
@@ -24,7 +24,7 @@ breaks (a refusal, a falling count, empty fields), because these facts belong to
 
 | Source | Coverage | Pages and fields | URL list | Tool (and the test that picked it) | Speed a run | Risks and fallback |
 |---|---|---|---|---|---|---|
-| Indeed, Bayt | observation: 30 newest per role and place | JobSpy's columns (title, company, location, job_url, date_posted, description, is_remote) | every role x place (other places remote only) | JobSpy as a guest | up to ~140 s (Bayt cut at the budget) | a 403 or 429 holds the board 6 h |
+| Indeed, Bayt (a task each) | observation: 30 newest per role and place | JobSpy's columns (title, company, location, job_url, date_posted, description, is_remote) | every role x place (other places remote only) | JobSpy as a guest | up to ~140 s each, side by side | a 403 or 429 holds the board 6 h |
 | Wuzzuf | population: every job in Egypt of the last 24 h | `/api/search/job` ids, then `/api/job` details: title, company, city, postedAt, description | newest first, 50 a page, until a page has nothing from the window | its web app's JSON API, plain requests (search page behind Cloudflare, API not) | a few calls | API change: the keyword search with `post_date` filter also works |
 | Tanqeeb (Egypt and 6 Gulf sites) | observation: 5 field pages per site | cards `a.search-job-title-link`, company, place, relative date | `/s/jobs/<field>-jobs?order_by=most_recent` per country site | HTML, plain requests (its keyword search shows a script nothing) | 35 pages, ~22 s, sites side by side | Gulf jobs mostly onsite (dropped by your rule); markup change |
 | NaukriGulf | observation: 30 newest per keyword, last 7 days | `spapi/jobapi/search` JSON: Designation, Company.Name, Location, JdURL, LatestPostedDate, jobInfo | 13 keyword searches | hidden API with `curl_cffi` (requests hangs 15 s, curl 200 in 0.6 s); remembered as Chrome-only | 13 calls, ~28 s | no remote filter (title or summary decides); dates run days late |
@@ -39,7 +39,7 @@ breaks (a refusal, a falling count, empty fields), because these facts belong to
 | Remote.co | population of its latest-jobs sitemap (~500), titles like your roles | job page `__NEXT_DATA__`: title, company, postedDate, countries, remoteWorkLevel | sitemap, then only job pages not read before | sitemap + `curl_cffi` (search pages: Akamai challenge for every impersonation) | 1 + a few pages, ~38 s the first run | sitemap or page layout change |
 | Workable | observation: each search's jobs of the last day, across every company on Workable | search API JSON | each keyword x place | public API | 234 searches, once a day (it allows few a day) | a 429 holds it for its Retry-After |
 | freehire.me | observation: 100 most relevant per keyword, last day | API JSON, only jobs it rates fresh | each keyword x (remote, Egypt) | public API | 26 calls, ~70 s | none known |
-| Your companies (204) | population of each company's own board | Workable, Greenhouse, Lever, Ashby APIs; Phenom and SuccessFactors pages; RSS; else the rendered page's links | `settings.yaml` companies, each read once a day | detected per site: an API when the platform has one, else the page; the ladder above when a site refuses (curl_cffi opened 5 of 6 Cloudflare 403s; waiting for quiet pages timed out Bain, Capgemini and IBM, so a page is read 10 s after it loads) | about 45 sites a run within the budget | a site behind a check is marked blocked for your session; McKinsey dropped (only a stealth browser read it: 20 links in 77 s) |
+| Your companies (121, in Egypt) | population of each company's own board, its Egypt jobs only ([companies.md](companies.md)) | Workable, Greenhouse, Lever, Ashby APIs; Phenom and SuccessFactors pages; RSS; else the rendered page's links | `settings.yaml` companies, each link its Egypt jobs page, read once a day | detected per site: an API when the platform has one, else the page; the ladder above when a site refuses (curl_cffi opened 5 of 6 Cloudflare 403s; waiting for quiet pages timed out Bain, Capgemini and IBM, so a page is read 10 s after it loads) | about 45 sites a run within the budget (so each about every 3 days) | a site behind a check is marked blocked for your session; McKinsey dropped (only a stealth browser read it: 20 links in 77 s) |
 | 28,000-company feed | observation: the aggregator's daily crawl, first seen in the last day | its JSON chunks | the manifest's chunks | one ~75 MB download, only when the feed changed | ~6 s | the feed stops updating |
 | Your Gmail alerts | population of your inboxes and spam, last day | links in each email (LinkedIn cards, Wellfound "Learn more" cards ...) | IMAP, read-only | IMAP; every job in a LinkedIn alert kept | ~35 s | an app password revoked |
 | Job pages (descriptions) | the new jobs that came without one | schema.org `JobPosting` in each page | up to 300 a run, by site | plain requests, then curl_cffi (never LinkedIn) | 60 s budget | a refused page skips its site this run (no 6 h hold) |

@@ -1,0 +1,58 @@
+{
+ "data": [
+  {
+   "id": "a1",
+   "attributes": {
+    "title": "Data Engineer",
+    "postedAt": "10/05/2026 10:00:00",
+    "uri": "jobs/p/a1",
+    "description": "<p>SQL and Python</p>",
+    "requirements": "",
+    "location": {
+     "city": {
+      "name": "Cairo"
+     },
+     "country": {
+      "name": "Egypt"
+     }
+    }
+   }
+  },
+  {
+   "id": "a2",
+   "attributes": {
+    "title": "Staff Accountant",
+    "postedAt": "10/05/2026 09:00:00",
+    "uri": "jobs/p/a2",
+    "description": "<p>SQL and Python</p>",
+    "requirements": "",
+    "location": {
+     "city": {
+      "name": "Giza"
+     },
+     "country": {
+      "name": "Egypt"
+     }
+    }
+   }
+  },
+  {
+   "id": "a3",
+   "attributes": {
+    "title": "Data Analyst",
+    "postedAt": "10/01/2026 09:00:00",
+    "uri": "jobs/p/a3",
+    "description": "<p>SQL and Python</p>",
+    "requirements": "",
+    "location": {
+     "city": {
+      "name": "Cairo"
+     },
+     "country": {
+      "name": "Egypt"
+     }
+    }
+   }
+  }
+ ]
+}

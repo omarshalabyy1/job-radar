@@ -1,8 +1,8 @@
 """The pipeline steps, one Airflow task each (python -m job_radar <step>):
 
-    schema -> extract_boards, extract_remote, extract_egypt, extract_gulf, extract_workable, extract_freehire,
-              extract_companies, extract_portals, extract_email (side by side) -> transform -> describe -> match_skills
-              -> export_career_ops
+    schema -> extract_boards, extract_bayt, extract_remote, extract_egypt, extract_gulf, extract_workable,
+              extract_freehire, extract_companies, extract_portals, extract_email (side by side)
+              -> transform -> describe -> match_skills -> export_career_ops
     email_egypt, email_abroad: the two emails, each at its own times (the HTML is in digest.py)
 
 A source that fails is a warning and the run goes on with the others; only a crash of the step
@@ -98,7 +98,11 @@ def extract(conn, *source_functions) -> None:
 
 # One extract step per group of sources: Airflow runs them side by side.
 def extract_boards(conn) -> None:
-    extract(conn, sources.job_boards, sources.jooble)
+    extract(conn, sources.indeed, sources.jooble)
+
+
+def extract_bayt(conn) -> None:
+    extract(conn, sources.bayt)
 
 
 def extract_remote(conn) -> None:

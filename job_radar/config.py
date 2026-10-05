@@ -77,9 +77,9 @@ NO_FETCH = r"linkedin\.com"
 TARGET_COMPANIES = words(SETTINGS["your_companies"])
 
 # The companies whose own career sites are read: settings.yaml (companies), copied to core.company by
-# the schema step. A Phenom site searches by keywords only, so each search names a place: Egypt, or
-# remote.
-PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst") for where in ("Egypt", "remote")]
+# the schema step; only their jobs in Egypt are kept (your rule, 2026-10-05). A Phenom site searches by
+# keywords only, so each search names Egypt.
+PHENOM_SEARCHES = [f"{kw} Egypt" for kw in ("data", "AI", "analyst")]
 
 # Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and its job
 # pages by field (its keyword search shows a script no jobs, 2026-10-05). It has no remote filter:

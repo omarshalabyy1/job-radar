@@ -1,0 +1,83 @@
+{
+ "TotalJobsCount": "323",
+ "Jobs": [
+  {
+   "Job": {
+    "Designation": "Data Engineer",
+    "Location": "Dubai - United Arab Emirates (UAE)",
+    "jobInfo": "Develop scalable ETL/ELT pipelines and cloud data solutions, ensuring data quality and supporting AI/ML analytics with CI/CD practices.",
+    "Experience": {
+     "Min": "5",
+     "Max": "8"
+    },
+    "Company": {
+     "Name": "Dicetek LLC ",
+     "Id": "41691"
+    },
+    "JobId": "290926000088",
+    "JdURL": "https://www.naukrigulf.com/data-engineer-jobs-in-dubai-uae-in-dicetek-llc-5-to-8-years-m-cd-41691-jid-290926000088",
+    "LatestPostedDate": "1790654400",
+    "Vacancies": "1",
+    "IsTopEmployer": "false",
+    "IsFeaturedEmployer": "false",
+    "IsPremium": "false",
+    "IsWebJob": "false",
+    "IsQuickWebJob": "false",
+    "LogoUrl": "https://static.naukimg.com/ni/nipjp/41691/41691.gif",
+    "TELogoUrl": "https://static.naukimg.com/ni/nipjp/41691/41691.gif",
+    "IsApplied": "false",
+    "IsTopEmployerLite": "false",
+    "Whitelistedkeywords": "sql,cloud computing,nosql",
+    "keywords": "ETL Processes,Data Pipeline Engineer,Data Systems Engineer,Analytics Engineer,SQL,Data Quality,Cloud Computing,NoSQL",
+    "Email": "",
+    "IsFormBasedApply": "false",
+    "jobRedirection": "false",
+    "shortlisted": false,
+    "expiringSoon": false,
+    "isArchived": false,
+    "recruiterActive": false,
+    "isRecruiterActive": false,
+    "isSponsoredJob": false
+   }
+  },
+  {
+   "Job": {
+    "Designation": "DATA ENGINEER – (DX)",
+    "Location": "Abu Dhabi - United Arab Emirates (UAE)",
+    "jobInfo": "Assist in digital transformation, develop data engineering solutions, manage data pipelines, ensure data quality, and support enterprise data governance.",
+    "Experience": {
+     "Min": "10",
+     "Max": "11"
+    },
+    "Company": {
+     "Name": "STAR SERVICES LLC  ",
+     "Id": "103104"
+    },
+    "JobId": "220926000316",
+    "JdURL": "https://www.naukrigulf.com/data-engineer-jobs-in-abu-dhabi-uae-in-star-services-llc-10-to-11-years-n-cd-103104-jid-220926000316",
+    "LatestPostedDate": "1790049600",
+    "Vacancies": "25",
+    "IsTopEmployer": "false",
+    "IsFeaturedEmployer": "false",
+    "IsPremium": "false",
+    "IsWebJob": "false",
+    "IsQuickWebJob": "false",
+    "LogoUrl": "https://static.naukimg.com/ni/nipjp/103104/103104.gif",
+    "TELogoUrl": "https://static.naukimg.com/ni/nipjp/103104/103104.gif",
+    "IsApplied": "false",
+    "IsTopEmployerLite": "false",
+    "Whitelistedkeywords": "data engineer",
+    "keywords": "Data Engineer,Data Engineer  Digital Transformation,DX Data Engineer,Big Data Engineer,Data Pipeline Engineer,ETL Data Engineer,Analytics Engineer",
+    "Email": "",
+    "IsFormBasedApply": "false",
+    "jobRedirection": "false",
+    "shortlisted": false,
+    "expiringSoon": false,
+    "isArchived": false,
+    "recruiterActive": false,
+    "isRecruiterActive": false,
+    "isSponsoredJob": false
+   }
+  }
+ ]
+}

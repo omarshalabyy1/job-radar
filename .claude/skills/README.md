@@ -14,7 +14,7 @@ collect does (the `/job-radar` skill sends Claude here when you call it). Start 
 | playwright-skill | lackeyjb's playwright-skill | MIT (its package.json); run `npm install` in it before first use |
 
 In job-radar, rate limits come first, to avoid bans: every request goes through
-`job_radar/sources.py` `fetch()` (one a second per site, a 429 held for its Retry-After, a 403 for
+`job_radar/sources/base.py` `fetch()` (one a second per site, a 429 held for its Retry-After, a 403 for
 6 hours), whatever the orchestrator says about speed. A site behind a check is opened with
 `scripts/open_blocked.py`, which saves the session the Airflow runs use (the orchestrator's
 `unlock.py` keeps a profile for local scrapers only). LinkedIn is never opened.

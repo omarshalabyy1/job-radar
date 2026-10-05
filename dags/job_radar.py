@@ -1,12 +1,12 @@
 """job_radar: find the new jobs and rank them; two email DAGs send them. The times are in
 settings.yaml (schedule), Cairo time; as shipped:
 
-    job_radar               11am and 7pm: schema -> extract_boards, extract_remote, extract_egypt,
+    job_radar               12pm: schema -> extract_boards, extract_bayt, extract_remote, extract_egypt,
                             extract_gulf, extract_workable, extract_freehire, extract_companies, extract_portals,
                             extract_email (side by side) -> transform -> describe -> match_skills
                             -> export_career_ops
-    job_radar_email_egypt   11:30am and 7:30pm: your home's jobs (Egypt) not emailed yet
-    job_radar_email_abroad  11:30am and 7:30pm: the jobs everywhere else (remote only) not emailed yet
+    job_radar_email_egypt   12:30pm: your home's jobs (Egypt) not emailed yet
+    job_radar_email_abroad  12:30pm: the jobs everywhere else (remote only) not emailed yet
 
 No AI runs on this schedule. Claude works only when you call /job-radar in Claude Code: it runs
 this DAG, reviews the matches against your CV and tailors applications (the job-radar skill).
@@ -73,9 +73,9 @@ with DAG(
     is_paused_upon_creation=False,
     default_args={"retries": 0, "execution_timeout": timedelta(seconds=170)},
 ):
-    extracts = [step(name) for name in ("extract_boards", "extract_remote", "extract_egypt", "extract_gulf",
-                                        "extract_workable", "extract_freehire", "extract_companies", "extract_portals",
-                                        "extract_email")]
+    extracts = [step(name) for name in ("extract_boards", "extract_bayt", "extract_remote", "extract_egypt",
+                                        "extract_gulf", "extract_workable", "extract_freehire", "extract_companies",
+                                        "extract_portals", "extract_email")]
     step("schema") >> extracts
     matched = step("match_skills", trigger_rule="all_done")
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=80)) >> matched

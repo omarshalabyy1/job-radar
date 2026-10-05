@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="100%" src="docs/mental-model.svg" alt="The mental model: job-radar is a scout that works for you. 1 Sweep, the scout walks the job market: 12 sources at 11am and 7pm. 2 Sift, it keeps only what fits you: your roles, places and level in settings.yaml. 3 Merge, one card per job, never twice. 4 Rank, best first, in your inbox. 5 Act, you decide and your coach helps: the tracker and Claude's /job-radar.">
+  <img width="100%" src="docs/mental-model.svg" alt="The mental model: job-radar is a scout that works for you. 1 Sweep, the scout walks the job market: 22 sources at 12pm. 2 Sift, it keeps only what fits you: your roles, places and level in settings.yaml. 3 Merge, one card per job, never twice. 4 Rank, best first, in your inbox. 5 Act, you decide and your coach helps: the tracker and Claude's /job-radar.">
 </p>
 
 # 👣 job-radar, in baby steps
@@ -14,24 +14,29 @@ Think of job-radar as **a scout that works for you**. Five stations, always in t
 
 | # | Station | Picture it as | What does it in job-radar |
 |---|---|---|---|
-| 1 | 🔵 **Sweep** | The scout walks the whole job market | Airflow runs the *collect* at 11am and 7pm: 12 sources, from Wuzzuf and Indeed to 200+ company career pages and your Gmail alerts |
+| 1 | 🔵 **Sweep** | The scout walks the whole job market | Airflow runs the *collect* at 12pm: 22 sources, from Wuzzuf and Indeed to 120+ company career pages in Egypt and your Gmail alerts |
 | 2 | 🟢 **Sift** | It keeps only what fits you | your rules in `settings.yaml`: roles, places, level; onsite only in Cairo or Giza, remote anywhere else |
 | 3 | 🟠 **Merge** | One card per job, never twice | the warehouse: every posting lands in `raw`, each job becomes one row in `core`, even when three boards carry it |
-| 4 | 🟣 **Rank** | The best first, delivered to your inbox | your skills are matched; two emails at 11:30am and 7:30pm, junior to senior, your companies first |
+| 4 | 🟣 **Rank** | The best first, delivered to your inbox | your skills are matched; two emails at 12:30pm, junior to senior, your companies first |
 | 5 | ✅ **Act** | You decide; your coach helps | the tracker to mark what you apply to, and Claude's `/job-radar` to review, tailor and apply |
 
-And four things to remember about where things live:
+And five things to remember about where things live:
 
 - **`settings.yaml` is your choices.** Change a role, a place or a company there; nowhere else.
 - **`.env` is your secrets.** Passwords stay on your laptop and never go to GitHub.
 - **The warehouse is its memory.** It remembers every job it has seen, so nothing comes twice.
 - **Airflow is its clock.** It wakes the scout on time, even if you forget.
+- **Claude Code is its coach, by hand.** When you type `/job-radar`, it passes checks and logins
+  with you (saved for the clock's runs), repairs a source that stopped, and helps you apply.
+
+The machine behind the scout, in four pictures (the two ways to run, where the jobs come from,
+one collect, every request): [docs/architecture.md](docs/architecture.md).
 
 ## 🧰 Before you start
 
 You need:
 
-- [ ] A Windows, Mac or Linux laptop that is on at 11am or 7pm most days (a missed time runs
+- [ ] A Windows, Mac or Linux laptop that is on at 12pm most days (a missed time runs
       as soon as the laptop wakes)
 - [ ] [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - [ ] A Gmail account with 2-Step Verification turned on
@@ -114,7 +119,7 @@ You should see `job-radar-warehouse-1`, `job-radar-airflow-1` and `job-radar-tra
 
 ### Step 8 · Get your first email
 
-Wait for 11:30am or 7:30pm (Cairo time), or send it now: in Airflow, **Trigger**
+Wait for 12:30pm (Cairo time), or send it now: in Airflow, **Trigger**
 `job_radar_email_egypt` and `job_radar_email_abroad`. Each job is emailed once, so the next email
 brings only new ones.
 
@@ -139,7 +144,7 @@ Open [`settings.yaml`](settings.yaml). Everything is plain words; save, and the 
 
 ## ☀️ Your daily routine
 
-1. **Open the email** at 11:30am or 7:30pm. Junior jobs first, senior last; ⭐ are your companies.
+1. **Open the email** at 12:30pm. Junior jobs first, senior last; ⭐ are your companies.
 2. **Tap a job** to read it on its own site.
 3. **Mark it in the tracker**: *saved*, *applied*, *interview*, *offer*, *rejected* or *ignored*.
    Ignored jobs drop out of Claude's review and the career-ops export.

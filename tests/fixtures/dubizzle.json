@@ -1,0 +1,176 @@
+{
+ "hits": [
+  {
+   "objectID": "item:4:2:3154:100286213",
+   "name": {
+    "en": "Data Entry Clerk"
+   },
+   "location_list": {
+    "en": [
+     "UAE",
+     "Dubai",
+     "Business Bay"
+    ]
+   },
+   "absolute_url": {
+    "en": "https://dubai.dubizzle.com/jobs/data-management-analysis/2026/09/18/data-entry-clerk-2-083---23364d26b6e34efead032808354fa0e0/"
+   },
+   "created_at": 1789736921,
+   "added": 1791004814,
+   "details": {
+    "Company Name": {
+     "en": {
+      "label": "Company Name",
+      "value": "StarLand Transport FZE LLC"
+     },
+     "ar": {
+      "label": "اسم الشركة",
+      "value": "StarLand Transport FZE LLC"
+     },
+     "slug": "company_name"
+    },
+    "Remote Job": {
+     "en": {
+      "label": "Remote Job",
+      "value": "No"
+     },
+     "ar": {
+      "label": "وظائف للعمل عن بعد",
+      "value": "لا"
+     },
+     "slug": "remote_job",
+     "lpv_card_ordering": 0
+    }
+   }
+  },
+  {
+   "objectID": "item:4:2:3154:100192684",
+   "name": {
+    "en": "Data Entry Clerk"
+   },
+   "location_list": {
+    "en": [
+     "UAE",
+     "Dubai",
+     "Al Nahda (Dubai)"
+    ]
+   },
+   "absolute_url": {
+    "en": "https://dubai.dubizzle.com/jobs/data-management-analysis/2026/09/10/data-entry-clerk-2-069---1b35f10954694107b21bee219cc5d648/"
+   },
+   "created_at": 1789039237,
+   "added": 1790845141,
+   "details": {
+    "Company Name": {
+     "en": {
+      "label": "Company Name",
+      "value": "Confidential"
+     },
+     "ar": {
+      "label": "اسم الشركة",
+      "value": "Confidential"
+     },
+     "slug": "company_name"
+    },
+    "Remote Job": {
+     "en": {
+      "label": "Remote Job",
+      "value": "No"
+     },
+     "ar": {
+      "label": "وظائف للعمل عن بعد",
+      "value": "لا"
+     },
+     "slug": "remote_job",
+     "lpv_card_ordering": 0
+    }
+   }
+  },
+  {
+   "objectID": "item:4:2:3154:100258731",
+   "name": {
+    "en": "Documentation Clerk"
+   },
+   "location_list": {
+    "en": [
+     "UAE",
+     "Dubai",
+     "Business Bay"
+    ]
+   },
+   "absolute_url": {
+    "en": "https://dubai.dubizzle.com/jobs/data-management-analysis/2026/09/16/documentation-clerk-2-914---ec2ad6ad5ebb4c87922e5b07d832667b/"
+   },
+   "created_at": 1789556761,
+   "added": 1790781283,
+   "details": {
+    "Company Name": {
+     "en": {
+      "label": "Company Name",
+      "value": "StarLand Transport FZE LLC"
+     },
+     "ar": {
+      "label": "اسم الشركة",
+      "value": "StarLand Transport FZE LLC"
+     },
+     "slug": "company_name"
+    },
+    "Remote Job": {
+     "en": {
+      "label": "Remote Job",
+      "value": "No"
+     },
+     "ar": {
+      "label": "وظائف للعمل عن بعد",
+      "value": "لا"
+     },
+     "slug": "remote_job",
+     "lpv_card_ordering": 0
+    }
+   }
+  },
+  {
+   "objectID": "item:4:2:3154:100286213",
+   "name": {
+    "en": "Data Analyst"
+   },
+   "location_list": {
+    "en": [
+     "UAE",
+     "Dubai",
+     "Business Bay"
+    ]
+   },
+   "absolute_url": {
+    "en": "https://dubai.dubizzle.com/jobs/data-management-analysis/2026/09/18/data-entry-clerk-2-083---23364d26b6e34efead032808354fa0e0/-analyst"
+   },
+   "created_at": 1789736921,
+   "added": 1791004814,
+   "details": {
+    "Company Name": {
+     "en": {
+      "label": "Company Name",
+      "value": "StarLand Transport FZE LLC"
+     },
+     "ar": {
+      "label": "اسم الشركة",
+      "value": "StarLand Transport FZE LLC"
+     },
+     "slug": "company_name"
+    },
+    "Remote Job": {
+     "en": {
+      "label": "Remote Job",
+      "value": "No"
+     },
+     "ar": {
+      "label": "وظائف للعمل عن بعد",
+      "value": "لا"
+     },
+     "slug": "remote_job",
+     "lpv_card_ordering": 0
+    }
+   }
+  }
+ ]
+}

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" width="1000" height="330" role="img" aria-label="The mental model: job-radar is a scout that works for you. 1 Sweep, the scout walks the job market: 12 sources at 11am and 7pm. 2 Sift, it keeps only what fits you: your roles, places and level in settings.yaml. 3 Merge, one card per job, never twice: raw to core, one row per job. 4 Rank, best first, in your inbox: skills matched, emails at 11:30am and 7:30pm. 5 Act, you decide and your coach helps: the tracker and Claude's /job-radar.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" width="1000" height="330" role="img" aria-label="The mental model: job-radar is a scout that works for you. 1 Sweep, the scout walks the job market: 22 sources at 12pm. 2 Sift, it keeps only what fits you: your roles, places and level in settings.yaml. 3 Merge, one card per job, never twice: raw to core, one row per job. 4 Rank, best first, in your inbox: skills matched, emails at 12:30pm. 5 Act, you decide and your coach helps: the tracker and Claude's /job-radar.">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0B1220"/>
@@ -22,7 +22,7 @@
 
   <rect width="1000" height="330" rx="22" fill="url(#bg)"/>
   <text x="50" y="52" class="title">The mental model: a scout that works for you</text>
-  <text x="50" y="76" class="sub">It walks the job market twice a day, keeps what fits you, and brings you a short list. You decide.</text>
+  <text x="50" y="76" class="sub">It walks the job market once a day, keeps what fits you, and brings you a short list. You decide.</text>
 
   <path class="link" d="M214 185h20"/>
   <path class="link" d="M398 185h20"/>
@@ -37,8 +37,8 @@
   <text x="64" y="178" class="story">The scout walks</text>
   <text x="64" y="196" class="story">the job market</text>
   <text x="64" y="232" class="tag">IN JOB-RADAR</text>
-  <text x="64" y="250" class="tech">12 sources,</text>
-  <text x="64" y="266" class="tech">at 11am and 7pm</text>
+  <text x="64" y="250" class="tech">22 sources,</text>
+  <text x="64" y="266" class="tech">at 12pm</text>
 
   <!-- 2 Sift -->
   <rect x="234" y="105" width="164" height="175" rx="14" fill="#14B8A6" fill-opacity="0.08" stroke="#14B8A6" stroke-opacity="0.7"/>
@@ -71,7 +71,7 @@
   <text x="616" y="196" class="story">in your inbox</text>
   <text x="616" y="232" class="tag">IN JOB-RADAR</text>
   <text x="616" y="250" class="tech">skills matched; emails</text>
-  <text x="616" y="266" class="tech">at 11:30am and 7:30pm</text>
+  <text x="616" y="266" class="tech">at 12:30pm</text>
 
   <!-- 5 Act -->
   <rect x="786" y="105" width="164" height="175" rx="14" fill="#22C55E" fill-opacity="0.08" stroke="#22C55E" stroke-opacity="0.7"/>

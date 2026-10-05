@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="100%" src="docs/header.svg" alt="job-radar: data and AI jobs, found for you. A terminal runs a collect over 12 sources and 200+ career pages, ranks the jobs by your skills and emails them at 11:30am and 7:30pm, while a radar sweeps for new jobs.">
+  <img width="100%" src="docs/header.svg" alt="job-radar: data and AI jobs, found for you. A terminal runs a collect over 22 sources and 120+ career pages in Egypt, ranks the jobs by your skills and emails them at 12:30pm, while a radar sweeps for new jobs.">
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Claude_Code-%2Fjob--radar-D97757?style=for-the-badge&logo=claude&logoColor=white" alt="Claude Code: /job-radar">
 </p>
 
-<h3 align="center">Your own job search, on autopilot: every new data and AI job from 12 sources,<br>ranked by your skills, in two emails a day.</h3>
+<h3 align="center">Your own job search, on autopilot: every new data and AI job from 22 sources,<br>ranked by your skills, in two emails a day.</h3>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Runs_on_your_laptop-1E293B?style=flat-square" alt="Runs on your laptop">
@@ -35,9 +35,9 @@
 
 **Two emails, each with only the jobs you have not seen**
 
-- 🏠 **Egypt** · 11:30am and 7:30pm (Cairo time): onsite and hybrid jobs in Cairo or Giza, and
+- 🏠 **Egypt** · 12:30pm (Cairo time): onsite and hybrid jobs in Cairo or Giza, and
   Egypt's remote jobs
-- 🌍 **Outside Egypt** · 11:30am and 7:30pm: remote jobs in the Gulf, Europe, the USA and worldwide
+- 🌍 **Outside Egypt** · 12:30pm: remote jobs in the Gulf, Europe, the USA and worldwide
 
 The further you scroll, the more experience a job asks for: **Entry & junior → Mid level →
 Senior**, best match first in each; your roles in your order; full-time, part-time, contract and
@@ -56,8 +56,11 @@ freelance. Jobs at your companies get a ⭐.
 ## 🧭 How it works
 
 <p align="center">
-  <img width="100%" src="docs/how-it-works.svg" alt="How it works: 01 Collect, job boards, job APIs, 200+ career pages and your Gmail alerts; 02 Rank, your roles, places and level, one row per job, scored by your skills; 03 Email, Egypt and outside Egypt, junior to senior, your companies first, sent once; 04 Apply, /job-radar in Claude Code reviews, tailors your CV and applies with your yes.">
+  <img width="100%" src="docs/how-it-works.svg" alt="How it works: 01 Collect, job boards, job APIs, 120+ career pages in Egypt and your Gmail alerts; 02 Rank, your roles, places and level, one row per job, scored by your skills; 03 Email, Egypt and outside Egypt, junior to senior, your companies first, sent once; 04 Apply, /job-radar in Claude Code reviews, tailors your CV and applies with your yes.">
 </p>
+
+The machine in four diagrams (two ways to run, a mind map of the sources, the pipeline, the
+request ladder) and where to change what: [docs/architecture.md](docs/architecture.md).
 
 <details>
 <summary><b>📐 The rules that decide what reaches you</b></summary>
@@ -84,14 +87,14 @@ freelance. Jobs at your companies get a ⭐.
 ## 🗓️ A day with job-radar
 
 <p align="center">
-  <img width="100%" src="docs/day.svg" alt="A day with job-radar, Cairo time: Airflow collects at 11am, with Workable's one search of the day, and at 7pm, and sends both emails 30 minutes later, at 11:30am and 7:30pm. Claude works only when you type /job-radar, at any time.">
+  <img width="100%" src="docs/day.svg" alt="A day with job-radar, Cairo time: Airflow collects once, at 12pm, and sends both emails 30 minutes later, at 12:30pm. Claude works only when you type /job-radar, at any time; you can also trigger a collect yourself.">
 </p>
 
 | Airflow DAG | When | Does |
 |---|---|---|
-| `job_radar` | 11am, 7pm | extract (9 tasks side by side) → transform → describe → match_skills → export_career_ops |
-| `job_radar_email_egypt` | 11:30am, 7:30pm | emails Egypt's new jobs |
-| `job_radar_email_abroad` | 11:30am, 7:30pm | emails everywhere else's new jobs |
+| `job_radar` | 12pm | extract (10 tasks side by side) → transform → describe → match_skills → export_career_ops |
+| `job_radar_email_egypt` | 12:30pm | emails Egypt's new jobs |
+| `job_radar_email_abroad` | 12:30pm | emails everywhere else's new jobs |
 
 No AI runs on this schedule. Airflow keeps its own records in the warehouse's Postgres, and when
 one of its parts stops, Docker restarts it.
@@ -135,7 +138,7 @@ through LinkedIn or Indeed: their terms ban automation, and accounts get banned 
   <img src="https://img.shields.io/badge/GulfTalent-1E293B?style=flat-square" alt="GulfTalent">
   <img src="https://img.shields.io/badge/Dubizzle_Jobs-1E293B?style=flat-square" alt="Dubizzle Jobs">
   <img src="https://img.shields.io/badge/28%2C000_career_pages-1E293B?style=flat-square" alt="28,000 career pages">
-  <img src="https://img.shields.io/badge/Your_204_companies-1E293B?style=flat-square" alt="Your 204 companies">
+  <img src="https://img.shields.io/badge/Your_121_companies_in_Egypt-1E293B?style=flat-square" alt="Your 121 companies in Egypt">
   <img src="https://img.shields.io/badge/Your_Gmail_alerts-1E293B?style=flat-square" alt="Your Gmail alerts">
 </p>
 
@@ -149,7 +152,7 @@ How each source is read, and the test behind each choice: [docs/scraping-plan.md
 | Source | How | Within its limits |
 |---|---|---|
 | Wuzzuf | the JSON API its web app calls: every job in Egypt from the last 24 hours, newest first, with its description | a few calls a run, 1 second apart |
-| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy) as a guest; remote jobs only outside Egypt | 3 seconds between a board's searches; a 403 or 429 stops that board for 6 hours |
+| Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy) as a guest, each in its own task; remote jobs only outside Egypt | 3 seconds between a board's searches; a 403 or 429 stops that board for 6 hours |
 | Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt, UAE, Saudi, Qatar, Kuwait, Bahrain and Oman sites' IT, data, business analyst, Python and internship pages; outside Egypt only jobs that say remote | 5 pages a site a run, 1 second apart |
 | NaukriGulf, GulfTalent | the search APIs their pages call (they answer only a real Chrome handshake): the newest jobs of each keyword from the last week; outside Egypt only remote ones are kept | 13 searches each a run, 1 second apart, in the Gulf task |
 | Dubizzle Jobs (UAE) | the public search index its pages query (the pages sit behind a bot check): remote jobs of the last week | one call a run |
@@ -160,10 +163,10 @@ How each source is read, and the test behind each choice: [docs/scraping-plan.md
 | Remote.co | its latest-jobs sitemap, then the pages of jobs titled like your roles and not read before (its search sits behind a bot check) | 1 call plus a few pages a run, 1 second apart |
 | [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart (its robots.txt allows them) |
 | [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
-| Your companies | `settings.yaml` (companies): your starred ones, plus 73 remote-first companies hiring worldwide from the [remote-in-tech](https://github.com/remoteintech/remote-jobs) list; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
+| Your companies | `settings.yaml` (companies): the 121 that hire in Egypt, each through its Egypt jobs page ([docs/companies.md](docs/companies.md)), only their Egypt jobs kept; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
 | Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
-| Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 4 emails a day of 500 |
+| Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 2 emails a day of 500 |
 
 ## ⚙️ Make it yours: `settings.yaml`
 
@@ -261,8 +264,7 @@ in the tracker, and keep Docker Desktop running. The first emails arrive at the 
 [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) by Riley Dorrington for
 the career pages, whose data is [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/),
 so this project stays non-commercial; [Relomote](https://relomote.com) and
-[freehire.me](https://freehire.me) for their public job pages and API; the
-[remote-in-tech](https://github.com/remoteintech/remote-jobs) list for the remote-first companies.
+[freehire.me](https://freehire.me) for their public job pages and API.
 
 ## 📚 Recommended GitHub projects
 

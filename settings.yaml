@@ -13,9 +13,9 @@
 # When it runs, Cairo time, 12-hour style: 11am, 7pm, "7:30pm" ... (the times of one line share
 # their minutes). No AI runs on this schedule: Claude only works when you call /job-radar.
 schedule:
-  collect: [11am, 7pm]                  # find new jobs
-  home_email: ["11:30am", "7:30pm"]     # the email of Egypt's jobs, right after each collect
-  abroad_email: ["11:30am", "7:30pm"]   # the email of the remote jobs everywhere else
+  collect: [12pm]                       # find new jobs, once a day (every source looks back a day)
+  home_email: ["12:30pm"]               # the email of Egypt's jobs, right after the collect
+  abroad_email: ["12:30pm"]             # the email of the remote jobs everywhere else
 
 # The jobs you want, in your order: the email lists them in this order, and a title takes the
 # first role it fits.
@@ -148,214 +148,129 @@ your_companies: [vodafone*, vois, _vois, orange, pwc*, pricewaterhouse*, deloitt
                  abu dhabi islamic*, eg bank, egbank, egyptian gulf bank*, etisalat*, e&*, advansys*, nawy,
                  alignerr*, labelbox*, crossover*, sumerge*, finaira*]
 
-# Companies whose own career pages are read every run (a link is optional: without one the company
-# is only starred). This is the one list: add, change or remove a company here and the next run
-# does the same in the warehouse (the tracker's Companies tab shows what each site was read as).
+# Your companies in Egypt (2026-10-05: only companies that hire in Egypt): each link is its jobs page
+# filtered to Egypt where the site has a filter, and only its jobs in Egypt are kept. This is the one
+# list: add, change or remove a company here and the next run does the same in the warehouse (the
+# tracker's Companies tab shows what each site was read as). docs/companies.md lists them.
 companies:
   - {name: "AAIB", link: "https://www.aaib.com/en/careers"}
   - {name: "Accenture", link: "https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers?locationCountry=d865e83093ad42319653b08e61f7db49"}
-  - {name: "ADIB", link: "https://hciq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs"}
-  - {name: "Advansys", link: "https://advansys-esc.com/"}
-  - {name: "Al Rajhi", link: "https://careers.alrajhibank.com.sa/"}
+  - {name: "ADIB", link: "https://www.adib.eg/careers"}
+  - {name: "Advansys", link: "https://advansys-esc.com/job-openings/"}
   - {name: "Alexbank", link: "https://apply.workable.com/alexbank/"}
   - {name: "Andersen", link: "https://eg.andersen.com/open-vacancies/"}
   - {name: "Aqarmap", link: "https://aqarmap.zohorecruit.com/jobs/Careers"}
-  - {name: "Aramex", link: "https://careers.aramex.com/"}
-  - {name: "Bain", link: "https://www.bain.com/careers/find-a-role/"}
+  - {name: "Aramex", link: "https://careers.aramex.com/search/?q=&locationsearch=Egypt"}
   - {name: "Banque du Caire", link: "https://www.bdc.com.eg/bdcwebsite/root-nav/careers.html"}
-  - {name: "Banque Misr", link: "https://www.banquemisr.com/en/Home/Careers"}
-  - {name: "BCG", link: "https://careers.bcg.com/global/en"}
-  - {name: "BDO", link: "https://www.bdo.ae/en-gb/careers"}
+  - {name: "Banque Misr", link: "https://www.banquemisr.com/en/Careers"}
+  - {name: "BCG", link: "https://careers.bcg.com/global/en/search-results?qcountry=Egypt"}
+  - {name: "BDO", link: "https://www.bdo.com.eg/en-gb/home"}
   - {name: "Bosta", link: "https://jobs.lever.co/Bosta"}
   - {name: "Breadfast", link: "https://www.breadfast.com/careers"}
   - {name: "Brimore", link: "https://careers.smartrecruiters.com/Brimore"}
   - {name: "Capgemini", link: "https://www.capgemini.com/careers/join-capgemini/job-search/?country_code=eg-en"}
   - {name: "Careem", link: "https://boards.greenhouse.io/careem"}
-  - {name: "CIB", link: "https://www.cibeg.com/en/careers"}
+  - {name: "CIB", link: "https://cibeg.taleo.net/careersection/cib_ex/jobsearch.ftl?lang=en"}
   - {name: "Coca-Cola", link: "https://coke.wd1.myworkdayjobs.com/coca-cola-careers?locationCountry=d865e83093ad42319653b08e61f7db49"}
   - {name: "Concentrix", link: "https://cnx.wd1.myworkdayjobs.com/en-US/external_global?locationCountry=d865e83093ad42319653b08e61f7db49"}
   - {name: "Contact Financial", link: "https://www.contact.eg/careers"}
-  - {name: "Danone", link: "https://careers.danone.com/en-global/jobs.html"}
-  - {name: "Dell", link: "https://enterpriseplatform.dell.com/hcmUI/CandidateExperience/en/sites/careers/jobs"}
-  - {name: "Deloitte", link: "https://middleeastjobs.deloitte.com/careersME/SearchJobs/feed/"}
-  - {name: "DHL", link: "https://careers.dhl.com/global/en"}
-  - {name: "DP World", link: "https://ehpv.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs"}
-  - {name: "du", link: "https://fa-ewnx-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs"}
-  - {name: "dubizzle", link: "https://www.dubizzlegroup.com/careers"}
-  - {name: "e& Egypt", link: "https://www.eand.com.eg/careers"}
+  - {name: "Danone", link: "https://careers.danone.com/en-global/jobs.html?841462520_group.propertyvalues.property=jcr%3Acontent%2Fdata%2Fmaster%2Fcountry&841462520_group.propertyvalues.operation=equals&841462520_group.propertyvalues.23_values=Egypt"}
+  - {name: "Dell", link: "https://enterpriseplatform.dell.com/hcmUI/CandidateExperience/en/sites/careers/jobs?location=Egypt&locationId=300000000464933&locationLevel=country&mode=location"}
+  - {name: "Deloitte", link: "https://middleeastjobs.deloitte.com/careersME/SearchJobs/feed/?search=Egypt"}
+  - {name: "DHL", link: "https://careers.dhl.com/global/en/search-results?qcountry=Egypt"}
+  - {name: "DP World", link: "https://ehpv.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs?location=Egypt&locationId=300000000273835&locationLevel=country&mode=location"}
+  - {name: "dubizzle", link: "https://apply.workable.com/dubizzlemena/"}
+  - {name: "e& Egypt", link: "https://etisalatmisr.taleo.net/careersection/ex/joblist.ftl?lang=en"}
   - {name: "Edita", link: "https://career5.successfactors.eu/portalcareer?company=Edita&navBarLevel=JOB_SEARCH"}
   - {name: "EFG Hermes", link: "https://careers.efghldg.com/joinUs/Index/en"}
   - {name: "EG Bank", link: "https://career2.successfactors.eu/career?company=egyptiangu"}
   - {name: "Ejada", link: "https://careers.ejada.com/en/job-search-results/"}
-  - {name: "Elm", link: "https://career.elm.sa/"}
   - {name: "Elmenus", link: "https://elmenus.recruitee.com/"}
-  - {name: "Emaar", link: "https://emhm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs"}
-  - {name: "Emirates NBD", link: "https://fa-evlo-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1"}
+  - {name: "Emaar", link: "https://emhm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs?location=Egypt&locationId=300000000346395&locationLevel=country&mode=location"}
+  - {name: "Emirates NBD", link: "https://www.emiratesnbd.com.eg/en/career/join-us"}
   - {name: "Ericsson", link: "https://jobs.ericsson.com/careers?location=Egypt"}
-  - {name: "Etisalat", link: "https://peoplehub.eand.com/hcmUI/CandidateExperience/en/sites/CX_1"}
-  - {name: "EY", link: "https://careers.ey.com/ey/search/?q=data&locationsearch=Egypt"}
-  - {name: "Fawry", link: "https://www.fawry.com/careers/"}
-  - {name: "FedEx", link: "https://careers.fedex.com/jobs"}
+  - {name: "EY", link: "https://careers.ey.com/ey/search/?q=&locationsearch=Egypt"}
+  - {name: "Fawry", link: "https://www.fawry.com/jobs/"}
   - {name: "Finaira", link: "https://finaira.ai/work-at-finaira/"}
-  - {name: "First Abu Dhabi Bank", link: "https://ehjd.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/fabCareers"}
-  - {name: "Geidea", link: "https://geidea.net/careers"}
-  - {name: "Giza Systems", link: "https://gizasystems.com/careers"}
+  - {name: "First Abu Dhabi Bank", link: "https://www.fabmisr.com.eg/en/about-fabmisr/careers"}
+  - {name: "Geidea", link: "https://apply.workable.com/geidea/"}
+  - {name: "Giza Systems", link: "https://www.pulse-careers.com/en/egypt/jobs/?jb_loc_list=eg,0,0"}
   - {name: "Grant Thornton", link: "https://www.grantthornton.eg/careers2/experienced-hires/"}
   - {name: "Halan", link: "https://jobs.halan.com/"}
   - {name: "Hassan Allam", link: "https://careers.hap.com.eg/jobs.rss"}
   - {name: "Henkel", link: "https://www.henkel.com/careers/find-your-job-apply"}
   - {name: "HSBC", link: "https://portal.careers.hsbc.com/careers?domain=hsbc.com&location=Egypt"}
   - {name: "Huawei", link: "https://career.huawei.com/reccampportal/portal5/social-recruitment.html"}
-  - {name: "IBM", link: "https://www.ibm.com/careers/search"}
-  - {name: "Instabug", link: "https://www.instabug.com/careers"}
+  - {name: "IBM", link: "https://www.ibm.com/careers/search?field_keyword_05[0]=Egypt"}
+  - {name: "Instabug", link: "https://instabug.bamboohr.com/careers"}
   - {name: "Intelligent Systems", link: "https://isys.ai/Join-Us"}
   - {name: "Intercom", link: "https://www.intercom.com.eg/home/careers/vacancies/"}
+  - {name: "IQVIA", link: "https://iqvia.wd1.myworkdayjobs.com/IQVIA?Location_Country=d865e83093ad42319653b08e61f7db49", starred: false}
   - {name: "ITIDA", link: "https://itida.gov.eg/English/Careers/Pages/default.aspx"}
   - {name: "ITWorx", link: "https://careers.itworx.com/"}
-  - {name: "Juhayna", link: "https://jobs.juhayna.com/"}
+  - {name: "Juhayna", link: "https://jobs.juhayna.com/search/?q="}
   - {name: "Khazna", link: "https://khazna.app/careers"}
   - {name: "Klivvr", link: "https://jobs.lever.co/klivvr", starred: false}
-  - {name: "KPMG", link: "https://slccareers.kpmg.com/"}
-  - {name: "Kuwait Finance House", link: "https://fa-esqe-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1"}
-  - {name: "L'Oréal", link: "https://careers.loreal.com/en/search-jobs/data"}
+  - {name: "KPMG", link: "https://kpmg.com/eg/en/careers/job-search.html"}
+  - {name: "Kuwait Finance House", link: "https://careers.ahliunited.com/search/?q=&locationsearch=Egypt"}
+  - {name: "L'Oréal", link: "https://careers.loreal.com/en/search-jobs/Egypt/3456/2/357994/27/30/50/2"}
   - {name: "Link Development", link: "https://linkdevelopment.com/careers/opportunities/"}
   - {name: "Maersk", link: "https://maersk.wd3.myworkdayjobs.com/Maersk_Careers?locations=853120f5cc8a10009e423980f6d80000"}
-  - {name: "Majorel", link: "https://www.majorel.com/careers/"}
-  - {name: "Mars", link: "https://careers.mars.com/global/en"}
+  - {name: "Majorel", link: "https://www.tp.com/ar-eg/locations/egypt/careers/"}
+  - {name: "Mars", link: "https://careers.mars.com/global/en/search-results?qcountry=Egypt"}
   - {name: "Mashreq", link: "https://hcld.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs?location=Egypt&locationId=300000000281972&locationLevel=country"}
-  - {name: "Mastercard", link: "https://careers.mastercard.com/us/en"}
+  - {name: "Mastercard", link: "https://careers.mastercard.com/us/en/search-results?qcountry=Egypt"}
   - {name: "Microsoft", link: "https://apply.careers.microsoft.com/careers?location=Egypt"}
   - {name: "MNT-Halan", link: "https://jobs.halan.com/"}
   - {name: "Mondelez", link: "https://wd3.myworkdaysite.com/recruiting/mdlz/External?locationCountry=d865e83093ad42319653b08e61f7db49"}
-  - {name: "MoneyFellows", link: "https://apply.workable.com/moneyfellows/"}
+  - {name: "MoneyFellows", link: "https://www.moneyfellows.com/en-us/career-details-page/"}
   - {name: "Mountain View", link: "https://www.mountainviewegypt.com/careers"}
   - {name: "Mylerz", link: "https://www.mylerz.com/career"}
-  - {name: "National Bank of Egypt", link: "https://srv.nbe.com.eg/Careers_EN"}
+  - {name: "National Bank of Egypt", link: "https://nbe.taleo.net/careersection/careersection/ex/jobsearch.ftl?lang=en"}
   - {name: "Nawy", link: "https://apply.workable.com/nawy-real-estate/"}
-  - {name: "Nestlé", link: "https://jobdetails.nestle.com"}
+  - {name: "Nestlé", link: "https://jobdetails.nestle.com/search/?q=&locationsearch=Egypt"}
   - {name: "Nokia", link: "https://jobs.nokia.com/en/sites/CX_1/jobs"}
   - {name: "noon", link: "https://joinnoon.com/jobs?country=eg"}
-  - {name: "Ooredoo", link: "https://ooredoo.sniperhire.net/qatar"}
   - {name: "Ora Developers", link: "https://www.ora-egypt.com/career"}
   - {name: "Oracle", link: "https://careers.oracle.com/en/sites/jobsearch/jobs?location=Egypt&locationId=300000000106827&locationLevel=country"}
-  - {name: "Orange", link: "https://orange.jobs/gb/en"}
-  - {name: "Palm Hills", link: "https://careers.palmhillsdevelopments.com/en/"}
+  - {name: "Orange", link: "https://orange.jobs/gb/en/search-results?qcountry=EGYPT"}
+  - {name: "Palm Hills", link: "https://careers.palmhillsdevelopments.com/jobs"}
   - {name: "Paymob", link: "https://paymob.com/en/careers"}
   - {name: "Paysky", link: "https://paysky.io/jobs/"}
   - {name: "PepsiCo", link: "https://www.pepsicojobs.com/main/jobs?location=Egypt"}
-  - {name: "Procter & Gamble", link: "https://www.pgcareers.com/global/en"}
+  - {name: "Procter & Gamble", link: "https://www.pgcareers.com/global/en/search-results?qcountry=Egypt"}
   - {name: "Property Finder", link: "https://propertyfinder.teamtailor.com/jobs.rss"}
-  - {name: "PwC", link: "https://www.pwc.com/gx/en/careers/job-results.html"}
+  - {name: "PwC", link: "https://pwc.wd3.myworkdayjobs.com/Global_Experienced_Careers?locations=e57e6863118d012127e77083342b58c1&locations=3f65865fb3201000e97aa22899830000&locations=478da54b794a1000ea47d1e3b0cc0000"}
   - {name: "Qlub", link: "https://jobs.ashbyhq.com/qlub", starred: false}
   - {name: "QNB", link: "https://qnb.sniperhire.net/"}
-  - {name: "Rabbit", link: "https://www.rabbitmart.com/careers"}
-  - {name: "Raya", link: "https://fa-ewrh-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/RayaCareers"}
-  - {name: "Robusta", link: "https://robustastudio.com/careers"}
+  - {name: "Rabbit", link: "https://www.rabbitmart.com/careers/"}
+  - {name: "Raya", link: "https://fa-ewrh-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/RayaCareers/jobs?location=Egypt&locationId=300000000462184&locationLevel=country&mode=location"}
+  - {name: "Robusta", link: "https://apply.workable.com/robusta/"}
   - {name: "Rology", link: "https://rology.ai/careers/"}
-  - {name: "SAP", link: "https://jobs.sap.com/en/jobs/?country=Egypt"}
-  - {name: "Siemens", link: "https://jobs.siemens.com/careers"}
+  - {name: "SAP", link: "https://careers.sap.com/search/?q=&locationsearch=Egypt"}
+  - {name: "Siemens", link: "https://jobs.siemens.com/en_US/externaljobs/SearchJobs/?42386=%5B812002%5D&42386_format=17546&listFilterMode=1"}
   - {name: "SODIC", link: "https://www.sodic.com/careers"}
   - {name: "SOUM", link: "https://jobs.lever.co/soum", starred: false}
-  - {name: "stc", link: "https://careers.stc.com.sa/"}
-  - {name: "Sumerge", link: "https://www.sumerge.com/job-openings"}
+  - {name: "Sumerge", link: "https://apply.workable.com/sumerge-1/"}
   - {name: "Sutherland", link: "https://www.jobs.sutherlandglobal.com/job-results#/egypt"}
   - {name: "Swvl", link: "https://apply.workable.com/swvl/"}
-  - {name: "Sylndr"}
-  - {name: "Sympl"}
-  - {name: "Synapse Analytics", link: "https://synapse-analytics.io/careers"}
-  - {name: "Tabby", link: "https://tabby.ai/en-AE/careers"}
-  - {name: "Talaat Moustafa", link: "https://careers.tmg.com.eg/"}
-  - {name: "talabat", link: "https://careers.talabat.com"}
+  - {name: "Sylndr", link: "https://sylndr.com/"}
+  - {name: "Sympl", link: "https://sympl.ai/"}
+  - {name: "Synapse Analytics", link: "https://synapseanalytics.recruitee.com/"}
+  - {name: "Tabby", link: "https://tabby.pinpointhq.com/"}
+  - {name: "Talaat Moustafa", link: "https://careers.tmg.com.eg/search/?q="}
+  - {name: "talabat", link: "https://careers.deliveryhero.com/jobs?options=252,845&page=1"}
   - {name: "Tamara", link: "https://job-boards.greenhouse.io/tamara"}
   - {name: "Telecom Egypt", link: "https://www.te.eg/web/guest/about-te/careers-and-training/jobs"}
   - {name: "Teleperformance", link: "https://tpegyptcareers.teleperformance.com.eg/vacancies"}
-  - {name: "Thndr", link: "https://thndr.app/careers"}
+  - {name: "Thndr", link: "https://jobs.ashbyhq.com/thndr"}
   - {name: "Trella", link: "https://careers.trella.app/jobs.rss"}
   - {name: "Unilever", link: "https://unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals?locationCountry=d865e83093ad42319653b08e61f7db49"}
-  - {name: "UPS", link: "https://www.jobs-ups.com/imea/en"}
   - {name: "Valeo", link: "https://valeo.wd3.myworkdayjobs.com/en-US/valeo_jobs?locationCountry=d865e83093ad42319653b08e61f7db49"}
   - {name: "Valify", link: "https://valify-solutions.zohorecruit.com/jobs/Careers"}
-  - {name: "Valu", link: "https://www.valu.com.eg/careers"}
-  - {name: "Vezeeta", link: "https://app.zenats.com/en/public_job/AdPU-GWxRraSztkxdGJv7g"}
+  - {name: "Valu", link: "https://careers.smartrecruiters.com/ValU1"}
+  - {name: "Vezeeta", link: "https://apply.workable.com/vezeeta/"}
   - {name: "Visa", link: "https://visa.wd5.myworkdayjobs.com/Visa?locationCountry=d865e83093ad42319653b08e61f7db49"}
-  - {name: "Vodafone", link: "https://jobs.vodafone.com/careers"}
+  - {name: "Vodafone", link: "https://jobs.vodafone.com/careers?location=Egypt"}
   - {name: "WE", link: "https://www.te.eg/web/guest/about-te/careers-and-training/jobs"}
-  - {name: "Yodawy"}
-  - {name: "Zain", link: "https://careers.zain.com/"}
-  - {name: "Ziina", link: "https://jobs.ashbyhq.com/ziina", starred: false}
-
-  # Remote-first companies hiring worldwide (the remote-in-tech list, 2026-10-03): their job boards
-  # are read every day; their jobs are not starred. Those the 28,000-company feed has are left out.
-  - {name: "10up", link: "https://apply.workable.com/10up/", starred: false}
-  - {name: "17hats", link: "https://apply.workable.com/17hats/", starred: false}
-  - {name: "42 Technologies", link: "https://apply.workable.com/42technologies/", starred: false}
-  - {name: "acct", link: "https://apply.workable.com/acct/", starred: false}
-  - {name: "Adzuna", link: "https://apply.workable.com/adzuna/", starred: false}
-  - {name: "Aha!", link: "https://boards.greenhouse.io/aha", starred: false}
-  - {name: "ALICE", link: "https://apply.workable.com/alice/", starred: false}
-  - {name: "Alight Solutions", link: "https://apply.workable.com/alight/", starred: false}
-  - {name: "argyle", link: "https://apply.workable.com/argyle/", starred: false}
-  - {name: "ARK", link: "https://boards.greenhouse.io/ark", starred: false}
-  - {name: "Aula Education", link: "https://apply.workable.com/aula-education/", starred: false}
-  - {name: "Automattic", link: "https://apply.workable.com/automattic/", starred: false}
-  - {name: "Axelerant", link: "https://apply.workable.com/axelerant/", starred: false}
-  - {name: "Bairesdev", link: "https://apply.workable.com/bairesdev/", starred: false}
-  - {name: "Balena", link: "https://apply.workable.com/balena/", starred: false}
-  - {name: "Bandcamp", link: "https://apply.workable.com/bandcamp/", starred: false}
-  - {name: "BandLab", link: "https://apply.workable.com/bandlab/", starred: false}
-  - {name: "Bandzoogle", link: "https://boards.greenhouse.io/bandzoogle", starred: false}
-  - {name: "Baremetrics", link: "https://apply.workable.com/baremetrics/", starred: false}
-  - {name: "Basecamp", link: "https://apply.workable.com/basecamp/", starred: false}
-  - {name: "Bit Zesty", link: "https://apply.workable.com/bit-zesty/", starred: false}
-  - {name: "Bonsai", link: "https://apply.workable.com/hellobonsai/", starred: false}
-  - {name: "Brainstorm Force", link: "https://apply.workable.com/brainstorm-force/", starred: false}
-  - {name: "Calibre", link: "https://jobs.ashbyhq.com/calibre", starred: false}
-  - {name: "CareCru", link: "https://apply.workable.com/carecru/", starred: false}
-  - {name: "CareMessage", link: "https://jobs.lever.co/caremessage", starred: false}
-  - {name: "CartStack", link: "https://apply.workable.com/cartstack/", starred: false}
-  - {name: "Celsius", link: "https://apply.workable.com/celsius/", starred: false}
-  - {name: "CircleCI", link: "https://boards.greenhouse.io/circleci", starred: false}
-  - {name: "CivicActions", link: "https://boards.greenhouse.io/civicactions", starred: false}
-  - {name: "Clevertech", link: "https://apply.workable.com/clevertech/", starred: false}
-  - {name: "Coalition Technologies", link: "https://apply.workable.com/coalition-technologies/", starred: false}
-  - {name: "CodeSandbox", link: "https://apply.workable.com/codesandbox/", starred: false}
-  - {name: "Codeship", link: "https://apply.workable.com/codeship/", starred: false}
-  - {name: "Coinbase", link: "https://boards.greenhouse.io/coinbase", starred: false}
-  - {name: "Compose", link: "https://apply.workable.com/compose/", starred: false}
-  - {name: "Connexa", link: "https://apply.workable.com/connexa/", starred: false}
-  - {name: "Datadog", link: "https://boards.greenhouse.io/datadog", starred: false}
-  - {name: "Dropbox", link: "https://boards.greenhouse.io/dropbox", starred: false}
-  - {name: "Elastic", link: "https://boards.greenhouse.io/elastic", starred: false}
-  - {name: "Ergeon", link: "https://boards.greenhouse.io/ergeon", starred: false}
-  - {name: "Eyeo (Adblock Plus)", link: "https://boards.greenhouse.io/eyeo", starred: false}
-  - {name: "Fastly", link: "https://boards.greenhouse.io/fastly", starred: false}
-  - {name: "Fly.io", link: "https://jobs.lever.co/fly", starred: false}
-  - {name: "Ghost Foundation", link: "https://boards.greenhouse.io/ghost", starred: false}
-  - {name: "Glitch", link: "https://jobs.ashbyhq.com/glitch", starred: false}
-  - {name: "GoDaddy", link: "https://boards.greenhouse.io/godaddy", starred: false}
-  - {name: "GoHiring", link: "https://boards.greenhouse.io/gohiring", starred: false}
-  - {name: "Graylog", link: "https://jobs.lever.co/graylog", starred: false}
-  - {name: "Grou.ps", link: "https://jobs.ashbyhq.com/build", starred: false}
-  - {name: "IQVIA", link: "https://jobs.ashbyhq.com/jobs", starred: false}
-  - {name: "Kaggle", link: "https://boards.greenhouse.io/kaggle", starred: false}
-  - {name: "Kona", link: "https://boards.greenhouse.io/kona", starred: false}
-  - {name: "Kraken", link: "https://jobs.lever.co/kraken", starred: false}
-  - {name: "Litmus", link: "https://jobs.ashbyhq.com/litmus", starred: false}
-  - {name: "Mindful", link: "https://jobs.lever.co/mindful", starred: false}
-  - {name: "Mixmax", link: "https://boards.greenhouse.io/mixmax", starred: false}
-  - {name: "MongoDB", link: "https://boards.greenhouse.io/mongodb", starred: false}
-  - {name: "Netris", link: "https://jobs.ashbyhq.com/netris", starred: false}
-  - {name: "Octopus Deploy", link: "https://boards.greenhouse.io/octopusdeploy", starred: false}
-  - {name: "Okta", link: "https://boards.greenhouse.io/okta", starred: false}
-  - {name: "OpenZeppelin", link: "https://boards.greenhouse.io/openzeppelin", starred: false}
-  - {name: "Platform.sh", link: "https://boards.greenhouse.io/platformsh", starred: false}
-  - {name: "Rackspace", link: "https://jobs.lever.co/rackspace", starred: false}
-  - {name: "ReCharge", link: "https://jobs.ashbyhq.com/recharge", starred: false}
-  - {name: "Scandit", link: "https://boards.greenhouse.io/scandit", starred: false}
-  - {name: "SmugMug", link: "https://boards.greenhouse.io/smugmug", starred: false}
-  - {name: "Stack Exchange", link: "https://boards.greenhouse.io/stackexchange", starred: false}
-  - {name: "Status", link: "https://boards.greenhouse.io/status", starred: false}
-  - {name: "StreamNative", link: "https://boards.greenhouse.io/streamnative", starred: false}
-  - {name: "Stripe", link: "https://boards.greenhouse.io/stripe", starred: false}
-  - {name: "TestGorilla", link: "https://jobs.ashbyhq.com/testgorilla", starred: false}
-  - {name: "Wizeline", link: "https://boards.greenhouse.io/wizeline", starred: false}
+  - {name: "Yodawy", link: "https://www.yodawy.com/"}
