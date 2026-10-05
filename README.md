@@ -144,6 +144,7 @@ request a second at most to any site (Workable's search, limited by the day inst
 faster). A site that answers 429 Too Many Requests is left alone for as long as it asks, and one
 that still answers 403 to a real Chrome's handshake for 6 hours, by every step and run (one file
 per site in `output/waits/`; delete it to lift the hold early).
+How each source is read, and the test behind each choice: [docs/scraping-plan.md](docs/scraping-plan.md).
 
 | Source | How | Within its limits |
 |---|---|---|
