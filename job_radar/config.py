@@ -82,9 +82,10 @@ TARGET_COMPANIES = words(SETTINGS["your_companies"])
 PHENOM_SEARCHES = [f"{kw} {where}" for kw in ("data", "AI", "analyst") for where in ("Egypt", "remote")]
 
 # Tanqeeb gathers Wuzzuf, Bayt, Forasna, NaukriGulf, GulfTalent ...: its country sites and its job
-# pages by field (its keyword search shows a script no jobs, 2026-10-05). It has no remote filter,
-# so Egypt only.
-TANQEEB_SITES = {"egypt": "Egypt"}
+# pages by field (its keyword search shows a script no jobs, 2026-10-05). It has no remote filter:
+# outside Egypt a job is kept only when its title or place says remote (your rule).
+TANQEEB_SITES = {"egypt": "Egypt", "uae": "UAE", "saudi": "Saudi Arabia", "qatar": "Qatar", "kuwait": "Kuwait",
+                 "bahrain": "Bahrain", "oman": "Oman"}
 TANQEEB_PAGES = ["it-jobs", "data-analyst-jobs", "business-analyst-jobs", "python-developer-jobs", "internship-jobs"]
 
 # Relomote's pages of remote jobs open to someone in Egypt, by field (its robots.txt allows them)

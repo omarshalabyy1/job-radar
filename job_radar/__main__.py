@@ -1,6 +1,6 @@
 """python -m job_radar <step> [<step> ...] | all
 
-Steps, in order: schema extract_boards extract_remote extract_egypt extract_workable extract_freehire
+Steps, in order: schema extract_boards extract_remote extract_egypt extract_gulf extract_workable extract_freehire
 extract_companies extract_portals extract_email transform describe match_skills export_career_ops
 email_egypt email_abroad
 Settings come from the environment, or from .env in the repo root (see .env.example).
@@ -14,9 +14,9 @@ from dotenv import load_dotenv
 from . import steps
 from .db import connect
 
-STEPS = ["schema", "extract_boards", "extract_remote", "extract_egypt", "extract_workable", "extract_freehire",
-         "extract_companies", "extract_portals", "extract_email", "transform", "describe", "match_skills",
-         "export_career_ops", "email_egypt", "email_abroad"]
+STEPS = ["schema", "extract_boards", "extract_remote", "extract_egypt", "extract_gulf", "extract_workable",
+         "extract_freehire", "extract_companies", "extract_portals", "extract_email", "transform", "describe",
+         "match_skills", "export_career_ops", "email_egypt", "email_abroad"]
 
 
 def main() -> None:

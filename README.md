@@ -89,7 +89,7 @@ freelance. Jobs at your companies get a ⭐.
 
 | Airflow DAG | When | Does |
 |---|---|---|
-| `job_radar` | 11am, 7pm | extract (8 tasks side by side) → transform → describe → match_skills → export_career_ops |
+| `job_radar` | 11am, 7pm | extract (9 tasks side by side) → transform → describe → match_skills → export_career_ops |
 | `job_radar_email_egypt` | 11:30am, 7:30pm | emails Egypt's new jobs |
 | `job_radar_email_abroad` | 11:30am, 7:30pm | emails everywhere else's new jobs |
 
@@ -124,6 +124,16 @@ through LinkedIn or Indeed: their terms ban automation, and accounts get banned 
   <img src="https://img.shields.io/badge/We_Work_Remotely-1E293B?style=flat-square" alt="We Work Remotely">
   <img src="https://img.shields.io/badge/Relomote-1E293B?style=flat-square" alt="Relomote">
   <img src="https://img.shields.io/badge/freehire.me-1E293B?style=flat-square" alt="freehire.me">
+  <img src="https://img.shields.io/badge/Remotive-1E293B?style=flat-square" alt="Remotive">
+  <img src="https://img.shields.io/badge/Remote_OK-1E293B?style=flat-square" alt="Remote OK">
+  <img src="https://img.shields.io/badge/Jobicy-1E293B?style=flat-square" alt="Jobicy">
+  <img src="https://img.shields.io/badge/Working_Nomads-1E293B?style=flat-square" alt="Working Nomads">
+  <img src="https://img.shields.io/badge/Arbeitnow-1E293B?style=flat-square" alt="Arbeitnow">
+  <img src="https://img.shields.io/badge/DailyRemote-1E293B?style=flat-square" alt="DailyRemote">
+  <img src="https://img.shields.io/badge/Remote.co-1E293B?style=flat-square" alt="Remote.co">
+  <img src="https://img.shields.io/badge/NaukriGulf-1E293B?style=flat-square" alt="NaukriGulf">
+  <img src="https://img.shields.io/badge/GulfTalent-1E293B?style=flat-square" alt="GulfTalent">
+  <img src="https://img.shields.io/badge/Dubizzle_Jobs-1E293B?style=flat-square" alt="Dubizzle Jobs">
   <img src="https://img.shields.io/badge/28%2C000_career_pages-1E293B?style=flat-square" alt="28,000 career pages">
   <img src="https://img.shields.io/badge/Your_205_companies-1E293B?style=flat-square" alt="Your 205 companies">
   <img src="https://img.shields.io/badge/Your_Gmail_alerts-1E293B?style=flat-square" alt="Your Gmail alerts">
@@ -139,9 +149,14 @@ per site in `output/waits/`; delete it to lift the hold early).
 |---|---|---|
 | Wuzzuf | the JSON API its web app calls: every job in Egypt from the last 24 hours, newest first, with its description | a few calls a run, 1 second apart |
 | Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy) as a guest; remote jobs only outside Egypt | 3 seconds between a board's searches; a 403 or 429 stops that board for 6 hours |
-| Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt site's IT, data, business analyst, Python and internship pages | 5 pages a run, 1 second apart |
+| Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt, UAE, Saudi, Qatar, Kuwait, Bahrain and Oman sites' IT, data, business analyst, Python and internship pages; outside Egypt only jobs that say remote | 5 pages a site a run, 1 second apart |
+| NaukriGulf, GulfTalent | the search APIs their pages call (they answer only a real Chrome handshake): the newest jobs of each keyword from the last week; outside Egypt only remote ones are kept | 13 searches each a run, 1 second apart, in the Gulf task |
+| Dubizzle Jobs (UAE) | the public search index its pages query (the pages sit behind a bot check): remote jobs of the last week | one call a run |
 | Workable | its public job search, every company on it; remote only outside Egypt | one round a day: it allows few searches a day, and each covers the whole day |
 | Himalayas, We Work Remotely | public search API, RSS feed | 1 second between pages |
+| Remotive, Remote OK, Jobicy, Working Nomads, Arbeitnow | public APIs, no key: each board's newest remote jobs from the last week (several publish a day or more late) | one call each a run; Remotive held 6 hours after each (it asks for at most 4 a day) |
+| DailyRemote | its newest remote jobs in your fields (the company is behind its paid plan, so none shows) | about 2 pages a run |
+| Remote.co | its latest-jobs sitemap, then the pages of jobs titled like your roles and not read before (its search sits behind a bot check) | 1 call plus a few pages a run, 1 second apart |
 | [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart (its robots.txt allows them) |
 | [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
 | Your companies | `settings.yaml` (companies): your starred ones, plus 73 remote-first companies hiring worldwide from the [remote-in-tech](https://github.com/remoteintech/remote-jobs) list; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |

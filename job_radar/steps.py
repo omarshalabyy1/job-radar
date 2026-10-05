@@ -1,6 +1,6 @@
 """The pipeline steps, one Airflow task each (python -m job_radar <step>):
 
-    schema -> extract_boards, extract_remote, extract_egypt, extract_workable, extract_freehire,
+    schema -> extract_boards, extract_remote, extract_egypt, extract_gulf, extract_workable, extract_freehire,
               extract_companies, extract_portals, extract_email (side by side) -> transform -> describe -> match_skills
               -> export_career_ops
     email_egypt, email_abroad: the two emails, each at its own times (the HTML is in digest.py)
@@ -102,11 +102,21 @@ def extract_boards(conn) -> None:
 
 
 def extract_remote(conn) -> None:
-    extract(conn, sources.himalayas, sources.weworkremotely, sources.relomote)
+    seen = {url for (url,) in conn.execute("SELECT job_url FROM raw.job_posting WHERE source = 'remoteco'")}
+
+    def remoteco():
+        return sources.remoteco(seen)
+
+    extract(conn, sources.himalayas, sources.weworkremotely, sources.relomote, sources.remotive, sources.remoteok,
+            sources.jobicy, sources.workingnomads, sources.arbeitnow, sources.dailyremote, remoteco)
 
 
 def extract_egypt(conn) -> None:
     extract(conn, sources.wuzzuf, sources.tanqeeb)
+
+
+def extract_gulf(conn) -> None:
+    extract(conn, sources.naukrigulf, sources.gulftalent, sources.dubizzle)
 
 
 def extract_workable(conn) -> None:

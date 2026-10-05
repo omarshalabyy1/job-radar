@@ -27,6 +27,7 @@ def web(monkeypatch, tmp_path):
     monkeypatch.setattr(sources, "WAITS", tmp_path / "waits")
     monkeypatch.setattr(sources, "SESSIONS", tmp_path / "sessions")
     monkeypatch.setattr(sources, "NEXT_TURN", {})
+    monkeypatch.setattr(sources, "CHROME_ONLY", set())
     web = type("Web", (), {"plain": Answer(200), "chrome": Answer(200), "calls": []})()
 
     def client(name):
@@ -80,6 +81,13 @@ def test_a_site_that_never_answers_or_drops_the_handshake_is_asked_as_chrome(web
     assert second[1] - first[1] + second[2]["timeout"] <= 30.1
 
 
+def test_a_site_only_chrome_gets_through_is_asked_as_chrome_from_then_on(web):
+    web.plain = sources.requests.exceptions.ConnectionError()
+    sources.fetch("GET", "https://k.test/1")
+    sources.fetch("GET", "https://k.test/2")
+    assert [client for client, _, _ in web.calls] == ["plain", "chrome", "chrome"]
+
+
 def test_a_refused_job_page_does_not_hold_its_host(web):
     web.plain = web.chrome = Answer(403)
     with pytest.raises(sources.Held):
@@ -131,6 +139,17 @@ def test_every_job_in_a_linkedin_alert_is_kept():
     assert config.role_of("Costing Analyst", alert=True) == config.ALERT_RANK
     assert config.role_of("Costing Analyst") is None and config.role_of("", alert=True) is None
     assert list(config.ROLE_LABEL)[-1] == config.ALERT_RANK  # listed after your roles
+
+
+def test_a_remote_board_keeps_your_roles_from_places_in_scope_this_week():
+    today = time.strftime("%Y-%m-%d")
+    jobs = [{"t": "Data Engineer", "geo": "Anywhere", "u": "https://x.test/1", "d": today},
+            {"t": "Data Engineer", "geo": "USA Only", "u": "https://x.test/2", "d": str(int(time.time()))},  # epoch
+            {"t": "Data Engineer", "geo": "Anywhere", "u": "https://x.test/3", "d": "2020-01-01"},  # too old
+            {"t": "Copywriter", "geo": "Anywhere", "u": "https://x.test/4", "d": today}]  # not your role
+    rows = sources.remote_board("board", jobs, "t", "c", "geo", "u", "d", "desc")
+    assert [(r["job_url"], config.place_of(r["location"])) for r in rows] == [("https://x.test/1", "Remote"),
+                                                                             ("https://x.test/2", "USA")]
 
 
 def test_6_october_is_an_onsite_area():
