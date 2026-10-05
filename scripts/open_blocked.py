@@ -44,7 +44,8 @@ with psycopg.connect(host="localhost", port=5433, dbname="jobradar", user="jobra
                 print(f"{url} did not open ({e.__class__.__name__}): try reloading it in the window")
             input(f"{url}\n  Pass the check, accept the cookies or log in in the window, then press Enter here... ")
             session = {"user_agent": page.evaluate("navigator.userAgent"),
-                       "cookies": [c for c in browser.cookies() if host.endswith(c["domain"].lstrip("."))]}
+                       "cookies": [c for c in browser.cookies() if host == c["domain"].lstrip(".")
+                                   or host.endswith("." + c["domain"].lstrip("."))]}
             (ROOT / "output" / "sessions").mkdir(parents=True, exist_ok=True)
             (ROOT / "output" / "sessions" / f"{host}.json").write_text(json.dumps(session), encoding="utf-8")
             (ROOT / "output" / "waits" / host).unlink(missing_ok=True)

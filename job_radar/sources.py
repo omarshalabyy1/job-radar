@@ -57,6 +57,8 @@ JOB_PAGE = (r"/jobs?/|/careers?/|/vacanc|/positions?/|viewjob|job-?listing|[?&]j
             r"|ashbyhq\.com|workable\.com")
 # a link that only says "Learn more" under a job card (Wellfound): the card is the text above it
 GENERIC_LINK = r"learn more|view job|see job|view details|more details|apply|apply now|see more"
+# LinkedIn's job alert senders: every job in their emails is kept, whatever its title
+LINKEDIN_ALERTS = r"(jobalerts-noreply|jobs-listings)@linkedin\.com"
 # an email bigger than this carries attachments, not job alerts: skipped, to spare Gmail's daily
 # IMAP download allowance (2,500 MB)
 MAIL_BYTES = 5_000_000
@@ -96,6 +98,10 @@ TURNS = threading.Lock()
 
 class Held(Exception):
     """A host not to be asked yet."""
+
+
+class Challenge(Exception):
+    """A page that shows a bot check, or a site that drops the headless browser."""
 
 
 def waiting(host: str) -> float:
@@ -152,30 +158,34 @@ def pace(host: str) -> None:
 
 def request(method: str, url: str, **kwargs):
     """One request, as a browser makes it, at the host's pace: with requests first, and when the site
-    turns it away (401, 403) or never answers, once more with curl_cffi, whose TLS handshake is a
-    real Chrome's - the check many bot filters make (it opened 5 of the 6 career sites that refused
-    requests, 2026-10-05; Bain is the other way round, hence requests first). A site you opened by
-    hand gets your session's cookies and user agent."""
+    turns it away (401, 403), drops the connection or never answers, once more with curl_cffi, whose
+    TLS handshake is a real Chrome's - the check many bot filters make (it opened 5 of the 6 career
+    sites that refused requests, 2026-10-05; Bain is the other way round, hence requests first). Both
+    tries together keep to the caller's timeout: requests gets half, curl_cffi what is left. A site
+    you opened by hand gets your session's cookies and user agent."""
     host = urlsplit(url).hostname
     pace(host)
     headers = {**BROWSER, **kwargs.pop("headers", {})}
     if saved := session(host):
         headers["User-Agent"] = saved["user_agent"]
         kwargs["cookies"] = {c["name"]: c["value"] for c in saved["cookies"]}
-    kwargs.setdefault("timeout", 60)
+    timeout, started = kwargs.pop("timeout", 60), time.monotonic()
     try:
-        r = requests.request(method, url, headers=headers, **kwargs)
+        r = requests.request(method, url, headers=headers, timeout=timeout / 2, **kwargs)
         if r.status_code not in (401, 403):
             return r
-    except requests.Timeout:
+    except (requests.Timeout, requests.ConnectionError):  # ConnectionError covers an SSL handshake refused
         pass
     if not saved:  # curl_cffi sends the user agent of the Chrome it imitates
         del headers["User-Agent"]
     pace(host)
-    return chrome_requests.request(method, url, headers=headers, impersonate="chrome", **kwargs)
+    return chrome_requests.request(method, url, headers=headers, impersonate="chrome",
+                                   timeout=max(1.0, timeout - (time.monotonic() - started)), **kwargs)
 
 
-def fetch(method: str, url: str, **kwargs):
+def fetch(method: str, url: str, hold_on_403: bool = True, **kwargs):
+    """hold_on_403=False for a single job page (describe): its host can be a platform's API too
+    (apply.workable.com), which one refused page must not stop for 6 hours."""
     host = urlsplit(url).hostname
     if left := waiting(host):
         raise Held(f"{host} is held for {duration(left)} more")
@@ -184,8 +194,9 @@ def fetch(method: str, url: str, **kwargs):
         hold(host, retry_after(r.headers.get("Retry-After")))
         raise Held(f"{host} answered {r.status_code}: held for {duration(waiting(host))}")
     if r.status_code in (401, 403):  # turned away even as a real Chrome: asking again soon risks a ban
-        hold(host, 6 * 3600)
-        raise Held(f"{host} answered {r.status_code}: held for 6 hours")
+        if hold_on_403:
+            hold(host, 6 * 3600)
+        raise Held(f"{host} answered {r.status_code}" + (": held for 6 hours" if hold_on_403 else ""))
     r.raise_for_status()
     return r
 
@@ -330,9 +341,10 @@ def relomote() -> list[dict]:
 
 
 def freehire() -> list[dict]:
-    """freehire.me's public job API (no key): each keyword, posted in the last day, remote anywhere
-    and any job in Egypt, the 100 most relevant of each with the full description. Only jobs it
-    rates fresh: not old ones posted again, and not falsely refreshed. 1 second apart."""
+    """freehire.me's public job API (no key; its robots.txt lets all but Googlebot use /api/): each
+    keyword, posted in the last day, remote anywhere and any job in Egypt, the 100 most relevant of
+    each with the full description. Only jobs it rates fresh: not old ones posted again, and not
+    falsely refreshed. 1 second apart."""
     rows = []
     for keyword in KEYWORDS:
         for where in ({"work_mode": "remote"}, {"countries": "eg"}):
@@ -369,6 +381,8 @@ def jooble() -> list[dict]:
 
     def search(args: tuple) -> list[dict]:
         keyword, (place, location, _) = args
+        if time_left(EXTRACT_SECONDS) < 15:  # Indeed and Bayt came first in the same step
+            return []
         r = fetch("POST", f"https://jooble.org/api/{key}", json={"keywords": keyword, "location": location})
         return [row("jooble", place, j["title"], j.get("company"), j.get("location"), j["link"],
                     (j.get("updated") or "")[:10], j.get("snippet"), j)
@@ -450,9 +464,9 @@ def company_portals() -> list[dict]:
 
 
 def wuzzuf() -> list[dict]:
-    """Wuzzuf, through the JSON API its own web app calls (its search page sits behind Cloudflare's
-    check; the API does not): every job in Egypt, newest first, 50 a page with their details 20 per
-    call, until a page has no job from the last
+    """Wuzzuf, through the JSON API its own web app calls (robots.txt allows it; only its search
+    page sits behind Cloudflare's challenge, and this does not touch it): every job in Egypt,
+    newest first, 50 a page with their details 20 per call, until a page has no job from the last
     HOURS_OLD hours (its own "last 24 hours" filter stops at 50 jobs, too few on a busy day). The
     window is counted from Wuzzuf's newest job, so its time zone does not matter; 1 second between
     calls. The title rules keep yours."""
@@ -550,10 +564,11 @@ def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
             return [], (platform, api, note, company)
         try:
             rows = READERS[platform](company, api)
-        except Exception as e:  # one site down is a short day; detected again next run, so a site
-            # whose saved session expired shows as blocked again, for scripts/open_blocked.py
+        except Exception as e:  # one site down is a short day; a refusal is detected again next run,
+            # so a site whose saved session expired shows as blocked, for scripts/open_blocked.py
             print(f"WARNING {company}: {e!r}"[:300])
-            return [], (None, api, f"read failed: {e!r}"[:200], company)
+            refused = isinstance(e, (Held, Challenge))
+            return [], (None if refused else platform, api, f"read failed: {e!r}"[:200], company)
         print(f"{company} ({platform}): {len(rows)}")
         return rows, (platform, api, note, company)
 
@@ -591,12 +606,17 @@ def detect(url: str) -> tuple[str, str | None, str | None]:
     for pattern, reader in COVERED:
         if re.search(pattern, url):
             return "covered", None, f"its jobs come through {reader}"
+    if left := waiting(parts.hostname):  # the site asked us to wait: not even a detection before then
+        return None, None, f"held for {duration(left)} more"
     try:
         r = request("GET", url, timeout=30)
     except ERRORS as e:
         return None, None, f"network error: {e!r}"[:200]
     page = r.text
-    if r.status_code in (401, 403, 429) or re.search(CHALLENGE, page[:20000]):
+    if r.status_code == 429:
+        hold(parts.hostname, retry_after(r.headers.get("Retry-After")))
+        return None, None, f"it asked to wait (HTTP 429): held for {duration(waiting(parts.hostname))}"
+    if r.status_code in (401, 403) or re.search(CHALLENGE, page[:20000]):
         return "blocked", None, f"it shows a bot check (HTTP {r.status_code}): run scripts/open_blocked.py"
     if r.status_code >= 400:
         return "unreachable", None, f"page not found (HTTP {r.status_code}): check the careers URL"
@@ -611,8 +631,10 @@ def detect(url: str) -> tuple[str, str | None, str | None]:
         return "rss", url, None
     try:  # a job board its JavaScript loads (an embedded Greenhouse or Workable list ...)
         page = rendered(url)
-    except Exception as e:  # a browser turned away (McKinsey's site drops headless Chromium) or a bot check
-        return "blocked", None, f"its page did not open in a browser ({e!r}"[:160] + "): run scripts/open_blocked.py"
+    except Challenge as e:
+        return "blocked", None, f"{e}"[:160] + ": run scripts/open_blocked.py"
+    except Exception as e:  # a slow page, or the browser itself: read again next run
+        return "page", url, f"could not render: {e!r}"[:200]
     for platform, pattern in ATS_PATTERNS:
         if m := re.search(pattern, page):
             return platform, m.group(1), None
@@ -740,7 +762,7 @@ def rendered(url: str) -> str:
     page is read once it has loaded and gone quiet, or 10 seconds after it loaded: busy sites (IBM,
     Bain, Capgemini) never go quiet, and waiting for it timed them out. A site you opened by hand
     gets your session; a page that still shows a bot check raises, for you to open."""
-    from playwright.sync_api import TimeoutError as PageTimeout, sync_playwright
+    from playwright.sync_api import Error as PageError, TimeoutError as PageTimeout, sync_playwright
     if not hasattr(BROWSERS, "chromium"):
         BROWSERS.chromium = sync_playwright().start().chromium.launch()
     saved = session(urlsplit(url).hostname)
@@ -749,7 +771,12 @@ def rendered(url: str) -> str:
         storage_state={"cookies": saved["cookies"], "origins": []} if saved else None)
     try:
         page = context.new_page()
-        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        except PageError as e:
+            if "ERR_HTTP2_PROTOCOL_ERROR" in str(e):  # how McKinsey's site (Akamai) drops headless Chromium
+                raise Challenge("it drops headless Chromium (ERR_HTTP2_PROTOCOL_ERROR)") from e
+            raise
         try:
             page.wait_for_load_state("networkidle", timeout=10000)
         except PageTimeout:  # still busy: what has loaded is read
@@ -758,7 +785,7 @@ def rendered(url: str) -> str:
     finally:
         context.close()
     if re.search(CHALLENGE, html[:20000]):
-        raise RuntimeError("the page shows a bot check")
+        raise Challenge("its page shows a bot check")
     return html
 
 
@@ -808,7 +835,8 @@ def read_mailbox(address: str, password: str, host: str, seen: set[str]) -> list
                 msg = email.message_from_bytes(imap.uid("fetch", uid, "(BODY.PEEK[])")[1][0][1],
                                                policy=email.policy.default)
                 body = msg.get_body(preferencelist=("html",))
-                jobs = jobs_in_email(body.get_content()) if body else []
+                alert = re.search(LINKEDIN_ALERTS, str(h["From"]), re.I) is not None
+                jobs = jobs_in_email(body.get_content(), alert) if body else []
                 if not re.search(JOB_SENDERS, str(h["From"]), re.I):
                     jobs = [job for job in jobs if re.search(JOB_PAGE, job[3], re.I)]
                     if not jobs:  # not a job email
@@ -824,8 +852,9 @@ def read_mailbox(address: str, password: str, host: str, seen: set[str]) -> list
     return rows
 
 
-def jobs_in_email(page: str) -> list[tuple[str, str, str, str]]:
-    """(title, company, location, url) of each link in a job email whose words are one of the roles.
+def jobs_in_email(page: str, alert: bool = False) -> list[tuple[str, str, str, str]]:
+    """(title, company, location, url) of each link in a job email whose words are one of the roles;
+    in a LinkedIn alert (alert), each of its job links whatever the title.
     Job alerts put the company and location on the line under the title ("Company · Location");
     a LinkedIn alert puts the whole card in one link: title, "Company · Location", then extras; a
     Wellfound alert puts the card above a "Learn more" link: title, then company."""
@@ -849,10 +878,10 @@ def jobs_in_email(page: str) -> list[tuple[str, str, str, str]]:
                 continue
             title, card = above[first], "\n".join(above[first + 1:])
         url = canonical_url(url)
-        # from LinkedIn only its job pages (not profiles, posts or searches), each kept whatever its
-        # title: LinkedIn chose it for your alert
+        # from LinkedIn only its job pages (not profiles, posts or searches); in its alert, each kept
+        # whatever its title: LinkedIn chose it for your alert
         linkedin_job = "linkedin.com/jobs/view/" in url
-        if not role_of(title, alert=linkedin_job) or url in urls or ("linkedin.com" in url and not linkedin_job):
+        if not role_of(title, alert=alert and linkedin_job) or url in urls or ("linkedin.com" in url and not linkedin_job):
             continue
         urls.add(url)
         after = card.split("\n")[0] if card else lines[i + 1] if i + 1 < len(lines) else ""

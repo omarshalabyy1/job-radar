@@ -180,7 +180,8 @@ def transform(conn) -> None:
     passes the rules (they changed) is removed. Re-running it changes nothing."""
     postings = conn.cursor(row_factory=dict_row).execute(
         "SELECT run_date, source, searched_for, title, company, location, job_url, date_posted, description,"
-        " payload->>'is_remote' = 'true' AS is_remote FROM raw.job_posting WHERE run_date >= current_date - %s"
+        " payload->>'is_remote' = 'true' AS is_remote, payload->>'from' AS sender"
+        " FROM raw.job_posting WHERE run_date >= current_date - %s"
         " ORDER BY posting_id", (DAYS,)).fetchall()
     # your companies: a name of 4+ letters as a whole word ("Vodafone Egypt" is Vodafone); a shorter
     # one only as the whole company name, or "ag" and "db" would star "Siemens AG" and "DB Schenker"
@@ -191,8 +192,8 @@ def transform(conn) -> None:
     yours = re.compile("|".join(rf"\b{re.escape(n)}\b" for n in names if len(letters(n)) > 3) or r"(?!)", re.I)
     jobs: dict[str, dict] = {}
     for p in postings:
-        rank = role_of(p["title"] or "",
-                       alert=p["source"] == "email" and "linkedin.com/jobs/view/" in (p["job_url"] or ""))
+        rank = role_of(p["title"] or "", alert=p["source"] == "email" and "linkedin.com/jobs/view/" in (p["job_url"] or "")
+                       and re.search(sources.LINKEDIN_ALERTS, p["sender"] or "", re.I) is not None)
         # the place searched, else the location's, else the title's ("Data Engineer - Cairo"); a job
         # whose place none of them gives (only job alerts get this far) is "Unknown location"
         place = p["searched_for"] or place_of(p["location"] or "") or place_of(p["title"] or "") or "Unknown location"
@@ -253,8 +254,9 @@ def describe(conn) -> None:
                 break
             time.sleep(1)
             try:
-                r = sources.fetch("GET", url, timeout=max(5, min(30, sources.time_left(DESCRIBE_SECONDS) - 5)))
-            except sources.Held:  # the site asked us to wait: none of its pages this run
+                r = sources.fetch("GET", url, hold_on_403=False,
+                                  timeout=max(5, min(30, sources.time_left(DESCRIBE_SECONDS) - 5)))
+            except sources.Held:  # the site asked us to wait, or refused: none of its pages this run
                 break
             except sources.ERRORS:  # not read: tried again next run
                 continue
