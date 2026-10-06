@@ -173,6 +173,9 @@ holding:
   number - a CV that claims what he can't show loses the interview. One to two pages.
 - `cover-letter.md` - at most one page: why this company, why him for this role (two or three
   facts from his CV that answer the job's main needs), a short close. Plain, specific English.
+  Write it with the copywriting skill so it persuades the reader to call him: open with what he
+  can do for them, back each claim with a fact from his CV, end with a clear ask. Short
+  paragraphs: two or three sentences each, about 200-250 words in all.
 - `notes.md` - the grade, the gaps and how to address them, and three likely interview questions
   with answers drawn from his experience.
 
@@ -198,8 +201,8 @@ and the prepared texts instead. When he confirms it was sent, set the job's stat
 (same SQL, `'applied'`).
 
 When a job says to apply by email, write that email too: to the address in the posting, the job
-title in the subject, the tailored CV and cover letter PDFs attached, and a short body (run
-through humanizer) that always carries his GitHub (github.com/omarshalabyy1) and portfolio
+title in the subject, the tailored CV and cover letter PDFs attached, and a short body (written
+with the copywriting skill, three short paragraphs at most, run through humanizer) that always carries his GitHub (github.com/omarshalabyy1) and portfolio
 (https://omarlabs.dev) links. Show it with the rest and send it only after his yes, like a form.
 
 ## /job-radar emails
