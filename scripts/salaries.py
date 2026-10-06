@@ -1,5 +1,6 @@
 r"""What the jobs you are applying to pay, from Glassdoor: for each job, the company's own salaries
-for that role in that country, and the role's market range there. Run it on the laptop, not in Docker:
+for that role in that country, and the role's market range there (a job with no country is skipped:
+Glassdoor would answer for the viewer's own country). Run it on the laptop, not in Docker:
 
     python scripts\salaries.py                  # every job you saved in the tracker
     python scripts\salaries.py 18135 18394      # or these job ids
@@ -8,9 +9,10 @@ for that role in that country, and the role's market range there. Run it on the 
     python scripts\salaries.py --all            # every company, country and role in the radar's jobs:
                                                 # stops after 12 hours, skips what an earlier run read
 
-It needs Scrapling (pip install "scrapling[fetchers]", then scrapling install): Glassdoor shows a
-bot check to job-radar's own headless browser (rendered()), and Scrapling's stealth browser passes
-it (tested 2026-10-06). No login, no CAPTCHA solving. Glassdoor answered 429 at 7 pages at once, so
+It uses Playwright's Chromium (playwright install chromium) in a real window placed off-screen:
+Glassdoor's bot check stops every headless mode; salary pages pass in a window, the company search
+was still challenged while another Glassdoor run shared the IP (tested 2026-10-07). An unpassed check
+counts as a 429. No login, no CAPTCHA solving. Glassdoor answered 429 at 7 pages at once, so
 this reads one page at a time and, on a 429, waits and tries the page again.
 
 Rows go to output/salaries/<date>.jsonl (gitignored) and are printed per job. Figures are EGP or the
@@ -29,7 +31,7 @@ from urllib.parse import quote
 
 import psycopg
 from dotenv import load_dotenv
-from scrapling.fetchers import StealthySession
+from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -50,7 +52,7 @@ ROLES = {"Data Engineer": ("data engineer", r"data engineer"),
          "Data Analyst": ("data analyst", r"data analyst|analytics")}
 SCIENTIST = ("data scientist", r"data scien")
 
-MONEY = r"(?:[A-Z]{3}\s?|[$£€]\s?)([\d,.]+K?)"
+MONEY = r"([A-Z]{3}|[$£€])\s?([\d,.]+K?)"  # the currency, then the figure
 HEAD = re.compile(rf"Total pay range\s+{MONEY}\s*-\s*{MONEY}\s*/(mo|yr)\s+{MONEY}\s*/(?:mo|yr)\s+Median total pay")
 LISTED = re.compile(rf"([A-Z][\w&/,()\- ]{{2,60}}?)\s+([\d,]+) Salaries submitted\s+{MONEY}\s*-\s*{MONEY}\s*/(mo|yr)")
 
@@ -62,32 +64,38 @@ def amount(text: str) -> int:
 
 def flat_text(page) -> str:
     """The page's text on one line; Glassdoor splits a figure over several tags ("EGP 1" "3K")."""
-    text = re.sub(r"\s+", " ", page.get_all_text(separator="\n", ignore_tags=("script", "style")))
+    text = re.sub(r"\s+", " ", page.inner_text("body"))
     return re.sub(r"(\d) (?=\d|K\b)", r"\1", text)
+
+
+class Throttled(Exception):
+    """Glassdoor still answers 429 or its bot check after four tries: the run stops, to go on later."""
 
 
 def read(session, url: str):
     """One page; on a 429, wait a minute (then two, three) and ask again."""
     for attempt in range(4):
-        page = session.fetch(url, network_idle=True)
-        if page.status != 429:
-            return page
-        print(f"  429 from Glassdoor, waiting {60 * (attempt + 1)} s")
+        status = session.goto(url, wait_until="domcontentloaded", timeout=60000).status
+        try:  # Cloudflare's "Just a moment..." JavaScript check passes on its own in a real window
+            session.wait_for_function("document.title !== 'Just a moment...'", timeout=30000)
+            session.wait_for_load_state("networkidle", timeout=10000)
+        except PlaywrightTimeout:
+            pass
+        if status != 429 and session.title() != "Just a moment...":
+            return session
+        print(f"  {status} or bot check from Glassdoor, waiting {60 * (attempt + 1)} s")
         time.sleep(60 * (attempt + 1))
-    return page
+    raise Throttled(url)
 
 
-def market(session, title: str, country: int | None) -> dict | None:
-    """The role's pay range and median in the country (worldwide when the country is unknown)."""
-    slug = title.replace(" ", "-")
-    if country:
-        place = SLUG[country].lower()
-        url = (f"{GD}/Salaries/{place}-{slug}-salary-SRCH_IL.0,{len(place)}_IN{country}"
-               f"_KO{len(place) + 1},{len(place) + 1 + len(slug)}.htm")
-    else:
-        url = f"{GD}/Salaries/{slug}-salary-SRCH_KO0,{len(slug)}.htm"
+def market(session, title: str, country: int) -> dict | None:
+    """The role's pay range and median in the country."""
+    slug, place = title.replace(" ", "-"), SLUG[country].lower()
+    url = (f"{GD}/Salaries/{place}-{slug}-salary-SRCH_IL.0,{len(place)}_IN{country}"
+           f"_KO{len(place) + 1},{len(place) + 1 + len(slug)}.htm")
     m = HEAD.search(flat_text(read(session, url)))
-    return m and {"low": amount(m[1]), "high": amount(m[2]), "per": m[3], "median": amount(m[4]), "url": url}
+    return m and {"currency": m[1], "low": amount(m[2]), "high": amount(m[4]), "per": m[5],
+                  "median": amount(m[7]), "url": url}
 
 
 def employer(session, company: str) -> tuple[str, str] | None:
@@ -95,32 +103,29 @@ def employer(session, company: str) -> tuple[str, str] | None:
     starts with the name searched for ("CIB" finds CIBC first, which is not it)."""
     page = read(session, f"{GD}/Search/results.htm?keyword={quote(company)}")
     wanted = re.sub(r"\W+", "-", company.strip()).lower()
-    for href in page.css("a::attr(href)").getall():
+    for href in page.eval_on_selector_all("a[href]", "links => links.map(a => a.getAttribute('href'))"):
         m = re.search(r"/Overview/Working-at-(.+?)-EI_IE(\d+)\.", href)
         if m and (m[1].lower() == wanted or m[1].lower().startswith(wanted + "-")):
             return m[1], m[2]
     return None
 
 
-def company_salaries(session, slug: str, eid: str, country: int | None) -> list[dict]:
-    """All the company's salaries in the country (everywhere when unknown), reading its pages until
-    one adds nothing new."""
-    if country:
-        place = SLUG[country]
-        base = (f"{GD}/Salary/{slug}-{place}-Salaries-EI_IE{eid}.0,{len(slug)}"
-                f"_IL.{len(slug) + 1},{len(slug) + 1 + len(place)}_IN{country}")
-    else:
-        base = f"{GD}/Salary/{slug}-Salaries-E{eid}"
+def company_salaries(session, slug: str, eid: str, country: int) -> list[dict]:
+    """All the company's salaries in the country, reading its pages until one adds nothing new."""
+    place = SLUG[country]
+    base = (f"{GD}/Salary/{slug}-{place}-Salaries-EI_IE{eid}.0,{len(slug)}"
+            f"_IL.{len(slug) + 1},{len(slug) + 1 + len(place)}_IN{country}")
     found, seen = [], set()
     for n in range(1, 21):
         text = flat_text(read(session, f"{base}.htm" if n == 1 else f"{base}_IP{n}.htm"))
         rows = [(m[1].replace("Sort by Most salaries ", "").strip(), int(m[2].replace(",", "")),
-                 amount(m[3]), amount(m[4]), m[5]) for m in LISTED.finditer(text)]
+                 m[3], amount(m[4]), amount(m[6]), m[7]) for m in LISTED.finditer(text)]
         new = [r for r in rows if r not in seen]
         if not new:
             break
         seen.update(new)
-        found += [{"title": t, "reports": k, "low": lo, "high": hi, "per": per} for t, k, lo, hi, per in new]
+        found += [{"title": t, "reports": k, "currency": cur, "low": lo, "high": hi, "per": per}
+                  for t, k, cur, lo, hi, per in new]
     return found
 
 
@@ -128,6 +133,28 @@ def country_of(place: str, location: str) -> int | None:
     if place in COUNTRIES:
         return COUNTRIES[place]
     return next((cid for name, cid in COUNTRIES.items() if name.lower() in location.lower()), None)
+
+
+def lookup(session, markets, employers, companies, search, pattern, country, where, name) -> list[dict]:
+    """The market row and the company's rows for one company, country and role; each page is read
+    once per run (the dicts)."""
+    rows = []
+    if (search, country) not in markets:
+        markets[search, country] = market(session, search, country)
+    if m := markets[search, country]:
+        rows.append({"source": "market", "title": search, **m})
+    if name not in employers:
+        employers[name] = employer(session, name)
+    if found := employers[name]:
+        if (found, country) not in companies:
+            companies[found, country] = company_salaries(session, *found, country)
+        own = [r for r in companies[found, country] if re.search(pattern, r["title"], re.I)]
+        rows += [{"source": "company", **r} for r in own]
+        if not own:
+            print(f"  {found[0]} on Glassdoor: no salaries for this role in {where}")
+    else:
+        print("  the company is not on Glassdoor")
+    return rows
 
 
 def done_before(folder: Path) -> set:
@@ -156,7 +183,8 @@ def main() -> None:
     skip = done_before(out.parent) if every else set()
     stop = time.monotonic() + 12 * 3600
     markets, employers, companies = {}, {}, {}  # each page read once per run
-    with StealthySession(headless=True, solve_cloudflare=False) as session, open(out, "a", encoding="utf-8") as f:
+    with sync_playwright() as p, open(out, "a", encoding="utf-8") as f:
+        session = p.chromium.launch(headless=False, args=["--window-position=-32000,-32000"]).new_page()
         for job_id, title, company, role, place, location in jobs:
             search, pattern = SCIENTIST if "scien" in title.lower() else ROLES.get(role, ROLES["Data Engineer"])
             country = country_of(place or "", location or "")
@@ -167,27 +195,22 @@ def main() -> None:
                 print("\n12 hours are up: run it again to go on where it stopped")
                 break
             print(f"\n#{job_id} {title} @ {company} ({where}) - Glassdoor '{search}'", flush=True)
-            rows = []
-            if (search, country) not in markets:
-                markets[search, country] = market(session, search, country)
-            if m := markets[search, country]:
-                rows.append({"source": "market", "title": search, **m})
-            name = names.get(str(job_id), company)
-            if name not in employers:
-                employers[name] = employer(session, name)
-            if found := employers[name]:
-                if (found, country) not in companies:
-                    companies[found, country] = company_salaries(session, *found, country)
-                own = [r for r in companies[found, country] if re.search(pattern, r["title"], re.I)]
-                rows += [{"source": "company", **r} for r in own]
-                if not own:
-                    print(f"  {found[0]} on Glassdoor: no salaries for this role in {where}")
-            else:
-                print("  the company is not on Glassdoor")
+            if not country:  # Glassdoor would answer for the viewer's own country (Egypt), not the job's
+                print("  no country to look up: the role figure applies")
+                f.write(json.dumps({"job_id": job_id, "company": company, "country": where, "role": role,
+                                    "source": "none"}, ensure_ascii=False) + "\n")
+                continue
+            try:
+                rows = lookup(session, markets, employers, companies, search, pattern, country, where,
+                              names.get(str(job_id), company))
+            except Throttled:
+                print("\nGlassdoor still answers 429 or its bot check after four tries: stopped. Run it again later to go on.")
+                break
             for r in rows:
                 median = f", median {r['median']:,}" if r.get("median") else ""
                 reports = f" ({r['reports']} reports)" if r.get("reports") else ""
-                print(f"  {r['source']:8} {r['title']}{reports}: {r['low']:,} - {r['high']:,} /{r['per']}{median}")
+                print(f"  {r['source']:8} {r['title']}{reports}: {r['currency']} {r['low']:,} - {r['high']:,}"
+                      f" /{r['per']}{median}")
                 f.write(json.dumps({"job_id": job_id, "company": company, "country": where, "role": role,
                                     **r}, ensure_ascii=False) + "\n")
             if not rows:

@@ -194,8 +194,9 @@ ON CONFLICT (job_id) DO UPDATE SET status = 'saved', note = EXCLUDED.note, updat
 
 For a form's salary question, run `python scripts\salaries.py <job_id>` on the laptop (or with no
 ids for every saved job; `<job_id>=<name>` when the radar has the company in Arabic): it reads the
-company's own Glassdoor salaries for that role and country, and the role's market range, with the
-Scrapling stealth browser (job-radar's Playwright gets Glassdoor's bot check), into
+company's own Glassdoor salaries for that role and country, and the role's market range, with
+Playwright in an off-screen window (Glassdoor's bot check stops every headless mode; the company
+search is not yet verified past it), into
 `output/salaries/<date>.jsonl`. `--all` does every company, country and role in the radar's jobs, by
 hand only (never scheduled): it stops after 12 hours and a second run goes on where it stopped.
 The figure he asks for follows his rule in
