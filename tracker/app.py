@@ -142,6 +142,7 @@ with cv_tab:
             else:
                 with st.spinner("Reading your CV…"):
                     text = "\n".join(page.extract_text() or "" for page in PdfReader(pdf).pages)
+                    text = " ".join(text.split())  # some PDFs come out one word per line: "power\nbi" never matches
                 if not text.strip():
                     st.error("No text found in this PDF (a scanned image?): export it from Word or Google Docs as PDF.")
                 else:
