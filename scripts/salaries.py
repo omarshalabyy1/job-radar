@@ -10,10 +10,10 @@ Glassdoor would answer for the viewer's own country). Run it on the laptop, not 
                                                 # stops after 12 hours, skips what an earlier run read
 
 It uses Playwright's Chromium (playwright install chromium) in a real window placed off-screen:
-Glassdoor's bot check stops every headless mode; salary pages pass in a window, the company search
-was still challenged while another Glassdoor run shared the IP (tested 2026-10-07). An unpassed check
-counts as a 429. No login, no CAPTCHA solving. Glassdoor answered 429 at 7 pages at once, so
-this reads one page at a time and, on a 429, waits and tries the page again.
+Glassdoor's bot check stops every headless mode and passes only the first page of a browser session,
+so each page opens in a fresh context (tested 2026-10-07). An unpassed check counts as a 429. No
+login, no CAPTCHA solving. Glassdoor answered 429 at 7 pages at once, so this reads one page at a
+time and, on a 429, waits and tries the page again.
 
 Rows go to output/salaries/<date>.jsonl (gitignored) and are printed per job. Figures are EGP or the
 country's currency a month, as Glassdoor shows them. The salary you ask for is still your own rule
@@ -31,7 +31,7 @@ from urllib.parse import quote
 
 import psycopg
 from dotenv import load_dotenv
-from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
+from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -73,16 +73,21 @@ class Throttled(Exception):
 
 
 def read(session, url: str):
-    """One page; on a 429, wait a minute (then two, three) and ask again."""
+    """One page, in a fresh browser context: Glassdoor lets the first page of a session through and
+    challenges the next ones (tested 2026-10-07). On a 429 or an unpassed check, wait a minute (then
+    two, three) and ask again."""
     for attempt in range(4):
-        status = session.goto(url, wait_until="domcontentloaded", timeout=60000).status
+        for context in session.contexts:
+            context.close()
+        page, status = session.new_page(), None
         try:  # Cloudflare's "Just a moment..." JavaScript check passes on its own in a real window
-            session.wait_for_function("document.title !== 'Just a moment...'", timeout=30000)
-            session.wait_for_load_state("networkidle", timeout=10000)
-        except PlaywrightTimeout:
+            status = page.goto(url, wait_until="domcontentloaded", timeout=60000).status
+            page.wait_for_function("document.title !== 'Just a moment...'", timeout=30000)
+            page.wait_for_load_state("networkidle", timeout=10000)
+        except PlaywrightError:  # a check that never clears, or its reload cutting into ours
             pass
-        if status != 429 and session.title() != "Just a moment...":
-            return session
+        if status not in (None, 429) and page.title() != "Just a moment...":
+            return page
         print(f"  {status} or bot check from Glassdoor, waiting {60 * (attempt + 1)} s")
         time.sleep(60 * (attempt + 1))
     raise Throttled(url)
@@ -118,7 +123,7 @@ def company_salaries(session, slug: str, eid: str, country: int) -> list[dict]:
     found, seen = [], set()
     for n in range(1, 21):
         text = flat_text(read(session, f"{base}.htm" if n == 1 else f"{base}_IP{n}.htm"))
-        rows = [(m[1].replace("Sort by Most salaries ", "").strip(), int(m[2].replace(",", "")),
+        rows = [(re.sub(r"(?i)^sort by most salaries ", "", m[1]).strip(), int(m[2].replace(",", "")),
                  m[3], amount(m[4]), amount(m[6]), m[7]) for m in LISTED.finditer(text)]
         new = [r for r in rows if r not in seen]
         if not new:
@@ -184,7 +189,7 @@ def main() -> None:
     stop = time.monotonic() + 12 * 3600
     markets, employers, companies = {}, {}, {}  # each page read once per run
     with sync_playwright() as p, open(out, "a", encoding="utf-8") as f:
-        session = p.chromium.launch(headless=False, args=["--window-position=-32000,-32000"]).new_page()
+        session = p.chromium.launch(headless=False, args=["--window-position=-32000,-32000"])
         for job_id, title, company, role, place, location in jobs:
             search, pattern = SCIENTIST if "scien" in title.lower() else ROLES.get(role, ROLES["Data Engineer"])
             country = country_of(place or "", location or "")
