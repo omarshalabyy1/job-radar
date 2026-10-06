@@ -131,7 +131,8 @@ def pace(host: str) -> None:
     with TURNS:
         turn = max(time.monotonic(), NEXT_TURN.get(host, 0.0))
         NEXT_TURN[host] = turn + GAP.get(host, 1.0)
-    time.sleep(max(0.0, turn - time.monotonic()))
+    while (left := turn - time.monotonic()) > 0:  # Windows' sleep can wake a few milliseconds early
+        time.sleep(left)
 
 
 def request(method: str, url: str, **kwargs):
