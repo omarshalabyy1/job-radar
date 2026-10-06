@@ -6,7 +6,8 @@ Glassdoor would answer for the viewer's own country). Run it on the laptop, not 
     python scripts\salaries.py 18135 18394      # or these job ids
     python scripts\salaries.py 18394=CIB        # a job with its company's name on Glassdoor
                                                 # (when the radar has it in Arabic, say)
-    python scripts\salaries.py --all            # every company, country and role in the radar's jobs:
+    python scripts\salaries.py --all            # every company, country and role in the radar's jobs
+                                                # (not jobs only from LinkedIn alerts, which have no role):
                                                 # stops after 12 hours, skips what an earlier run read
 
 It uses Playwright's Chromium (playwright install chromium) in a real window placed off-screen:
@@ -116,12 +117,14 @@ def employer(session, company: str) -> tuple[str, str] | None:
 
 
 def company_salaries(session, slug: str, eid: str, country: int) -> list[dict]:
-    """All the company's salaries in the country, reading its pages until one adds nothing new."""
+    """The company's salaries in the country from its first 5 pages (Glassdoor lists the titles with
+    the most reports first; each page costs requests against its 429s), stopping early when a page
+    adds nothing new."""
     place = SLUG[country]
     base = (f"{GD}/Salary/{slug}-{place}-Salaries-EI_IE{eid}.0,{len(slug)}"
             f"_IL.{len(slug) + 1},{len(slug) + 1 + len(place)}_IN{country}")
     found, seen = [], set()
-    for n in range(1, 21):
+    for n in range(1, 6):
         text = flat_text(read(session, f"{base}.htm" if n == 1 else f"{base}_IP{n}.htm"))
         rows = [(re.sub(r"(?i)^sort by most salaries ", "", m[1]).strip(), int(m[2].replace(",", "")),
                  m[3], amount(m[4]), amount(m[6]), m[7]) for m in LISTED.finditer(text)]
@@ -176,7 +179,7 @@ def main() -> None:
         names = dict(a.split("=", 1) for a in args if "=" in a)  # job id -> Glassdoor name
         if every:  # one job for each company, country and role
             jobs = conn.execute("SELECT DISTINCT ON (company, place, role) job_id, title, company, role, place,"
-                                " location FROM mart.job_status WHERE company <> ''"
+                                " location FROM mart.job_status WHERE company <> '' AND role <> 'More from your LinkedIn alerts'"
                                 " ORDER BY company, place, role, job_id").fetchall()
         else:
             ids = [int(a.split("=")[0]) for a in args] or [i for (i,) in conn.execute(
