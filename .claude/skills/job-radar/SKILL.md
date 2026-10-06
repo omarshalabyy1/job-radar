@@ -191,6 +191,13 @@ ON CONFLICT (job_id) DO UPDATE SET status = 'saved', note = EXCLUDED.note, updat
 
 ## 5. Apply with him - one job at a time, each with his yes
 
+For a form's salary question, run `python scripts\salaries.py <job_id>` on the laptop (or with no
+ids for every saved job; `<job_id>=<name>` when the radar has the company in Arabic): it reads the
+company's own Glassdoor salaries for that role and country, and the role's market range, with the
+Scrapling stealth browser (job-radar's Playwright gets Glassdoor's bot check), into
+`output/salaries/<date>.jsonl`. The figure he asks for follows his rule in
+`output/applications/application-answers.md`.
+
 Applying sends his personal data in his name, so it never happens on its own: for one job, show
 what will be submitted (which CV, the letter, his answers to the form's questions, each answer
 run through the humanizer skill first) and ask. Only

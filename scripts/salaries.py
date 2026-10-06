@@ -1,0 +1,169 @@
+r"""What the jobs you are applying to pay, from Glassdoor: for each job, the company's own salaries
+for that role in that country, and the role's market range there. Run it on the laptop, not in Docker:
+
+    python scripts\salaries.py                  # every job you saved in the tracker
+    python scripts\salaries.py 18135 18394      # or these job ids
+    python scripts\salaries.py 18394=CIB        # a job with its company's name on Glassdoor
+                                                # (when the radar has it in Arabic, say)
+
+It needs Scrapling (pip install "scrapling[fetchers]", then scrapling install): Glassdoor shows a
+bot check to job-radar's own headless browser (rendered()), and Scrapling's stealth browser passes
+it (tested 2026-10-06). No login, no CAPTCHA solving. Glassdoor answered 429 at 7 pages at once, so
+this reads one page at a time and, on a 429, waits and tries the page again.
+
+Rows go to output/salaries/<date>.jsonl (gitignored) and are printed per job. Figures are EGP or the
+country's currency a month, as Glassdoor shows them. The salary you ask for is still your own rule
+(output/applications/application-answers.md); this is the evidence behind it.
+"""
+
+import json
+import os
+import re
+import sys
+import time
+from datetime import date
+from pathlib import Path
+
+import psycopg
+from dotenv import load_dotenv
+from scrapling.fetchers import StealthySession
+
+ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT / ".env")
+GD = "https://www.glassdoor.com"
+
+# Glassdoor's country ids, each checked on its role page ("How much does a ... make in <country>?")
+COUNTRIES = {"Egypt": 69, "USA": 1, "United States": 1, "United Kingdom": 2, "UK": 2, "Canada": 3,
+             "UAE": 6, "United Arab Emirates": 6, "Germany": 96, "Saudi Arabia": 207, "Spain": 219,
+             "Netherlands": 178}
+SLUG = {1: "United-States", 2: "United-Kingdom", 3: "Canada", 6: "United-Arab-Emirates", 69: "Egypt",
+        96: "Germany", 207: "Saudi-Arabia", 219: "Spain", 178: "Netherlands"}
+
+# the Glassdoor title searched for each job-radar role, and the words that mark the same role
+ROLES = {"Data Engineer": ("data engineer", r"data engineer"),
+         "AI & Data Engineer": ("data engineer", r"data engineer|ai engineer"),
+         "AI Engineer (NLP, LLM, agents, RAG)": ("ai engineer", r"\bai engineer|machine learning|\bml engineer"),
+         "BI Developer": ("business intelligence developer", r"\bbi\b|business intelligence|power bi"),
+         "Data Analyst": ("data analyst", r"data analyst|analytics")}
+SCIENTIST = ("data scientist", r"data scien")
+
+MONEY = r"(?:[A-Z]{3}\s?|[$£€]\s?)([\d,.]+K?)"
+HEAD = re.compile(rf"Total pay range\s+{MONEY}\s*-\s*{MONEY}\s*/(mo|yr)\s+{MONEY}\s*/(?:mo|yr)\s+Median total pay")
+LISTED = re.compile(rf"([A-Z][\w&/,()\- ]{{2,60}}?)\s+([\d,]+) Salaries submitted\s+{MONEY}\s*-\s*{MONEY}\s*/(mo|yr)")
+
+
+def amount(text: str) -> int:
+    text = text.replace(",", "")
+    return round(float(text[:-1]) * 1000) if text.endswith("K") else round(float(text))
+
+
+def flat_text(page) -> str:
+    """The page's text on one line; Glassdoor splits a figure over several tags ("EGP 1" "3K")."""
+    text = re.sub(r"\s+", " ", page.get_all_text(separator="\n", ignore_tags=("script", "style")))
+    return re.sub(r"(\d) (?=\d|K\b)", r"\1", text)
+
+
+def read(session, url: str):
+    """One page; on a 429, wait a minute (then two, three) and ask again."""
+    for attempt in range(4):
+        page = session.fetch(url, network_idle=True)
+        if page.status != 429:
+            return page
+        print(f"  429 from Glassdoor, waiting {60 * (attempt + 1)} s")
+        time.sleep(60 * (attempt + 1))
+    return page
+
+
+def market(session, title: str, country: int | None) -> dict | None:
+    """The role's pay range and median in the country (worldwide when the country is unknown)."""
+    slug = title.replace(" ", "-")
+    if country:
+        place = SLUG[country].lower()
+        url = (f"{GD}/Salaries/{place}-{slug}-salary-SRCH_IL.0,{len(place)}_IN{country}"
+               f"_KO{len(place) + 1},{len(place) + 1 + len(slug)}.htm")
+    else:
+        url = f"{GD}/Salaries/{slug}-salary-SRCH_KO0,{len(slug)}.htm"
+    m = HEAD.search(flat_text(read(session, url)))
+    return m and {"low": amount(m[1]), "high": amount(m[2]), "per": m[3], "median": amount(m[4]), "url": url}
+
+
+def employer(session, company: str) -> tuple[str, str] | None:
+    """The company's Glassdoor slug and id: the first company Glassdoor's search finds whose name
+    starts with the name searched for ("CIB" finds CIBC first, which is not it)."""
+    page = read(session, f"{GD}/Search/results.htm?keyword={company}")
+    wanted = re.sub(r"\W+", "-", company.strip()).lower()
+    for href in page.css("a::attr(href)").getall():
+        m = re.search(r"/Overview/Working-at-(.+?)-EI_IE(\d+)\.", href)
+        if m and (m[1].lower() == wanted or m[1].lower().startswith(wanted + "-")):
+            return m[1], m[2]
+    return None
+
+
+def company_salaries(session, slug: str, eid: str, country: int | None, pattern: str) -> list[dict]:
+    """The company's salaries in the country (everywhere when unknown) whose title matches the role,
+    reading its pages until one adds nothing new."""
+    if country:
+        place = SLUG[country]
+        base = (f"{GD}/Salary/{slug}-{place}-Salaries-EI_IE{eid}.0,{len(slug)}"
+                f"_IL.{len(slug) + 1},{len(slug) + 1 + len(place)}_IN{country}")
+    else:
+        base = f"{GD}/Salary/{slug}-Salaries-E{eid}"
+    found, seen = [], set()
+    for n in range(1, 21):
+        text = flat_text(read(session, f"{base}.htm" if n == 1 else f"{base}_IP{n}.htm"))
+        rows = [(m[1].replace("Sort by Most salaries ", "").strip(), int(m[2].replace(",", "")),
+                 amount(m[3]), amount(m[4]), m[5]) for m in LISTED.finditer(text)]
+        new = [r for r in rows if r not in seen]
+        if not new:
+            break
+        seen.update(new)
+        found += [{"title": t, "reports": k, "low": lo, "high": hi, "per": per}
+                  for t, k, lo, hi, per in new if re.search(pattern, t, re.I)]
+    return found
+
+
+def country_of(place: str, location: str) -> int | None:
+    if place in COUNTRIES:
+        return COUNTRIES[place]
+    return next((cid for name, cid in COUNTRIES.items() if name.lower() in location.lower()), None)
+
+
+def main() -> None:
+    with psycopg.connect(host="localhost", port=5433, dbname="jobradar", user="jobradar",
+                         password=os.environ["WAREHOUSE_PASSWORD"]) as conn:
+        names = dict(a.split("=", 1) for a in sys.argv[1:] if "=" in a)  # job id -> Glassdoor name
+        ids = [int(a.split("=")[0]) for a in sys.argv[1:]] or [i for (i,) in conn.execute(
+            "SELECT job_id FROM core.application WHERE status = 'saved' ORDER BY job_id")]
+        jobs = conn.execute("SELECT job_id, title, company, role, place, location FROM mart.job_status"
+                            " WHERE job_id = ANY(%s) ORDER BY job_id", (ids,)).fetchall()
+    out = ROOT / "output" / "salaries" / f"{date.today()}.jsonl"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with StealthySession(headless=True, solve_cloudflare=False) as session, open(out, "a", encoding="utf-8") as f:
+        for job_id, title, company, role, place, location in jobs:
+            search, pattern = SCIENTIST if "scien" in title.lower() else ROLES.get(role, ROLES["Data Engineer"])
+            country = country_of(place or "", location or "")
+            where = SLUG.get(country, "worldwide")
+            print(f"\n#{job_id} {title} @ {company} ({where}) - Glassdoor '{search}'")
+            rows = []
+            if m := market(session, search, country):
+                rows.append({"source": "market", "title": search, **m})
+            if found := employer(session, names.get(str(job_id), company)):
+                own = company_salaries(session, *found, country, pattern)
+                rows += [{"source": "company", **r} for r in own]
+                if not own:
+                    print(f"  {found[0]} on Glassdoor: no salaries for this role in {where}")
+            else:
+                print("  the company is not on Glassdoor")
+            for r in rows:
+                median = f", median {r['median']:,}" if r.get("median") else ""
+                reports = f" ({r['reports']} reports)" if r.get("reports") else ""
+                print(f"  {r['source']:8} {r['title']}{reports}: {r['low']:,} - {r['high']:,} /{r['per']}{median}")
+                f.write(json.dumps({"job_id": job_id, "company": company, "country": where, "role": role,
+                                    **r}, ensure_ascii=False) + "\n")
+            if not rows:
+                print("  no salary found")
+    print(f"\nSaved to {out}")
+
+
+if __name__ == "__main__":
+    main()
