@@ -45,11 +45,11 @@ freelance. Jobs at your companies get a ⭐.
 
 **Also on your laptop**
 
-- 📋 **Tracker**, http://127.0.0.1:8501: filter jobs, mark saved / applied / interview / offer,
+- 📋 **Tracker**, port 8501: filter jobs, mark saved / applied / interview / offer,
   see the skills each role asks for, upload your CV, see how each company's careers page is read.
-- 🌀 **Airflow**, http://127.0.0.1:8081: every run, every task's log, and *Trigger* to run now.
+- 🌀 **Airflow**, port 8081: every run, every task's log, and *Trigger* to run now.
 - 🤖 **Claude**, `/job-radar` in Claude Code: reviews your matches, tailors your CV, helps you apply.
-- 🗄️ **SQL**, `localhost:5433` (database and user `jobradar`): query the `mart` views.
+- 🗄️ **SQL**, port 5433 (database and user `jobradar`): query the `mart` views.
 
 <br clear="right">
 

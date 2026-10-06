@@ -105,7 +105,7 @@ You should see `job-radar-warehouse-1`, `job-radar-airflow-1` and `job-radar-tra
 
 ### Step 6 · Run your first collect
 
-1. Open Airflow at http://127.0.0.1:8081 (no login).
+1. Open Airflow on port 8081 (no login).
 2. You see three DAGs: `job_radar` (the collect) and the two email ones.
 3. Click `job_radar`, then **Trigger** (top right).
 4. Wait 3 to 5 minutes. Every task box turns green; click a box and **Logs** to read what each
@@ -113,7 +113,7 @@ You should see `job-radar-warehouse-1`, `job-radar-airflow-1` and `job-radar-tra
 
 ### Step 7 · Open your tracker and add your CV
 
-1. Open the tracker at http://127.0.0.1:8501. The **Jobs** tab lists everything the collect kept.
+1. Open the tracker on port 8501. The **Jobs** tab lists everything the collect kept.
 2. Go to the **CV** tab and upload your CV as a PDF. From now on every job shows how much of what
    it asks for your CV covers, and Claude can tailor applications from it.
 
