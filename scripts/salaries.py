@@ -5,6 +5,8 @@ for that role in that country, and the role's market range there. Run it on the 
     python scripts\salaries.py 18135 18394      # or these job ids
     python scripts\salaries.py 18394=CIB        # a job with its company's name on Glassdoor
                                                 # (when the radar has it in Arabic, say)
+    python scripts\salaries.py --all            # every company, country and role in the radar's jobs:
+                                                # stops after 12 hours, skips what an earlier run read
 
 It needs Scrapling (pip install "scrapling[fetchers]", then scrapling install): Glassdoor shows a
 bot check to job-radar's own headless browser (rendered()), and Scrapling's stealth browser passes
@@ -23,6 +25,7 @@ import sys
 import time
 from datetime import date
 from pathlib import Path
+from urllib.parse import quote
 
 import psycopg
 from dotenv import load_dotenv
@@ -90,7 +93,7 @@ def market(session, title: str, country: int | None) -> dict | None:
 def employer(session, company: str) -> tuple[str, str] | None:
     """The company's Glassdoor slug and id: the first company Glassdoor's search finds whose name
     starts with the name searched for ("CIB" finds CIBC first, which is not it)."""
-    page = read(session, f"{GD}/Search/results.htm?keyword={company}")
+    page = read(session, f"{GD}/Search/results.htm?keyword={quote(company)}")
     wanted = re.sub(r"\W+", "-", company.strip()).lower()
     for href in page.css("a::attr(href)").getall():
         m = re.search(r"/Overview/Working-at-(.+?)-EI_IE(\d+)\.", href)
@@ -99,9 +102,9 @@ def employer(session, company: str) -> tuple[str, str] | None:
     return None
 
 
-def company_salaries(session, slug: str, eid: str, country: int | None, pattern: str) -> list[dict]:
-    """The company's salaries in the country (everywhere when unknown) whose title matches the role,
-    reading its pages until one adds nothing new."""
+def company_salaries(session, slug: str, eid: str, country: int | None) -> list[dict]:
+    """All the company's salaries in the country (everywhere when unknown), reading its pages until
+    one adds nothing new."""
     if country:
         place = SLUG[country]
         base = (f"{GD}/Salary/{slug}-{place}-Salaries-EI_IE{eid}.0,{len(slug)}"
@@ -117,8 +120,7 @@ def company_salaries(session, slug: str, eid: str, country: int | None, pattern:
         if not new:
             break
         seen.update(new)
-        found += [{"title": t, "reports": k, "low": lo, "high": hi, "per": per}
-                  for t, k, lo, hi, per in new if re.search(pattern, t, re.I)]
+        found += [{"title": t, "reports": k, "low": lo, "high": hi, "per": per} for t, k, lo, hi, per in new]
     return found
 
 
@@ -128,27 +130,55 @@ def country_of(place: str, location: str) -> int | None:
     return next((cid for name, cid in COUNTRIES.items() if name.lower() in location.lower()), None)
 
 
+def done_before(folder: Path) -> set:
+    """(company, country, role) already read by an earlier run, found or not."""
+    return {(r["company"], r["country"], r["role"]) for path in folder.glob("*.jsonl")
+            for r in map(json.loads, path.read_text(encoding="utf-8").splitlines())}
+
+
 def main() -> None:
+    every = "--all" in sys.argv
+    args = [a for a in sys.argv[1:] if a != "--all"]
     with psycopg.connect(host="localhost", port=5433, dbname="jobradar", user="jobradar",
                          password=os.environ["WAREHOUSE_PASSWORD"]) as conn:
-        names = dict(a.split("=", 1) for a in sys.argv[1:] if "=" in a)  # job id -> Glassdoor name
-        ids = [int(a.split("=")[0]) for a in sys.argv[1:]] or [i for (i,) in conn.execute(
-            "SELECT job_id FROM core.application WHERE status = 'saved' ORDER BY job_id")]
-        jobs = conn.execute("SELECT job_id, title, company, role, place, location FROM mart.job_status"
-                            " WHERE job_id = ANY(%s) ORDER BY job_id", (ids,)).fetchall()
+        names = dict(a.split("=", 1) for a in args if "=" in a)  # job id -> Glassdoor name
+        if every:  # one job for each company, country and role
+            jobs = conn.execute("SELECT DISTINCT ON (company, place, role) job_id, title, company, role, place,"
+                                " location FROM mart.job_status WHERE company <> ''"
+                                " ORDER BY company, place, role, job_id").fetchall()
+        else:
+            ids = [int(a.split("=")[0]) for a in args] or [i for (i,) in conn.execute(
+                "SELECT job_id FROM core.application WHERE status = 'saved' ORDER BY job_id")]
+            jobs = conn.execute("SELECT job_id, title, company, role, place, location FROM mart.job_status"
+                                " WHERE job_id = ANY(%s) ORDER BY job_id", (ids,)).fetchall()
     out = ROOT / "output" / "salaries" / f"{date.today()}.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
+    skip = done_before(out.parent) if every else set()
+    stop = time.monotonic() + 12 * 3600
+    markets, employers, companies = {}, {}, {}  # each page read once per run
     with StealthySession(headless=True, solve_cloudflare=False) as session, open(out, "a", encoding="utf-8") as f:
         for job_id, title, company, role, place, location in jobs:
             search, pattern = SCIENTIST if "scien" in title.lower() else ROLES.get(role, ROLES["Data Engineer"])
             country = country_of(place or "", location or "")
             where = SLUG.get(country, "worldwide")
-            print(f"\n#{job_id} {title} @ {company} ({where}) - Glassdoor '{search}'")
+            if (company, where, role) in skip:
+                continue
+            if time.monotonic() > stop:
+                print("\n12 hours are up: run it again to go on where it stopped")
+                break
+            print(f"\n#{job_id} {title} @ {company} ({where}) - Glassdoor '{search}'", flush=True)
             rows = []
-            if m := market(session, search, country):
+            if (search, country) not in markets:
+                markets[search, country] = market(session, search, country)
+            if m := markets[search, country]:
                 rows.append({"source": "market", "title": search, **m})
-            if found := employer(session, names.get(str(job_id), company)):
-                own = company_salaries(session, *found, country, pattern)
+            name = names.get(str(job_id), company)
+            if name not in employers:
+                employers[name] = employer(session, name)
+            if found := employers[name]:
+                if (found, country) not in companies:
+                    companies[found, country] = company_salaries(session, *found, country)
+                own = [r for r in companies[found, country] if re.search(pattern, r["title"], re.I)]
                 rows += [{"source": "company", **r} for r in own]
                 if not own:
                     print(f"  {found[0]} on Glassdoor: no salaries for this role in {where}")
@@ -162,6 +192,9 @@ def main() -> None:
                                     **r}, ensure_ascii=False) + "\n")
             if not rows:
                 print("  no salary found")
+                f.write(json.dumps({"job_id": job_id, "company": company, "country": where, "role": role,
+                                    "source": "none"}, ensure_ascii=False) + "\n")
+            f.flush()
     print(f"\nSaved to {out}")
 
 
