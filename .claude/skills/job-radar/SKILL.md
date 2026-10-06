@@ -172,6 +172,17 @@ holding:
   own words where his CV backs them. Never invent an employer, title, date, degree, skill or
   number - a CV that claims what he can't show loses the interview. One to two pages.
   Never put a photo on a CV, for any country.
+  Layout: always the look of his two favourite CVs (two PDFs on his Desktop; ask him which if they
+  are not named in memory; layout only, never their content). One column, A4, plain
+  sans-serif (Calibri-like, about 10 pt), narrow margins, no photo, icons or graphics, so ATS reads
+  it. Header centred: his name large and bold in navy, a "Role | Specialty" line under it, then one
+  contact line (city, phone, email, github.com/omarshalabyy1, omarlabs.dev) separated by " • ".
+  Section headings in bold navy capitals with a full-width navy rule under them, in this order:
+  Professional Summary (4-5 lines), Core Skills (groups, each a bold "Label:" then a comma list),
+  Professional Experience, Projects, Education, Certifications, Additional (languages). Each role:
+  bold title, " — " company | city in grey, dates right-aligned with the length in brackets
+  ("Sep 2025 – Present (1 yr)"), then 3-5 bullets that start with a verb and end with a result or
+  number. Each project the same, plus an italic "Technologies:" line under its bullets.
 - `cover-letter.md` - at most one page: why this company, why him for this role (two or three
   facts from his CV that answer the job's main needs), a short close. Plain, specific English.
   Write it with the copywriting skill so it persuades the reader to call him: open with what he
