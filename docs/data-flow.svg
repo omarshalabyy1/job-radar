@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 948" width="1000" height="948" role="img" aria-label="Data flow, table by table, rows on 6 October 2026: the Airflow DAG job_radar runs ten extract tasks side by side (Indeed and Jooble, Bayt, 10 remote boards, Wuzzuf and Tanqeeb, NaukriGulf GulfTalent and Dubizzle, Workable, freehire.me, your companies' career pages, the 28,000-company feed and your Gmail alerts) into raw.job_posting (4,143 rows, each posting once by source and link). transform keeps one row per job in core.job (688 rows), describe adds descriptions and match_skills stores core.job_skill (2,403) and core.cv_skill (0) from core.skill (54 skills). core.company (121) comes from settings.yaml, core.cv (0) and core.application (0) from the tracker. The mart views job_status (688), skill_demand (186) and jobs_daily (259) feed the tracker, the two emails, the career-ops export and SQL.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="0.55" stop-color="#10213A"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#64748B"/>
+    </marker>
+    <marker id="amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#F59E0B"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", -apple-system, Helvetica, Arial, sans-serif; }
+    .title { font-size: 21px; font-weight: 700; fill: #FFFFFF; }
+    .sub { font-size: 13.5px; fill: #CBD5E1; }
+    .layer { font-size: 14px; font-weight: 700; fill: #0B1220; }
+    .where { font-size: 12px; fill: #94A3B8; }
+    .name { font-size: 13px; fill: #F1F5F9; }
+    .small { font-size: 12.5px; fill: #F1F5F9; }
+    .count { font-size: 11.5px; fill: #94A3B8; }
+    .col { font-size: 12.5px; fill: #E2E8F0; }
+    .key { font-size: 11px; font-weight: 700; }
+    .task { font-size: 12px; font-weight: 700; fill: #0B1220; }
+    .edge { fill: none; stroke: #64748B; stroke-width: 1.4; }
+  </style>
+  <rect width="1000" height="948" rx="22" fill="url(#bg)"/>
+  <text x="40" y="50" class="title">Data flow, table by table</text>
+  <text x="40" y="74" class="sub">Every table in the warehouse, the tables it is built from, and its row count on 6 October 2026.</text>
+  <rect x="24" y="96" width="196" height="26" rx="13" fill="#94A3B8"/><text x="122.0" y="114" class="layer" text-anchor="middle">Sources</text>
+  <text x="122.0" y="138" class="where" text-anchor="middle">by extract task, and your inputs</text>
+  <rect x="250" y="96" width="160" height="26" rx="13" fill="#3B82F6"/><text x="330.0" y="114" class="layer" text-anchor="middle">1  raw (bronze)</text>
+  <text x="330.0" y="138" class="where" text-anchor="middle">each posting once</text>
+  <rect x="440" y="96" width="160" height="26" rx="13" fill="#0EA5E9"/><text x="520.0" y="114" class="layer" text-anchor="middle">2  core (silver)</text>
+  <text x="520.0" y="138" class="where" text-anchor="middle">one row per job</text>
+  <rect x="650" y="96" width="160" height="26" rx="13" fill="#14B8A6"/><text x="730.0" y="114" class="layer" text-anchor="middle">3  mart (gold)</text>
+  <text x="730.0" y="138" class="where" text-anchor="middle">views</text>
+  <rect x="840" y="96" width="136" height="26" rx="13" fill="#22C55E"/><text x="908.0" y="114" class="layer" text-anchor="middle">4  Outputs</text>
+  <text x="908.0" y="138" class="where" text-anchor="middle">what you see</text>
+  <rect x="24" y="206.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="220.0" class="key" fill="#FBBF24">extract_boards</text><text x="34" y="234.0" class="count" style="fill:#E2E8F0;font-size:11.5px">Indeed, Jooble</text>
+  <path d="M220 223.0 C235.0 223.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="244.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="258.0" class="key" fill="#FBBF24">extract_bayt</text><text x="34" y="272.0" class="count" style="fill:#E2E8F0;font-size:11.5px">Bayt</text>
+  <path d="M220 261.0 C235.0 261.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="282.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="296.0" class="key" fill="#FBBF24">extract_remote</text><text x="34" y="310.0" class="count" style="fill:#E2E8F0;font-size:11.5px">10 remote boards</text>
+  <path d="M220 299.0 C235.0 299.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="320.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="334.0" class="key" fill="#FBBF24">extract_egypt</text><text x="34" y="348.0" class="count" style="fill:#E2E8F0;font-size:11.5px">Wuzzuf, Tanqeeb</text>
+  <path d="M220 337.0 C235.0 337.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="358.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="372.0" class="key" fill="#FBBF24">extract_gulf</text><text x="34" y="386.0" class="count" style="fill:#E2E8F0;font-size:11.5px">NaukriGulf, GulfTalent, Dubizzle</text>
+  <path d="M220 375.0 C235.0 375.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="396.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="410.0" class="key" fill="#FBBF24">extract_workable</text><text x="34" y="424.0" class="count" style="fill:#E2E8F0;font-size:11.5px">Workable</text>
+  <path d="M220 413.0 C235.0 413.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="434.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="448.0" class="key" fill="#FBBF24">extract_freehire</text><text x="34" y="462.0" class="count" style="fill:#E2E8F0;font-size:11.5px">freehire.me</text>
+  <path d="M220 451.0 C235.0 451.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="471.99999999999994" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="485.99999999999994" class="key" fill="#FBBF24">extract_companies</text><text x="34" y="499.99999999999994" class="count" style="fill:#E2E8F0;font-size:11.5px">your companies' career pages</text>
+  <path d="M220 488.99999999999994 C235.0 488.99999999999994 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="510.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="524.0" class="key" fill="#FBBF24">extract_portals</text><text x="34" y="538.0" class="count" style="fill:#E2E8F0;font-size:11.5px">28,000-company feed</text>
+  <path d="M220 527.0 C235.0 527.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="548.0" width="196" height="34" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.7"/><text x="34" y="562.0" class="key" fill="#FBBF24">extract_email</text><text x="34" y="576.0" class="count" style="fill:#E2E8F0;font-size:11.5px">your Gmail alerts</text>
+  <path d="M220 565.0 C235.0 565.0 235.0 385.0 248 385.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="150" width="196" height="30" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.75"/><text x="34" y="170" class="small">settings.yaml: companies</text>
+  <rect x="24" y="630" width="196" height="30" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.75"/><text x="34" y="650" class="small">sql/schema.sql: skills</text>
+  <rect x="24" y="670" width="196" height="30" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.75"/><text x="34" y="690" class="small">tracker, CV tab</text>
+  <rect x="24" y="710" width="196" height="30" rx="7" fill="#13233D" stroke="#94A3B8" stroke-opacity="0.75"/><text x="34" y="730" class="small">tracker, Jobs tab</text>
+  <rect x="250" y="370.0" width="160" height="30" rx="7" fill="#13233D" stroke="#3B82F6" stroke-opacity="0.75"/><text x="260" y="390.0" class="name">job_posting</text><text x="402" y="390.0" class="count" text-anchor="end">4,143</text>
+  <rect x="440" y="150" width="160" height="30" rx="7" fill="#13233D" stroke="#0EA5E9" stroke-opacity="0.75"/><text x="450" y="170" class="name">company</text><text x="592" y="170" class="count" text-anchor="end">121</text>
+  <rect x="440" y="370.0" width="160" height="30" rx="7" fill="#13233D" stroke="#0EA5E9" stroke-opacity="0.75"/><text x="450" y="390.0" class="name">job</text><text x="592" y="390.0" class="count" text-anchor="end">688</text>
+  <rect x="440" y="410.0" width="160" height="30" rx="7" fill="#13233D" stroke="#0EA5E9" stroke-opacity="0.75"/><text x="450" y="430.0" class="name">job_skill</text><text x="592" y="430.0" class="count" text-anchor="end">2,403</text>
+  <rect x="440" y="450.0" width="160" height="30" rx="7" fill="#13233D" stroke="#0EA5E9" stroke-opacity="0.75"/><text x="450" y="470.0" class="name">skill</text><text x="592" y="470.0" class="count" text-anchor="end">54</text>
+  <rect x="440" y="490.0" width="160" height="30" rx="7" fill="#13233D" stroke="#0EA5E9" stroke-opacity="0.75"/><text x="450" y="510.0" class="name">cv_skill</text><text x="592" y="510.0" class="count" text-anchor="end">0</text>
+  <rect x="440" y="530.0" width="160" height="30" rx="7" fill="#13233D" stroke="#0EA5E9" stroke-opacity="0.75"/><text x="450" y="550.0" class="name">cv</text><text x="592" y="550.0" class="count" text-anchor="end">0</text>
+  <rect x="440" y="570.0" width="160" height="30" rx="7" fill="#13233D" stroke="#0EA5E9" stroke-opacity="0.75"/><text x="450" y="590.0" class="name">application</text><text x="592" y="590.0" class="count" text-anchor="end">0</text>
+  <rect x="650" y="390" width="160" height="30" rx="7" fill="#13233D" stroke="#14B8A6" stroke-opacity="0.75" stroke-dasharray="4 3"/><text x="660" y="410" class="name">job_status</text><text x="802" y="410" class="count" text-anchor="end">688</text>
+  <rect x="650" y="490.0" width="160" height="30" rx="7" fill="#13233D" stroke="#14B8A6" stroke-opacity="0.75" stroke-dasharray="4 3"/><text x="660" y="510.0" class="name">skill_demand</text><text x="802" y="510.0" class="count" text-anchor="end">186</text>
+  <rect x="650" y="630" width="160" height="30" rx="7" fill="#13233D" stroke="#14B8A6" stroke-opacity="0.75" stroke-dasharray="4 3"/><text x="660" y="650" class="name">jobs_daily</text><text x="802" y="650" class="count" text-anchor="end">259</text>
+  <line x1="410" y1="385.0" x2="438" y2="385.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M220 165.0 C330.0 165.0 330.0 165.0 438 165.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M220 645.0 C330.0 645.0 330.0 465.0 438 465.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M220 685.0 C330.0 685.0 330.0 545.0 438 545.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M220 725.0 C330.0 725.0 330.0 585.0 438 585.0" class="edge" marker-end="url(#arrow)"/>
+  <line x1="490" y1="400.0" x2="490" y2="409.0" class="edge" marker-end="url(#arrow)"/>
+  <line x1="550" y1="450.0" x2="550" y2="441.0" class="edge" marker-end="url(#arrow)"/>
+  <line x1="490" y1="480.0" x2="490" y2="489.0" class="edge" marker-end="url(#arrow)"/>
+  <line x1="550" y1="530.0" x2="550" y2="521.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 385.0 C625.0 385.0 625.0 405.0 648 405.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 425.0 C625.0 425.0 625.0 405.0 648 405.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 505.0 C625.0 505.0 625.0 405.0 648 405.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 545.0 C625.0 545.0 625.0 405.0 648 405.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 585.0 C625.0 585.0 625.0 405.0 648 405.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 385.0 C625.0 385.0 625.0 505.0 648 505.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 425.0 C625.0 425.0 625.0 505.0 648 505.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 465.0 C625.0 465.0 625.0 505.0 648 505.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 385.0 C625.0 385.0 625.0 645.0 648 645.0" class="edge" marker-end="url(#arrow)"/>
+  <rect x="840" y="150" width="136" height="168" rx="12" fill="#13233D" stroke="#22C55E" stroke-opacity="0.75"/>
+  <text x="908" y="170" class="where" text-anchor="middle">tracker, port 8501</text>
+  <rect x="848" y="180" width="120" height="26" rx="13" fill="#166534"/><text x="908" y="198" class="small" style="font-size:11.5px" text-anchor="middle">Jobs</text>
+  <rect x="848" y="214" width="120" height="26" rx="13" fill="#166534"/><text x="908" y="232" class="small" style="font-size:11.5px" text-anchor="middle">Skills in demand</text>
+  <rect x="848" y="248" width="120" height="26" rx="13" fill="#166534"/><text x="908" y="266" class="small" style="font-size:11.5px" text-anchor="middle">Companies</text>
+  <rect x="848" y="282" width="120" height="26" rx="13" fill="#166534"/><text x="908" y="300" class="small" style="font-size:11.5px" text-anchor="middle">CV</text>
+  <rect x="840" y="334.0" width="136" height="104" rx="12" fill="#13233D" stroke="#22C55E" stroke-opacity="0.75"/>
+  <text x="908" y="354.0" class="where" text-anchor="middle">2 emails, 12:30pm</text>
+  <rect x="848" y="364.0" width="120" height="26" rx="13" fill="#166534"/><text x="908" y="382.0" class="small" style="font-size:11.5px" text-anchor="middle">Egypt</text>
+  <rect x="848" y="398.0" width="120" height="26" rx="13" fill="#166534"/><text x="908" y="416.0" class="small" style="font-size:11.5px" text-anchor="middle">Outside Egypt</text>
+  <rect x="840" y="474.0" width="136" height="72" rx="12" fill="#13233D" stroke="#22C55E" stroke-opacity="0.75"/>
+  <text x="852" y="496.0" class="small" font-weight="700">output/career-ops/</text>
+  <text x="852" y="516.0" class="count" style="fill:#CBD5E1;font-size:12px">pipeline.md, best</text>
+  <text x="852" y="532.0" class="count" style="fill:#CBD5E1;font-size:12px">matches; cv.md</text>
+  <rect x="840" y="606.0" width="136" height="72" rx="12" fill="#13233D" stroke="#22C55E" stroke-opacity="0.75"/>
+  <text x="852" y="628.0" class="small" font-weight="700">SQL</text>
+  <text x="852" y="648.0" class="count" style="fill:#CBD5E1;font-size:12px">localhost:5433, any</text>
+  <text x="852" y="664.0" class="count" style="fill:#CBD5E1;font-size:12px">SQL tool</text>
+  <path d="M810 405.0 C825.0 405.0 825.0 210 838 210" class="edge" marker-end="url(#arrow)"/>
+  <path d="M810 505.0 C825.0 505.0 825.0 246 838 246" class="edge" marker-end="url(#arrow)"/>
+  <path d="M810 405.0 C825.0 405.0 825.0 386.0 838 386.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M810 405.0 C825.0 405.0 825.0 510.0 838 510.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M810 645.0 C825.0 645.0 825.0 642.0 838 642.0" class="edge" marker-end="url(#arrow)"/>
+  <path d="M600 165.0 H838" class="edge" marker-end="url(#arrow)"/>
+  <rect x="24" y="764" width="952" height="96" rx="12" fill="#F59E0B" fill-opacity="0.08" stroke="#F59E0B" stroke-opacity="0.6"/>
+  <text x="38" y="786" class="name" font-weight="700" style="fill:#FBBF24">Airflow</text>
+  <text x="38" y="814" class="where">job_radar, 12pm</text>
+  <rect x="214" y="796" width="65.2" height="26" rx="13" fill="#F59E0B"/><text x="246.6" y="814" class="task" text-anchor="middle">schema</text>
+  <line x1="283.2" y1="809" x2="296.2" y2="809" class="edge" stroke="#F59E0B" marker-end="url(#amber)"/>
+  <rect x="299.2" y="796" width="115.60000000000001" height="26" rx="13" fill="#F59E0B"/><text x="357.0" y="814" class="task" text-anchor="middle">extract_* x10</text>
+  <line x1="418.8" y1="809" x2="431.8" y2="809" class="edge" stroke="#F59E0B" marker-end="url(#amber)"/>
+  <rect x="434.8" y="796" width="86.8" height="26" rx="13" fill="#F59E0B"/><text x="478.2" y="814" class="task" text-anchor="middle">transform</text>
+  <line x1="525.6" y1="809" x2="538.6" y2="809" class="edge" stroke="#F59E0B" marker-end="url(#amber)"/>
+  <rect x="541.6" y="796" width="79.6" height="26" rx="13" fill="#F59E0B"/><text x="581.4" y="814" class="task" text-anchor="middle">describe</text>
+  <line x1="625.2" y1="809" x2="638.2" y2="809" class="edge" stroke="#F59E0B" marker-end="url(#amber)"/>
+  <rect x="641.2" y="796" width="108.4" height="26" rx="13" fill="#F59E0B"/><text x="695.4000000000001" y="814" class="task" text-anchor="middle">match_skills</text>
+  <line x1="753.6" y1="809" x2="766.6" y2="809" class="edge" stroke="#F59E0B" marker-end="url(#amber)"/>
+  <rect x="769.6" y="796" width="144.4" height="26" rx="13" fill="#F59E0B"/><text x="841.8000000000001" y="814" class="task" text-anchor="middle">export_career_ops</text>
+  <text x="38" y="846" class="where">two email DAGs, 12:30pm</text>
+  <rect x="214" y="828" width="101.2" height="26" rx="13" fill="#F59E0B"/><text x="264.6" y="846" class="task" text-anchor="middle">email_egypt</text>
+  <line x1="319.2" y1="841" x2="332.2" y2="841" class="edge" stroke="#F59E0B" marker-end="url(#amber)"/>
+  <rect x="335.2" y="828" width="108.4" height="26" rx="13" fill="#F59E0B"/><text x="389.4" y="846" class="task" text-anchor="middle">email_abroad</text>
+  <text x="40" y="884" class="where">Dashed boxes are views. Arrows inside core: match_skills builds job_skill from job and skill, cv_skill from cv and skill.</text>
+  <text x="40" y="903" class="where">extract_companies reads the career pages listed in core.company; the tracker's CV tab reads core.cv; export_career_ops writes your newest CV.</text>
+  <text x="40" y="922" class="where">Counts: count(*) on each table and view.</text>
+</svg>

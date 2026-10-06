@@ -228,6 +228,24 @@ in the tracker, and keep Docker Desktop running. The first emails arrive at the 
 
 > After editing `.env`, run `docker compose up -d` so the containers pick it up.
 
+## 🏗️ For engineers
+
+Every table in the warehouse, the tables it is built from, and its row count on 6 October 2026:
+
+![Data flow, table by table](docs/data-flow.svg)
+
+The tables and how they join; there is no star schema, one row per job sits in the middle:
+
+![The table model](docs/data-model.svg)
+
+The collect DAG in Airflow's graph view, every task green:
+
+![Airflow graph view of job_radar: schema, ten extract tasks side by side, then transform, describe, match_skills and export_career_ops, all successful](docs/airflow-dag.png)
+
+The tracker's main page, every job with how many of your skills it asks for:
+
+![The job tracker: counts by status, then the Jobs tab with each job's skills, title, company and role](docs/app.png)
+
 ## 🧰 Built with
 
 <p align="center">
