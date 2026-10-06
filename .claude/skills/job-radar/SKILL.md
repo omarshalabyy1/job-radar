@@ -197,6 +197,11 @@ through LinkedIn or Indeed - their terms ban automation and accounts get banned:
 and the prepared texts instead. When he confirms it was sent, set the job's status to `applied`
 (same SQL, `'applied'`).
 
+When a job says to apply by email, write that email too: to the address in the posting, the job
+title in the subject, the tailored CV and cover letter PDFs attached, and a short body (run
+through humanizer) that always carries his GitHub (github.com/omarshalabyy1) and portfolio
+(https://omarlabs.dev) links. Show it with the rest and send it only after his yes, like a form.
+
 ## /job-radar emails
 
 `MSYS_NO_PATHCONV=1 docker exec job-radar-airflow-1 airflow dags trigger job_radar_email_egypt`
