@@ -177,7 +177,10 @@ holding:
   is always his own, never theirs. In short: one column, A4, plain
   sans-serif (Calibri-like, about 10 pt), narrow margins, no photo, icons or graphics, so ATS reads
   it. Header centred: his name large and bold in navy, a "Role | Specialty" line under it, then one
-  contact line (city, phone, email, github.com/omarshalabyy1, omarlabs.dev) separated by " • ".
+  contact line ("Rehab, Cairo, Egypt", phone, email, github.com/omarshalabyy1,
+  "Portfolio: omarlabs.dev") separated by " • ". omarlabs.dev always carries the "Portfolio:" label.
+  Every link is short and clickable in the PDF (email as mailto, a project repo shown as "GitHub").
+  His fixed CV facts (each job's place and dates) are in the same `cv-look.md`; they beat `core.cv`.
   Section headings in bold navy capitals with a full-width navy rule under them, in this order:
   Professional Summary (4-5 lines), Core Skills (groups, each a bold "Label:" then a comma list),
   Professional Experience, Projects, Education, Certifications, Additional (languages). Each role:
@@ -226,7 +229,7 @@ and the prepared texts instead. When he confirms it was sent, set the job's stat
 When a job says to apply by email, write that email too: to the address in the posting, the job
 title in the subject, the tailored CV and cover letter PDFs attached, and a short body (written
 with the copywriting skill, three short paragraphs at most, run through humanizer) that always carries his GitHub (github.com/omarshalabyy1) and portfolio
-(https://omarlabs.dev) links. Show it with the rest and send it only after his yes, like a form.
+("Portfolio: https://omarlabs.dev") links. Show it with the rest and send it only after his yes, like a form.
 
 ## /job-radar emails
 
