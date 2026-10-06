@@ -171,6 +171,7 @@ holding:
 - `cv.md` - his CV rewritten for this job: reorder, reword and cut what is true, and use the job's
   own words where his CV backs them. Never invent an employer, title, date, degree, skill or
   number - a CV that claims what he can't show loses the interview. One to two pages.
+  Never put a photo on a CV, for any country.
 - `cover-letter.md` - at most one page: why this company, why him for this role (two or three
   facts from his CV that answer the job's main needs), a short close. Plain, specific English.
   Write it with the copywriting skill so it persuades the reader to call him: open with what he
