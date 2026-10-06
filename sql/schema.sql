@@ -53,7 +53,7 @@ CREATE INDEX IF NOT EXISTS job_first_seen ON core.job (first_seen);
 -- when the posting went up (steps.posted_at: the source's time, else its date, else when the radar
 -- captured it); a warehouse made before the column existed gets it here
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS posted_at timestamptz;
--- A job first seen over a week ago (config.KEEP_DAYS) is deleted by transform with its raw postings,
+-- A job first seen over 4 days ago (config.KEEP_DAYS) is deleted by transform with its raw postings,
 -- unless you noted or applied to it; only its key stays here, so a job still posted later is never
 -- stored or emailed again.
 CREATE TABLE IF NOT EXISTS core.job_seen (

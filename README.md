@@ -75,7 +75,7 @@ request ladder) and where to change what: [docs/architecture.md](docs/architectu
 - **No duplicates:** a posting is stored once (source + link); a job is one row (its normalized
   title + company), so the same job on three boards, or reposted, is one job; each job is emailed once.
 - **Light on the laptop:** the scrapers run one by one (a collect takes about 15 minutes); each step
-  stops at its time budget and leaves the rest for the next run. A job first seen over a week ago is
+  stops at its time budget and leaves the rest for the next run. A job first seen over 4 days ago is
   deleted, unless you noted or applied to it (its key stays, so it is never emailed again). A collect missed while the laptop slept runs once it wakes.
 - **Every public page is read**, whatever a site's robots.txt says; a site that turns scripts away
   is asked again with a real Chrome's handshake. The code never logs in and never gets past a bot

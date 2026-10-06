@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 HOURS_OLD = 24  # every run looks back this far: a run after the laptop was asleep or off backfills the last day
-KEEP_DAYS = 7  # a job first seen longer ago is deleted (transform), unless you noted or applied to it
+KEEP_DAYS = 4  # a job first seen longer ago is deleted (transform), unless you noted or applied to it
 # Each extract step (Airflow runs them one by one) gets 150 seconds and describe 60; what does not
 # fit waits for the next run.
 EXTRACT_SECONDS = 150

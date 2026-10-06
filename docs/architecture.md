@@ -81,7 +81,7 @@ mindmap
 ## One collect
 
 Ten extract tasks run one by one, each within 150 seconds, so a busy laptop is not swamped; a whole
-collect takes about 15 minutes, and both emails go right after it. A job first seen over a week ago
+collect takes about 15 minutes, and both emails go right after it. A job first seen over 4 days ago
 is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key).
 Every posting is stored once (its source and link), every job once (`core.job`), every email
 sends a job once.
