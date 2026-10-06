@@ -18,9 +18,9 @@ fixes or unlocks (a saved login, a repaired reader) the daily run uses from then
 flowchart LR
     subgraph auto["Docker + Airflow: on its own, once a day"]
         direction TB
-        noon(["12pm Cairo,<br>or your Trigger"]):::trigger --> collect["collect<br>22 sources, under 5 minutes"]
+        noon(["12pm Cairo,<br>or your Trigger"]):::trigger --> collect["collect<br>22 sources, one by one"]
         collect --> warehouse[("warehouse<br>core.job")]
-        warehouse --> mails(["12:30pm<br>2 emails"]):::success
+        warehouse --> mails(["right after<br>2 emails"]):::success
     end
     subgraph hand["Claude Code + Docker: by hand, /job-radar"]
         direction TB
@@ -80,18 +80,20 @@ mindmap
 
 ## One collect
 
-Ten extract tasks run side by side, each within 150 seconds; a whole collect stays under 5 minutes.
+Ten extract tasks run one by one, each within 150 seconds, so a busy laptop is not swamped; a whole
+collect takes about 15 minutes, and both emails go right after it. A job first seen over a week ago
+is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key).
 Every posting is stored once (its source and link), every job once (`core.job`), every email
 sends a job once.
 
 ```mermaid
 %% flowchart: one collect, left to right
-%% clock -> schema -> 10 extract tasks side by side -> raw -> transform -> core -> describe -> match_skills -> export
-%% the two email DAGs read the mart view on their own clock
+%% clock -> schema -> 10 extract tasks one by one -> raw -> transform -> core -> describe -> match_skills -> export
+%% the two email DAGs run once match_skills is done (an Airflow Asset) and read the mart view
 flowchart LR
     clock(["Airflow<br>12pm Cairo,<br>or your Trigger"]):::trigger --> schema["schema<br>settings.yaml to core.company"]
     schema --> extracts
-    subgraph extracts["10 extract tasks, side by side, 150 s each"]
+    subgraph extracts["10 extract tasks, one by one, 150 s each"]
         direction TB
         boards["extract_boards<br>Indeed"]
         bayt["extract_bayt<br>Bayt"]
@@ -111,7 +113,7 @@ flowchart LR
     describe --> match["match_skills"]
     match --> export["export_career_ops"]
     core -.-> mart[("mart.job_status")]
-    mart -.-> emails(["2 emails<br>12:30pm<br>each job once"]):::success
+    mart -.-> emails(["2 emails<br>right after<br>each job once"]):::success
 
     classDef trigger fill:#fed7aa,stroke:#c2410c,color:#374151
     classDef success fill:#a7f3d0,stroke:#047857,color:#374151

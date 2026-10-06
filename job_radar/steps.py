@@ -1,9 +1,9 @@
 """The pipeline steps, one Airflow task each (python -m job_radar <step>):
 
     schema -> extract_boards, extract_bayt, extract_remote, extract_egypt, extract_gulf, extract_workable,
-              extract_freehire, extract_companies, extract_portals, extract_email (side by side)
+              extract_freehire, extract_companies, extract_portals, extract_email (one by one)
               -> transform -> describe -> match_skills -> export_career_ops
-    email_egypt, email_abroad: the two emails, each at its own times (the HTML is in digest.py)
+    email_egypt, email_abroad: the two emails, right after each collect (the HTML is in digest.py)
 
 A source that fails is a warning and the run goes on with the others; only a crash of the step
 itself (the warehouse down, the email not sent) or no network at all fails its task.
@@ -18,14 +18,16 @@ import socket
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
+from dateutil.parser import isoparse
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import sources
-from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOME, HOURS_OLD, NO_FETCH, ROLE_LABEL, ROOT, SETTINGS,
+from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, ROLE_LABEL, ROOT, SETTINGS,
                      in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
 
@@ -174,6 +176,31 @@ def extract_email(conn) -> None:
     extract(conn, mailboxes)
 
 
+# where a posting's own time is, by source: an ISO time, or Unix seconds or milliseconds
+POSTED_KEYS = ("posted_at", "publishedAt", "pubDate", "pub_date", "publication_date", "first_published", "postedDate",
+               "posted_date_ts", "LatestPostedDate", "created", "createdAt", "created_at", "first_seen")
+
+
+def posted_at(payload: dict, date_posted, loaded_at: datetime) -> datetime:
+    """When the posting went up: its source's own time when it gives one; else its posting date when
+    that is before the day the radar captured it (Indeed and Bayt give only a date); else the time the
+    radar captured it, which a daily collect puts within a day of the posting."""
+    for key in POSTED_KEYS:
+        value = payload.get(key)
+        try:
+            if isinstance(value, (int, float)) or (isinstance(value, str) and value.isdigit()):
+                n = float(value)
+                return datetime.fromtimestamp(n / 1000 if n > 1e11 else n, timezone.utc)
+            if isinstance(value, str) and "T" in value:  # a date alone ("2024-03-12") has no time: next key
+                t = isoparse(value)
+                return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            continue
+    if date_posted and date_posted < loaded_at.date():
+        return datetime.combine(date_posted, datetime.min.time(), timezone.utc)
+    return loaded_at
+
+
 def job_key(title: str, company: str, job_url: str) -> str:
     """One key per job however the boards word it: the title without its bracketed notes and its
     trailing ' - City' / ' | Remote' / ' / ...' part, the company without its legal suffix, both
@@ -191,10 +218,11 @@ def transform(conn) -> None:
     """raw -> core.job: the window's postings with a role, not above senior, in a place in scope and
     in reach (remote, or onsite/hybrid in Cairo or Giza), one row per job (job_key: the same job on
     several boards, or reposted, is one job). A job of the window not emailed yet that no longer
-    passes the rules (they changed) is removed. Re-running it changes nothing."""
+    passes the rules (they changed) is removed, and so is a job first seen over KEEP_DAYS ago (with
+    the raw postings of then) unless you noted or applied to it. Re-running it changes nothing."""
     postings = conn.cursor(row_factory=dict_row).execute(
         "SELECT run_date, source, searched_for, title, company, location, job_url, date_posted, description,"
-        " payload->>'is_remote' = 'true' AS is_remote, payload->>'from' AS sender"
+        " payload->>'is_remote' = 'true' AS is_remote, payload->>'from' AS sender, payload, loaded_at"
         " FROM raw.job_posting WHERE run_date >= current_date - %s"
         " ORDER BY posting_id", (DAYS,)).fetchall()
     # your companies: a name of 4+ letters as a whole word ("Vodafone Egypt" is Vodafone); a shorter
@@ -221,18 +249,22 @@ def transform(conn) -> None:
             "role": ROLE_LABEL[rank], "date_posted": p["date_posted"],
             "target": (is_target(p["company"]) or yours.search(p["company"]) is not None
                        or letters(p["company"]) in short),
-            "description": p["description"], "first_seen": p["run_date"]})
+            "description": p["description"], "first_seen": p["run_date"],
+            "posted_at": posted_at(p["payload"], p["date_posted"], p["loaded_at"])})
         job["description"] = job["description"] or p["description"]
         if place == "Remote" and job["place"] != "Remote":  # found by a remote search too: a remote
             # job, shown with that remote listing's location and link
             job.update(place="Remote", location=p["location"], source=p["source"], job_url=p["job_url"])
+    deleted = {key for (key,) in conn.execute("SELECT job_key FROM core.job_seen")}  # never stored again
+    jobs = {key: job for key, job in jobs.items() if key not in deleted}
     with conn.cursor() as cur:
         cur.executemany("""
             INSERT INTO core.job AS j (job_key, title, company, location, place, source, job_url, role_rank, role,
-                                       target_company, date_posted, description, first_seen)
+                                       target_company, date_posted, description, first_seen, posted_at)
             VALUES (%(key)s, %(title)s, %(company)s, %(location)s, %(place)s, %(source)s, %(job_url)s, %(rank)s,
-                    %(role)s, %(target)s, %(date_posted)s, %(description)s, %(first_seen)s)
+                    %(role)s, %(target)s, %(date_posted)s, %(description)s, %(first_seen)s, %(posted_at)s)
             ON CONFLICT (job_key) DO UPDATE SET
+                posted_at = coalesce(j.posted_at, EXCLUDED.posted_at),
                 description = coalesce(j.description, EXCLUDED.description),
                 target_company = j.target_company OR EXCLUDED.target_company,
                 place = CASE WHEN EXCLUDED.place = 'Remote' THEN 'Remote' ELSE j.place END,
@@ -244,8 +276,15 @@ def transform(conn) -> None:
                     " AND job_key <> ALL(%s) AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
                     (DAYS, list(jobs)))
         dropped = cur.rowcount
+        old = ("FROM core.job j WHERE first_seen < current_date - %s"
+               " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)")
+        cur.execute(f"INSERT INTO core.job_seen SELECT job_key {old} ON CONFLICT DO NOTHING", (KEEP_DAYS,))
+        cur.execute(f"DELETE {old}", (KEEP_DAYS,))
+        aged = cur.rowcount
+        cur.execute("DELETE FROM raw.job_posting WHERE run_date < current_date - %s", (KEEP_DAYS,))
     conn.commit()
-    print(f"transform: {len(postings)} postings -> {len(jobs)} jobs in scope, {dropped} no longer in scope removed")
+    print(f"transform: {len(postings)} postings -> {len(jobs)} jobs in scope, {dropped} no longer in scope removed,"
+          f" {aged} first seen over {KEEP_DAYS} days ago deleted")
 
 
 def describe(conn) -> None:
@@ -336,12 +375,12 @@ def page_description(page: bytes) -> str | None:
 
 
 def email_egypt(conn) -> None:
-    """The email of your home's jobs (settings.yaml: home, schedule.home_email)."""
+    """The email of your home's jobs."""
     email(conn, home=True)
 
 
 def email_abroad(conn) -> None:
-    """The email of the jobs everywhere else: remote only, no hybrid or onsite (schedule.abroad_email)."""
+    """The email of the jobs everywhere else: remote only, no hybrid or onsite."""
     email(conn, home=False)
 
 

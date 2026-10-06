@@ -9,3 +9,4 @@ requests
 streamlit
 pyyaml
 curl_cffi
+python-dateutil

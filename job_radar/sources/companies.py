@@ -31,21 +31,21 @@ def company_portals() -> list[dict]:
     changed since it was last read (its manifest's last_updated). Kept: first seen in the window, a
     role, a place in scope."""
     def chunk(name: str) -> list[dict]:
-        return json.loads(gzip.decompress(get(f"{PORTAL_FEED}/{name}").content))
+        """One chunk's jobs in scope. Filtered here, so its ~25,000 jobs are freed at once instead of
+        waiting in memory until the chunks before it are read."""
+        return [row(j.get("ats", "portal").lower(), None, j["title"], j.get("company"), j["location"], j["url"],
+                    j["first_seen"][:10], None, j)
+                for j in json.loads(gzip.decompress(get(f"{PORTAL_FEED}/{name}").content))
+                if ((j.get("first_seen") or "")[:10] >= since() and j.get("title") and j.get("url")
+                    and role_of(j["title"]) and place_of(j.get("location") or ""))]
 
     manifest = get(f"{PORTAL_FEED}/jobs_manifest.json").json()
     updated = str(manifest.get("last_updated") or "")
     if updated and FEED_READ.exists() and FEED_READ.read_text() == updated:
         print(f"company_portals: the feed is unchanged since {updated}, nothing to download")
         return []
-    rows = []
     with ThreadPoolExecutor(8) as pool:
-        for jobs in pool.map(chunk, manifest["chunks"]):
-            for j in jobs:
-                if ((j.get("first_seen") or "")[:10] >= since() and j.get("title") and j.get("url")
-                        and role_of(j["title"]) and place_of(j.get("location") or "")):
-                    rows.append(row(j.get("ats", "portal").lower(), None, j["title"], j.get("company"),
-                                    j["location"], j["url"], j["first_seen"][:10], None, j))
+        rows = [r for found in pool.map(chunk, manifest["chunks"]) for r in found]
     # marked read before the rows are saved: if saving fails, these jobs come with the feed's next update
     FEED_READ.parent.mkdir(parents=True, exist_ok=True)
     FEED_READ.write_text(updated)

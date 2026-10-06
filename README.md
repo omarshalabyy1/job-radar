@@ -35,9 +35,9 @@
 
 **Two emails, each with only the jobs you have not seen**
 
-- 🏠 **Egypt** · 12:30pm (Cairo time): onsite and hybrid jobs in Cairo or Giza, and
+- 🏠 **Egypt** · right after the 12pm collect (Cairo time): onsite and hybrid jobs in Cairo or Giza, and
   Egypt's remote jobs
-- 🌍 **Outside Egypt** · 12:30pm: remote jobs in the Gulf, Europe, the USA and worldwide
+- 🌍 **Outside Egypt** · right after it too: remote jobs in the Gulf, Europe, the USA, Canada and worldwide
 
 The further you scroll, the more experience a job asks for: **Entry & junior → Mid level →
 Senior**, best match first in each; your roles in your order; full-time, part-time, contract and
@@ -74,8 +74,9 @@ request ladder) and where to change what: [docs/architecture.md](docs/architectu
   stays only when it says remote.
 - **No duplicates:** a posting is stored once (source + link); a job is one row (its normalized
   title + company), so the same job on three boards, or reposted, is one job; each job is emailed once.
-- **Fast:** a collect finishes in under 5 minutes; each step stops at its time budget and leaves the
-  rest for the next run. A collect missed while the laptop slept runs once it wakes.
+- **Light on the laptop:** the scrapers run one by one (a collect takes about 15 minutes); each step
+  stops at its time budget and leaves the rest for the next run. A job first seen over a week ago is
+  deleted, unless you noted or applied to it (its key stays, so it is never emailed again). A collect missed while the laptop slept runs once it wakes.
 - **Every public page is read**, whatever a site's robots.txt says; a site that turns scripts away
   is asked again with a real Chrome's handshake. The code never logs in and never gets past a bot
   check: a site that shows one is opened by you once (`scripts/open_blocked.py`) and read with your
@@ -92,11 +93,11 @@ request ladder) and where to change what: [docs/architecture.md](docs/architectu
 
 | Airflow DAG | When | Does |
 |---|---|---|
-| `job_radar` | 12pm | extract (10 tasks side by side) → transform → describe → match_skills → export_career_ops |
-| `job_radar_email_egypt` | 12:30pm | emails Egypt's new jobs |
-| `job_radar_email_abroad` | 12:30pm | emails everywhere else's new jobs |
+| `job_radar` | 12pm | extract (10 tasks, one by one) → transform → describe → match_skills → export_career_ops |
+| `job_radar_email_egypt` | right after the collect | emails Egypt's new jobs |
+| `job_radar_email_abroad` | right after the collect | emails everywhere else's new jobs |
 
-No AI runs on this schedule. Airflow keeps its own records in the warehouse's Postgres, and when
+No AI runs on this schedule. Airflow keeps its own records in its own small Postgres, and when
 one of its parts stops, Docker restarts it.
 
 ## 🤖 Claude, when you call it
@@ -272,7 +273,6 @@ The tracker's main page, every job with how many of your skills it asks for:
 | Tasks fail with "Process timed out" | The Docker VM is starved: another stack on it (another Airflow) is using every CPU. Stop that stack while job-radar runs, or give Docker more CPUs; the next run catches up. |
 | A company shows *blocked* in the tracker | Its site shows a bot check: run `.venv\Scripts\python scripts\open_blocked.py` on the laptop, get past the check (or log in, or accept the cookies) in the window it opens and press Enter; the next run reads it with your session. Run it again when a session expires. |
 | Airflow seems down | It restarts itself: when one of its parts stops, the container exits and Docker starts it again within a minute (`docker ps` shows it restarting). |
-| An older warehouse, set up before Airflow moved to Postgres | Once: `docker exec job-radar-warehouse-1 psql -U jobradar -d jobradar -c "CREATE DATABASE airflow"`, then `docker compose up -d`. |
 
 </details>
 

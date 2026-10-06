@@ -176,8 +176,8 @@ def digest(jobs: list[dict], name: str) -> str:
             f'color:{INK2}">Entry and junior jobs first, senior last; in each, your companies first, then the best matches. '
             f'Each job is sent once.<br>On your laptop: the <a href="http://127.0.0.1:8501" style="color:{LINK}">'
             f'tracker</a> to mark what you apply to · <a href="http://127.0.0.1:8081" style="color:{LINK}">Airflow'
-            f'</a> collects at {times(SCHEDULE["collect"])} · {HOME} email {times(SCHEDULE["home_email"])}, '
-            f'outside {HOME} {times(SCHEDULE["abroad_email"])} (Cairo time).</td></tr></table></div>')
+            f'</a> collects at {times(SCHEDULE["collect"])} (Cairo time) and sends both emails right after.'
+            f'</td></tr></table></div>')
     # everything in reading order until EMAIL_BYTES (UTF-8, the header and footer counted), then one
     # line for the jobs left to the tracker
     sections, size = [], len((head + foot).encode())

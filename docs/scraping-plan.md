@@ -8,8 +8,8 @@ breaks (a refusal, a falling count, empty fields), because these facts belong to
 - **Goal:** the new data and AI jobs in your roles, in your places: Egypt (onsite or hybrid only in
   your Cairo and Giza areas), anywhere else remote only. Most sources are read as an *observation*
   (their newest jobs per search), not a full count of the site; the coverage column says which.
-- **Run:** an Airflow task, once a day at 12pm (Cairo); the extract tasks run side by side, each within a
-  150-second budget, and the whole run under 300 seconds. What does not fit waits for the next run.
+- **Run:** an Airflow task, once a day at 12pm (Cairo); the extract tasks run one by one, each within a
+  150-second budget. What does not fit waits for the next run.
 - **Storage:** every posting as it came (its JSON in `raw.job_posting.payload`), once per source and
   link; then one row per job in `core.job` (the same job on several boards is one job).
 - **Checks:** each task logs `<source>: N postings, M new`; dedup by link (raw) and by normalized
@@ -24,7 +24,7 @@ breaks (a refusal, a falling count, empty fields), because these facts belong to
 
 | Source | Coverage | Pages and fields | URL list | Tool (and the test that picked it) | Speed a run | Risks and fallback |
 |---|---|---|---|---|---|---|
-| Indeed, Bayt (a task each) | observation: 30 newest per role and place | JobSpy's columns (title, company, location, job_url, date_posted, description, is_remote) | every role x place (other places remote only) | JobSpy as a guest | up to ~140 s each, side by side | a 403 or 429 holds the board 6 h |
+| Indeed, Bayt (a task each) | observation: 30 newest per role and place | JobSpy's columns (title, company, location, job_url, date_posted, description, is_remote) | every role x place (other places remote only) | JobSpy as a guest | up to ~140 s each | a 403 or 429 holds the board 6 h |
 | Wuzzuf | population: every job in Egypt of the last 24 h | `/api/search/job` ids, then `/api/job` details: title, company, city, postedAt, description | newest first, 50 a page, until a page has nothing from the window | its web app's JSON API, plain requests (search page behind Cloudflare, API not) | a few calls | API change: the keyword search with `post_date` filter also works |
 | Tanqeeb (Egypt and 6 Gulf sites) | observation: 5 field pages per site | cards `a.search-job-title-link`, company, place, relative date | `/s/jobs/<field>-jobs?order_by=most_recent` per country site | HTML, plain requests (its keyword search shows a script nothing) | 35 pages, ~22 s, sites side by side | Gulf jobs mostly onsite (dropped by your rule); markup change |
 | NaukriGulf | observation: 30 newest per keyword, last 7 days | `spapi/jobapi/search` JSON: Designation, Company.Name, Location, JdURL, LatestPostedDate, jobInfo | 13 keyword searches | hidden API with `curl_cffi` (requests hangs 15 s, curl 200 in 0.6 s); remembered as Chrome-only | 13 calls, ~28 s | no remote filter (title or summary decides); dates run days late |

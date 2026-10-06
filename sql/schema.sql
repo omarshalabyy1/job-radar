@@ -50,6 +50,15 @@ CREATE TABLE IF NOT EXISTS core.job (
     emailed_at     timestamptz                -- set once: a job is never emailed twice
 );
 CREATE INDEX IF NOT EXISTS job_first_seen ON core.job (first_seen);
+-- when the posting went up (steps.posted_at: the source's time, else its date, else when the radar
+-- captured it); a warehouse made before the column existed gets it here
+ALTER TABLE core.job ADD COLUMN IF NOT EXISTS posted_at timestamptz;
+-- A job first seen over a week ago (config.KEEP_DAYS) is deleted by transform with its raw postings,
+-- unless you noted or applied to it; only its key stays here, so a job still posted later is never
+-- stored or emailed again.
+CREATE TABLE IF NOT EXISTS core.job_seen (
+    job_key text PRIMARY KEY
+);
 
 -- Your companies: settings.yaml (companies) is the list, made the same here by the schema step every
 -- run. A starred one's jobs are starred from any source, and a careers page, when given, is read at
@@ -109,9 +118,9 @@ INSERT INTO core.skill (track, skill, pattern) VALUES
     ('Data Engineering', 'SQL Server', 'sql server|mssql|t-sql|tsql'),
     ('Data Engineering', 'Data modeling', 'data model|\merd\M|entity relationship|normali[sz]ation'),
     ('Data Engineering', 'Data warehousing', 'data warehous|\mdwh\M|\molap\M'),
-    ('Data Engineering', 'Star schema / SCD', 'star schema|snowflake schema|dimensional model|fact table|\mscd\M|slowly changing'),
+    ('Data Engineering', 'Star schema / SCD', 'star[- ]schema|snowflake schema|dimensional model|fact table|\mscd\M|slowly changing'),
     ('Data Engineering', 'ETL / ELT', '\metl\M|\melt\M'),
-    ('Data Engineering', 'Data lake / lakehouse', 'data lake|lakehouse|delta lake'),
+    ('Data Engineering', 'Data lake / lakehouse', 'data lake|lakehouse|delta lake|medallion'),
     ('Data Engineering', 'Query optimization', 'query optimi|query tuning|performance tuning|execution plan|indexing'),
     ('Data Engineering', 'dbt', '\mdbt\M'),
     ('Data Engineering', 'Data quality', 'data quality|data validation|great expectations'),
@@ -119,7 +128,7 @@ INSERT INTO core.skill (track, skill, pattern) VALUES
     ('Data Engineering', 'NoSQL', 'nosql|mongo|cassandra|dynamodb'),
     ('Data Engineering', 'Python', '\mpython\M'),
     ('Data Engineering', 'Pandas / NumPy', 'pandas|numpy'),
-    ('Data Engineering', 'REST APIs', 'rest(ful)? api|api integration'),
+    ('Data Engineering', 'REST APIs', 'rest(ful)? apis?|api integration|postman'),
     ('Data Engineering', 'Azure', '\mazure\M'),
     ('Data Engineering', 'Azure Data Factory', 'data factory|\madf\M'),
     ('Data Engineering', 'Databricks', 'databricks'),
@@ -132,7 +141,11 @@ INSERT INTO core.skill (track, skill, pattern) VALUES
     ('Data Engineering', 'Informatica', 'informatica'),
     ('Data Engineering', 'Linux / shell', 'linux|shell script|\mbash\M'),
     ('Data Engineering', 'Docker', 'docker'),
-    ('Data Engineering', 'Power BI', 'power ?bi'),
+    ('Data Engineering', 'Power BI', 'power ?bi|\mdax\M|power query'),
+    ('Data Engineering', 'Excel', '\mexcel\M'),
+    ('Data Engineering', 'Git', '\mgit\M|github|gitlab'),
+    ('Data Engineering', 'AWS', '\maws\M|amazon web services|redshift'),
+    ('Data Engineering', 'GCP / BigQuery', '\mgcp\M|google cloud|bigquery'),
     ('Generative AI', 'LLMs', '\mllms?\M|large language model'),
     ('Generative AI', 'Generative AI', 'generative ai|\mgen ?ai\M'),
     ('Generative AI', 'Prompt engineering', 'prompt engineering|prompt design|few-shot'),
@@ -177,7 +190,10 @@ CREATE VIEW mart.job_status AS
 SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j.source, j.job_url,
        j.target_company, coalesce(k.skill_matches, 0) AS skill_matches, k.skills_matched,
        j.description IS NOT NULL AS described, j.date_posted, j.first_seen, j.emailed_at,
-       coalesce(a.status, 'new') AS status, a.note, a.updated_at, v.cv_label, v.cv_coverage
+       coalesce(a.status, 'new') AS status, a.note, a.updated_at, v.cv_label, v.cv_coverage, j.posted_at,
+       -- apply within 48 hours of the posting: 1 within 12 hours, 2 within 24, 3 within 48, 4 older
+       CASE WHEN now() - j.posted_at <= interval '12 hours' THEN 1 WHEN now() - j.posted_at <= interval '24 hours' THEN 2
+            WHEN now() - j.posted_at <= interval '48 hours' THEN 3 ELSE 4 END AS fresh_level
 FROM core.job j
 LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
            FROM core.job_skill GROUP BY job_id) k USING (job_id)

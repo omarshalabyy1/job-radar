@@ -11,7 +11,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from bs4 import BeautifulSoup
-from jobspy import scrape_jobs
 
 from ..config import BAYT_PLACES, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, ONSITE_PLACES, PLACES, ROLES, place_of, role_of
 from .base import ERRORS, Held, duration, fetch, get, hold, row, since, time_left, waiting
@@ -29,9 +28,6 @@ class Blocked(logging.Handler):
 
 
 BLOCKED = Blocked()
-
-for _board in ("Indeed", "Bayt"):
-    logging.getLogger(f"JobSpy:{_board}").addHandler(BLOCKED)
 
 
 def indeed() -> list[dict]:
@@ -53,6 +49,11 @@ def board(site: str, places: list[tuple]) -> list[dict]:
     """One JobSpy board's searches: each role in each place, 3 seconds apart. A board that answers
     403 or 429 gets no more searches for 6 hours (JobSpy gives no Retry-After). Searches stop at the
     step's time budget. LinkedIn is never searched: its jobs come only from your alert emails."""
+    # JobSpy loads pandas and pyarrow (~5 s and ~80 MB per process), so only the two steps that use
+    # it import it. BLOCKED goes on after JobSpy has set up its own log output (adding it twice is a no-op).
+    from jobspy import scrape_jobs
+    for name in ("Indeed", "Bayt"):
+        logging.getLogger(f"JobSpy:{name}").addHandler(BLOCKED)
     rows = []
     for place, location, country in places:
         for _, label, term, _ in ROLES:

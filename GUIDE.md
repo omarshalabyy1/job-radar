@@ -17,7 +17,7 @@ Think of job-radar as **a scout that works for you**. Five stations, always in t
 | 1 | 🔵 **Sweep** | The scout walks the whole job market | Airflow runs the *collect* at 12pm: 22 sources, from Wuzzuf and Indeed to 120+ company career pages in Egypt and your Gmail alerts |
 | 2 | 🟢 **Sift** | It keeps only what fits you | your rules in `settings.yaml`: roles, places, level; onsite only in Cairo or Giza, remote anywhere else |
 | 3 | 🟠 **Merge** | One card per job, never twice | the warehouse: every posting lands in `raw`, each job becomes one row in `core`, even when three boards carry it |
-| 4 | 🟣 **Rank** | The best first, delivered to your inbox | your skills are matched; two emails at 12:30pm, junior to senior, your companies first |
+| 4 | 🟣 **Rank** | The best first, delivered to your inbox | your skills are matched; two emails right after the collect, junior to senior, your companies first |
 | 5 | ✅ **Act** | You decide; your coach helps | the tracker to mark what you apply to, and Claude's `/job-radar` to review, tailor and apply |
 
 And five things to remember about where things live:
@@ -95,31 +95,35 @@ docker compose up -d --build
 ```
 
 The first time takes 10 to 20 minutes (it builds the image and downloads a browser). Then check
-that three containers are up:
+that four containers are up:
 
 ```bash
 docker ps --format "{{.Names}}  {{.Status}}"
 ```
 
-You should see `job-radar-warehouse-1`, `job-radar-airflow-1` and `job-radar-tracker-1`, all `Up`.
+You should see `job-radar-warehouse-1`, `job-radar-airflow-db-1`, `job-radar-airflow-1` and
+`job-radar-tracker-1`, all `Up`.
 
 ### Step 6 · Run your first collect
 
 1. Open Airflow on port 8081 (no login).
 2. You see three DAGs: `job_radar` (the collect) and the two email ones.
 3. Click `job_radar`, then **Trigger** (top right).
-4. Wait 3 to 5 minutes. Every task box turns green; click a box and **Logs** to read what each
+4. Wait about 15 minutes (the tasks run one by one). Every task box turns green; click a box and **Logs** to read what each
    source found ("freehire: 175 postings, 91 new").
 
 ### Step 7 · Open your tracker and add your CV
 
-1. Open the tracker on port 8501. The **Jobs** tab lists everything the collect kept.
+1. Open the tracker on port 8501. The **Jobs** tab lists everything the collect kept, with how fresh
+   each job is (apply within 48 hours of the posting); sort by several columns and filter in the
+   sidebar, where each filter shows how many jobs each choice gives. **Dashboard** charts the jobs
+   your filters keep, and **Skills in demand** shows the skills they ask for most, on your CV or not.
 2. Go to the **CV** tab and upload your CV as a PDF. From now on every job shows how much of what
    it asks for your CV covers, and Claude can tailor applications from it.
 
 ### Step 8 · Get your first email
 
-Wait for 12:30pm (Cairo time), or send it now: in Airflow, **Trigger**
+Both emails go right after each collect; to send them again now, in Airflow, **Trigger**
 `job_radar_email_egypt` and `job_radar_email_abroad`. Each job is emailed once, so the next email
 brings only new ones.
 
@@ -144,7 +148,7 @@ Open [`settings.yaml`](settings.yaml). Everything is plain words; save, and the 
 
 ## ☀️ Your daily routine
 
-1. **Open the email** at 12:30pm. Junior jobs first, senior last; ⭐ are your companies.
+1. **Open the email** after the 12pm collect (about 12:15pm). Junior jobs first, senior last; ⭐ are your companies.
 2. **Tap a job** to read it on its own site.
 3. **Mark it in the tracker**: *saved*, *applied*, *interview*, *offer*, *rejected* or *ignored*.
    Ignored jobs drop out of Claude's review and the career-ops export.

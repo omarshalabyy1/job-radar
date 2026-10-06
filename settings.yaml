@@ -1,5 +1,5 @@
 # job-radar settings: what to look for, where, and when to email it.
-# Edit, save, and the next run uses it (a schedule change shows in Airflow within a minute).
+# Edit, save, and the next run uses it (a schedule change shows in Airflow within five minutes).
 #
 # How words match a job title, a location or a company name:
 #   - any case, as whole words:        "ai" matches "AI Engineer", not "Airline"
@@ -11,11 +11,10 @@
 # job must be remote. Egypt gets its own email, and every other place shares the second one.
 
 # When it runs, Cairo time, 12-hour style: 11am, 7pm, "7:30pm" ... (the times of one line share
-# their minutes). No AI runs on this schedule: Claude only works when you call /job-radar.
+# their minutes). Both emails (Egypt's jobs, and the remote jobs everywhere else) go right after
+# each collect. No AI runs on this schedule: Claude only works when you call /job-radar.
 schedule:
   collect: [12pm]                       # find new jobs, once a day (every source looks back a day)
-  home_email: ["12:30pm"]               # the email of Egypt's jobs, right after the collect
-  abroad_email: ["12:30pm"]             # the email of the remote jobs everywhere else
 
 # The jobs you want, in your order: the email lists them in this order, and a title takes the
 # first role it fits.
@@ -121,6 +120,10 @@ places:
     search: {United States: usa}
     words: [united states*, u.s.a, new york, san francisco, seattle, austin, boston, chicago, los angeles,
             denver, atlanta, dallas, houston, miami, washington, san jose, san diego]
+  - name: Canada  # after the USA ("Vancouver, WA" is the USA), before Europe ("London, ON, Canada")
+    search: {Canada: canada}
+    words: [canada*, toronto*, vancouver*, montreal*, montréal*, ottawa*, calgary*, edmonton*, ontario*, quebec*,
+            québec*, british columbia*, alberta*]
   - name: Europe
     search: {United Kingdom: uk, Germany: germany, Netherlands: netherlands, Ireland: ireland, France: france,
              Spain: spain, Poland: poland, Sweden: sweden, Switzerland: switzerland, Portugal: portugal}

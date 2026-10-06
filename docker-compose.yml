@@ -1,7 +1,8 @@
 # job-radar: the warehouse (Postgres), Airflow (scheduler, DAG processor and API server, LocalExecutor,
-# in one container) and the tracker (Streamlit). Everything listens on 127.0.0.1 only. Airflow keeps
-# its own records in the warehouse's Postgres too (database airflow): on SQLite, its parts writing at
-# once locked the file and the scheduler stopped for good ("database is locked", 2026-10-03).
+# in one container) with its own small Postgres for its records, and the tracker (Streamlit).
+# Everything listens on 127.0.0.1 only. Airflow's records left SQLite ("database is locked", the
+# scheduler stopped for good, 2026-10-03) and then the warehouse's Postgres: each crash of the
+# warehouse under a busy run took Airflow down with it (2026-10-06).
 #
 #   docker compose up -d --build    # Airflow http://127.0.0.1:8081 (no login), tracker http://127.0.0.1:8501,
 #                                   # warehouse localhost:5433 (psql, any SQL tool)
@@ -34,9 +35,24 @@ services:
       - "127.0.0.1:5433:5432"
     volumes:
       - warehouse-data:/var/lib/postgresql/data
-      - ./sql/airflow-db.sql:/docker-entrypoint-initdb.d/airflow-db.sql:ro  # on a new warehouse only
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U jobradar -d jobradar"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Airflow's run history only; no port outside Docker's network (the official Airflow compose file's pattern)
+  airflow-db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -55,7 +71,16 @@ services:
       <<: *job-env
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://jobradar:${WAREHOUSE_PASSWORD:?set in .env}@warehouse:5432/airflow
+      # One task at a time: the scrapers go one by one, each with its full time budget. 10 side by
+      # side on a busy laptop took over 30 s each just to read the DAG file, Airflow failed them
+      # before they ran, and the warehouse crashed (2026-10-06). LocalExecutor also keeps one worker
+      # process per slot (default 32: ~1.4 GB idle).
+      AIRFLOW__CORE__PARALLELISM: "1"
+      # reading the DAG file may take longer than 30 s when the laptop is busy
+      AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "120"
+      # the DAG file changes only when you edit it: read every 5 minutes, not every 30 seconds
+      AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "300"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
@@ -65,6 +90,8 @@ services:
     depends_on:
       warehouse:
         condition: service_healthy
+      airflow-db:
+        condition: service_healthy
 
   tracker:
     build: .
@@ -72,7 +99,10 @@ services:
     entrypoint: /opt/job-radar-venv/bin/streamlit
     command: run /opt/job-radar/tracker/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
     restart: unless-stopped
-    environment: *job-env
+    environment:
+      <<: *job-env
+      STREAMLIT_THEME_BASE: dark  # a theme setting replaces the default theme: keep it dark
+      STREAMLIT_THEME_PRIMARY_COLOR: "#3987e5"  # the charts' blue on chips, sliders and progress bars
     ports:
       - "127.0.0.1:8501:8501"
     volumes:
@@ -83,4 +113,5 @@ services:
 
 volumes:
   warehouse-data:
+  airflow-db-data:
   airflow-home:

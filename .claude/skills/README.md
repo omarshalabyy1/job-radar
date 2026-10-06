@@ -6,6 +6,7 @@ collect does (the `/job-radar` skill sends Claude here when you call it). Start 
 
 | Skill | From | License |
 |---|---|---|
+| job-radar | written for job-radar's owner: `/job-radar` runs a collect, reviews matches, tailors applications | - |
 | scraping-orchestrator | written for job-radar's owner | - |
 | web-scraping | [yfe404/web-scraper](https://github.com/yfe404/web-scraper) | MIT |
 | scrapling | [Thanane15M/scrapling-skill](https://github.com/Thanane15M/scrapling-skill) | MIT |

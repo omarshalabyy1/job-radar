@@ -1,18 +1,19 @@
-"""job_radar: find the new jobs and rank them; two email DAGs send them. The times are in
-settings.yaml (schedule), Cairo time; as shipped:
+"""job_radar: find the new jobs and rank them; two email DAGs send them right after. The collect's
+time is in settings.yaml (schedule), Cairo time; as shipped:
 
     job_radar               12pm: schema -> extract_boards, extract_bayt, extract_remote, extract_egypt,
                             extract_gulf, extract_workable, extract_freehire, extract_companies, extract_portals,
-                            extract_email (side by side) -> transform -> describe -> match_skills
+                            extract_email (one by one) -> transform -> describe -> match_skills
                             -> export_career_ops
-    job_radar_email_egypt   12:30pm: your home's jobs (Egypt) not emailed yet
-    job_radar_email_abroad  12:30pm: the jobs everywhere else (remote only) not emailed yet
+    job_radar_email_egypt   after each collect: your home's jobs (Egypt) not emailed yet
+    job_radar_email_abroad  after each collect: the jobs everywhere else (remote only) not emailed yet
 
 No AI runs on this schedule. Claude works only when you call /job-radar in Claude Code: it runs
 this DAG, reviews the matches against your CV and tailors applications (the job-radar skill).
 
-Each task is one step of `python -m job_radar`, run from the job_radar virtual environment. The
-extract tasks run in parallel, so a run takes about as long as its slowest source.
+Each task is one step of `python -m job_radar`, run from the job_radar virtual environment.
+Airflow runs one task at a time (docker-compose.yml: parallelism), so a collect never swamps a busy
+laptop; it takes about 15 minutes, and the emails start once match_skills is done (its Asset).
 
 - A laptop asleep or switched off at a run time runs once as soon as it is back (catchup off),
   and Trigger (top right in Airflow) runs it now. Every run, scheduled or not, backfills the
@@ -26,8 +27,8 @@ A source that fails is a warning in its task's log and the task stays green; a f
 warehouse down, no network, the email not sent) is not retried: the next run catches up, and the
 tasks after it still run on what is there (all_done).
 
-A run finishes in under 300 seconds: each step stops itself at its time budget (config: extracts
-150 s side by side, describe 60 s) and leaves the rest for the next run. execution_timeout stops a
+Each step stops itself at its time budget (config: 150 s an extract, describe 60 s) and leaves
+the rest for the next run. execution_timeout stops a
 step that hangs anyway; it allows 90 s more than the budget, because on a busy laptop a task can
 need over a minute just to start Python (2026-10-05: tasks killed at 170 s before their work began).
 
@@ -45,9 +46,10 @@ from pathlib import Path
 import pendulum
 import yaml
 from airflow.providers.standard.operators.bash import BashOperator
-from airflow.sdk import DAG
+from airflow.sdk import DAG, Asset
 
 SCHEDULE = yaml.safe_load(Path("/opt/job-radar/settings.yaml").read_text(encoding="utf-8"))["schedule"]
+COLLECTED = Asset("job_radar_collected")  # updated when a collect has ranked its jobs; the emails run on it
 
 
 def cron(times: list) -> str:
@@ -78,14 +80,13 @@ with DAG(
                                         "extract_gulf", "extract_workable", "extract_freehire", "extract_companies",
                                         "extract_portals", "extract_email")]
     step("schema") >> extracts
-    matched = step("match_skills", trigger_rule="all_done")
+    matched = step("match_skills", trigger_rule="all_done", outlets=[COLLECTED])
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=150)) >> matched
     matched >> step("export_career_ops")
 
-# your two emails, each at its own times (a laptop asleep at a time sends once it is back)
-for dag_id, name, schedule in (("job_radar_email_egypt", "email_egypt", cron(SCHEDULE["home_email"])),
-                               ("job_radar_email_abroad", "email_abroad", cron(SCHEDULE["abroad_email"]))):
-    with DAG(dag_id=dag_id, schedule=schedule, start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
+# your two emails, right after each collect (a manual one too: they hold only jobs not emailed yet)
+for dag_id, name in (("job_radar_email_egypt", "email_egypt"), ("job_radar_email_abroad", "email_abroad")):
+    with DAG(dag_id=dag_id, schedule=[COLLECTED], start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
              catchup=False, max_active_runs=1, is_paused_upon_creation=False,
              default_args={"retries": 0, "execution_timeout": timedelta(seconds=240)}):
         step(name)
