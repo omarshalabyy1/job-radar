@@ -53,8 +53,9 @@ CREATE INDEX IF NOT EXISTS job_first_seen ON core.job (first_seen);
 
 -- Your companies: settings.yaml (companies) is the list, made the same here by the schema step every
 -- run. A starred one's jobs are starred from any source, and a careers page, when given, is read at
--- most once a day. The platform is detected on the next run; 'forbidden' (robots.txt), 'blocked'
--- (turns scripts away) and 'unreachable' (page not found) sites are retried daily.
+-- most once a day, whatever its robots.txt says. The platform is detected on the next run; 'blocked'
+-- (turns scripts away) and 'unreachable' (page not found) sites are retried daily, as are 'forbidden'
+-- rows left from before robots.txt was ignored.
 CREATE TABLE IF NOT EXISTS core.company (
     company     text PRIMARY KEY,
     careers_url text,         -- its careers page or portal; empty = starred only
@@ -86,10 +87,14 @@ CREATE TABLE IF NOT EXISTS core.cv_skill (
 
 CREATE TABLE IF NOT EXISTS core.application (
     job_id     bigint      PRIMARY KEY REFERENCES core.job,
-    status     text        NOT NULL CHECK (status IN ('saved', 'applied', 'interview', 'offer', 'rejected', 'ignored')),
+    status     text        NOT NULL CHECK (status IN ('new', 'saved', 'applied', 'interview', 'offer', 'rejected', 'ignored')),
     note       text,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- 'new' is stored when a job still marked new has a note; warehouses made before that get the wider check here.
+ALTER TABLE core.application DROP CONSTRAINT IF EXISTS application_status_check;
+ALTER TABLE core.application ADD CONSTRAINT application_status_check
+    CHECK (status IN ('new', 'saved', 'applied', 'interview', 'offer', 'rejected', 'ignored'));
 
 -- Your skills (Data Engineering and Generative AI). Reloaded on every run, so this list is the
 -- only place to change them.
