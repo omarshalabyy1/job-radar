@@ -176,6 +176,10 @@ holding:
 - `notes.md` - the grade, the gaps and how to address them, and three likely interview questions
   with answers drawn from his experience.
 
+Before any of this text goes to him, run the humanizer skill over the cover letter and every
+answer to an application form's questions (and the interview answers in `notes.md`), so none of
+it reads as AI-written. Humanizer changes the wording only, never the facts.
+
 He wants files to send: offer PDFs (the pdf skill) or Word (the docx skill).
 
 Mark each one saved in the tracker, so it shows there:
@@ -185,7 +189,8 @@ ON CONFLICT (job_id) DO UPDATE SET status = 'saved', note = EXCLUDED.note, updat
 ## 5. Apply with him - one job at a time, each with his yes
 
 Applying sends his personal data in his name, so it never happens on its own: for one job, show
-what will be submitted (which CV, the letter, his answers to the form's questions) and ask. Only
+what will be submitted (which CV, the letter, his answers to the form's questions, each answer
+run through the humanizer skill first) and ask. Only
 after a clear yes, open the application page in the browser and fill the form from that job's
 folder. Logins, passwords and CAPTCHAs are his to do; if a form needs one, hand over. Never apply
 through LinkedIn or Indeed - their terms ban automation and accounts get banned: give him the link
