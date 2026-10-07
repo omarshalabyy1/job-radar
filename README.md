@@ -144,7 +144,7 @@ through LinkedIn or Indeed: their terms ban automation, and accounts get banned 
   <img src="https://img.shields.io/badge/GulfTalent-1E293B?style=flat-square" alt="GulfTalent">
   <img src="https://img.shields.io/badge/Dubizzle_Jobs-1E293B?style=flat-square" alt="Dubizzle Jobs">
   <img src="https://img.shields.io/badge/28%2C000_career_pages-1E293B?style=flat-square" alt="28,000 career pages">
-  <img src="https://img.shields.io/badge/Your_120_companies_in_Egypt-1E293B?style=flat-square" alt="Your 120 companies in Egypt">
+  <img src="https://img.shields.io/badge/Your_119_companies_in_Egypt-1E293B?style=flat-square" alt="Your 119 companies in Egypt">
   <img src="https://img.shields.io/badge/Your_Gmail_alerts-1E293B?style=flat-square" alt="Your Gmail alerts">
 </p>
 
@@ -170,7 +170,7 @@ How each source is read, and the test behind each choice: [docs/scraping-plan.md
 | [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart (its robots.txt allows them) |
 | Startup platforms: Wellfound, Welcome to the Jungle, startup.jobs, Built In, Y Combinator (Work at a Startup) | Wellfound's role pages and Welcome to the Jungle's public search index, both with the company's size (the tracker's Company size column); startup.jobs' and Built In's newest cards; Y Combinator's job board: the last day's jobs in your roles | about 50 calls a run in their own task, 1 second apart per site |
 | [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
-| Your companies | `settings.yaml` (companies): the 120 that hire in Egypt, each through its Egypt jobs page ([docs/companies.md](docs/companies.md)), only their Egypt jobs kept; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
+| Your companies | `settings.yaml` (companies): the 119 that hire in Egypt, each through its Egypt jobs page ([docs/companies.md](docs/companies.md)), only their Egypt jobs kept; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
 | Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
 | Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 2 emails a day of 500 |

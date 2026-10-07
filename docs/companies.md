@@ -1,6 +1,6 @@
 # Your companies
 
-The 120 companies whose own career sites job-radar reads every day: only companies that hire in
+The 119 companies whose own career sites job-radar reads every day: only companies that hire in
 Egypt, each through its jobs page filtered to Egypt where the site has a filter, and only their jobs
 in Egypt are kept. Jobs at these companies are starred in your email, from any source.
 
@@ -69,7 +69,6 @@ there, then run the script. The tracker's Companies tab shows how each site was 
 | KPMG | [kpmg.com](https://kpmg.com/eg/en/careers/job-search.html) | careers page (platform found on the first read) |
 | Kuwait Finance House | [careers.ahliunited.com](https://careers.ahliunited.com/search/?q=&locationsearch=Egypt) | careers page (platform found on the first read) |
 | L'Oréal | [careers.loreal.com](https://careers.loreal.com/en/search-jobs/Egypt/3456/2/357994/27/30/50/2) | careers page (platform found on the first read) |
-| Link Development | [linkdevelopment.com](https://linkdevelopment.com/careers/opportunities/) | careers page (platform found on the first read) |
 | Maersk | [maersk.wd3.myworkdayjobs.com](https://maersk.wd3.myworkdayjobs.com/Maersk_Careers?locations=853120f5cc8a10009e423980f6d80000) | Workday, through the 28,000-company feed |
 | Majorel | [www.tp.com](https://www.tp.com/ar-eg/locations/egypt/careers/) | careers page (platform found on the first read) |
 | Mars | [careers.mars.com](https://careers.mars.com/global/en/search-results?qcountry=Egypt) | careers page (platform found on the first read) |
