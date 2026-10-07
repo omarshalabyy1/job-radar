@@ -26,7 +26,7 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-with psycopg.connect(host="localhost", port=5433, dbname="jobradar", user="jobradar",
+with psycopg.connect(host="127.0.0.1", port=5433, dbname="jobradar", user="jobradar",
                      password=os.environ["WAREHOUSE_PASSWORD"]) as conn:
     urls = sys.argv[1:] or [url for (url,) in conn.execute(
         "SELECT careers_url FROM core.company WHERE platform = 'blocked' ORDER BY company")]

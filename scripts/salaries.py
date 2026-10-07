@@ -174,7 +174,7 @@ def done_before(folder: Path) -> set:
 def main() -> None:
     every = "--all" in sys.argv
     args = [a for a in sys.argv[1:] if a != "--all"]
-    with psycopg.connect(host="localhost", port=5433, dbname="jobradar", user="jobradar",
+    with psycopg.connect(host="127.0.0.1", port=5433, dbname="jobradar", user="jobradar",
                          password=os.environ["WAREHOUSE_PASSWORD"]) as conn:
         names = dict(a.split("=", 1) for a in args if "=" in a)  # job id -> Glassdoor name
         if every:  # one job for each company, country and role
