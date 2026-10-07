@@ -26,11 +26,14 @@ FRESH = {1: "Within 12 hours", 2: "Within 24 hours", 3: "Within 48 hours", 4: "O
 # Sort by any of these, in the order picked: ↓ is highest, newest or Z first; ↑ is lowest, oldest or A first
 SORTS = {"Role": "role_rank", "Target": "target_company", "Skills": "skill_matches", "CV covers": "cv_coverage",
          "Posted": "posted_at", "First seen": "first_seen", "Title": "title", "Company": "company", "Where": "place",
-         "Source": "source", "Status": "status"}
+         "Source": "source", "Status": "status", "Company size": "most_employees"}
 SORT_OPTIONS = [f"{name} {arrow}" for name in SORTS for arrow in ("↓", "↑")]
 DEFAULT_SORT = ["Role ↑", "Target ↓", "Skills ↓", "Posted ↓"]
 # the sidebar's list filters: widget key -> column
 FILTERS = {"role": "role", "where": "place", "posted": "posted", "status": "status"}
+# Small companies: the most employees a company can have to pass. A range passes by its top ("11-50" is in
+# 1-50), "1,000+" never does, and a company of unknown size is left out while one is picked.
+SIZES = {"1-10": 10, "1-20": 20, "1-50": 50, "1-100": 100, "1-200": 200}
 # chart colors (the dataviz skill's palette, dark-surface steps): one blue for a single series; blue and
 # orange for "on your CV" and "not on your CV yet"
 BLUE, ORANGE = "#3987e5", "#d95926"
@@ -38,6 +41,13 @@ BLUE, ORANGE = "#3987e5", "#d95926"
 
 def plural(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def most_employees(size: str | None) -> float | None:
+    """The top of a company size ('51-200' -> 200, '251' -> 251); '1,000+' has no top."""
+    if not size:
+        return None
+    return float("inf") if size.endswith("+") else float(size.replace(",", "").split("-")[-1])
 
 
 def query(sql: str) -> pd.DataFrame:
@@ -60,10 +70,12 @@ jobs = query("SELECT job_id, role_rank, fresh_level, posted_at, skill_matches, c
              " company_size, role, place, source, status, note, first_seen, job_url, skills_matched, described FROM mart.job_status")
 jobs["posted"] = jobs["fresh_level"].map(FRESH)
 jobs["cv_coverage"] = pd.to_numeric(jobs["cv_coverage"])
+jobs["most_employees"] = pd.to_numeric(jobs["company_size"].map(most_employees))
 
 OPTIONS = {"role": sorted(jobs["role"].unique()), "where": sorted(jobs["place"].unique()),
            "posted": list(FRESH.values()), "status": STATUSES}
-DEFAULTS = {"role": [], "where": [], "posted": [], "status": OPEN, "skills": 0, "q": "", "sort": DEFAULT_SORT}
+DEFAULTS = {"role": [], "where": [], "posted": [], "status": OPEN, "size": None, "skills": 0, "q": "",
+            "sort": DEFAULT_SORT}
 # The filters live in the address, so a reload or a bookmark keeps them.
 if "role" not in st.session_state:
     url = st.query_params
@@ -71,6 +83,7 @@ if "role" not in st.session_state:
     st.session_state.update(
         {name: [o for o in url.get_all(name) if o in OPTIONS[name]] or list(DEFAULTS[name]) for name in FILTERS},
         skills=min(int(skills_in_url), 10) if skills_in_url.isdigit() else 0,
+        size=url.get("size") if url.get("size") in SIZES else None,
         q=url.get("q", ""),
         sort=[o for o in url.get_all("sort") if o in SORT_OPTIONS] or list(DEFAULT_SORT))
 
@@ -86,6 +99,8 @@ def passing(skip: str = "") -> pd.Series:
     for name, column in FILTERS.items():
         if f[name] and name != skip:
             keep &= jobs[column].isin(f[name])
+    if f.size and skip != "size":
+        keep &= jobs["most_employees"] <= SIZES[f.size]
     if f.q:
         keep &= (jobs["title"] + " " + jobs["company"]).str.contains(f.q, case=False, regex=False)
     return keep
@@ -115,13 +130,18 @@ with st.sidebar:
     counts_line("posted")
     statuses = st.multiselect("Status", STATUSES, key="status")
     counts_line("status")
+    size = st.segmented_control("Company size", list(SIZES), key="size",
+                                help="Employees. A range counts by its top: 11-50 is in 1-50. Jobs whose company "
+                                     "size no site gives are hidden while one is picked.")
+    pool = jobs.loc[passing(skip="size"), "most_employees"]
+    st.caption(" · ".join(f"{option} **{int((pool <= cap).sum())}**" for option, cap in SIZES.items()))
     min_skills = st.slider("At least this many of your skills", 0, 10, key="skills")
     text = st.text_input("Search title or company", key="q")
     sort = st.multiselect("Sort by", SORT_OPTIONS, key="sort",
                           help="First pick first: ↓ is highest, newest or Z first, ↑ lowest, oldest or A first "
                                "(Role ↑ is your order in settings.yaml). A column picked twice counts once.")
 st.query_params.from_dict({k: v for k, v in {"role": roles, "where": places, "posted": posted, "status": statuses,
-                                             "skills": min_skills, "q": text, "sort": sort}.items() if v})
+                                             "size": size, "skills": min_skills, "q": text, "sort": sort}.items() if v})
 
 shown = jobs[passing()]
 by, ascending = [], []
