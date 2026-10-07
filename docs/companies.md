@@ -1,6 +1,6 @@
 # Your companies
 
-The 121 companies whose own career sites job-radar reads every day: only companies that hire in
+The 120 companies whose own career sites job-radar reads every day: only companies that hire in
 Egypt, each through its jobs page filtered to Egypt where the site has a filter, and only their jobs
 in Egypt are kept. Jobs at these companies are starred in your email, from any source.
 
@@ -12,7 +12,6 @@ there, then run the script. The tracker's Companies tab shows how each site was 
 | AAIB | [www.aaib.com](https://www.aaib.com/en/careers) | careers page (platform found on the first read) |
 | Accenture | [accenture.wd103.myworkdayjobs.com](https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers?locationCountry=d865e83093ad42319653b08e61f7db49) | Workday, through the 28,000-company feed |
 | ADIB | [www.adib.eg](https://www.adib.eg/careers) | careers page (platform found on the first read) |
-| Advansys | [advansys-esc.com](https://advansys-esc.com/job-openings/) | careers page (platform found on the first read) |
 | Alexbank | [apply.workable.com](https://apply.workable.com/alexbank/) | Workable, public API |
 | Andersen | [eg.andersen.com](https://eg.andersen.com/open-vacancies/) | careers page (platform found on the first read) |
 | Aqarmap | [aqarmap.zohorecruit.com](https://aqarmap.zohorecruit.com/jobs/Careers) | careers page (platform found on the first read) |
