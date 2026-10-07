@@ -1,7 +1,7 @@
 """job_radar: find the new jobs and rank them; two email DAGs send them right after. The collect's
 time is in settings.yaml (schedule), Cairo time; as shipped:
 
-    job_radar               12pm: schema -> extract_boards, extract_bayt, extract_remote, extract_egypt,
+    job_radar               12pm: schema -> extract_boards, extract_bayt, extract_remote, extract_startups, extract_egypt,
                             extract_gulf, extract_workable, extract_freehire, extract_companies, extract_portals,
                             extract_email (one by one) -> transform -> describe -> match_skills
                             -> export_career_ops
@@ -76,9 +76,9 @@ with DAG(
     is_paused_upon_creation=False,
     default_args={"retries": 0, "execution_timeout": timedelta(seconds=240)},
 ):
-    extracts = [step(name) for name in ("extract_boards", "extract_bayt", "extract_remote", "extract_egypt",
-                                        "extract_gulf", "extract_workable", "extract_freehire", "extract_companies",
-                                        "extract_portals", "extract_email")]
+    extracts = [step(name) for name in ("extract_boards", "extract_bayt", "extract_remote", "extract_startups",
+                                        "extract_egypt", "extract_gulf", "extract_workable", "extract_freehire",
+                                        "extract_companies", "extract_portals", "extract_email")]
     step("schema") >> extracts
     matched = step("match_skills", trigger_rule="all_done", outlets=[COLLECTED])
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=150)) >> matched

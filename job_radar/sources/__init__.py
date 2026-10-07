@@ -9,7 +9,7 @@ laptop's internet address: see fetch() (a host that answers 429 is left alone fo
 asks) and the README's limits. LinkedIn is never opened: its jobs come from your alert emails.
 
 One module per group (docs/architecture.md, the mind map): base (the request door every source uses),
-boards, egypt, gulf, remote, companies, inbox."""
+boards, egypt, gulf, remote, startups, companies, inbox."""
 
 from .base import ERRORS, Challenge, Held, fetch, time_left
 from .boards import bayt, freehire, indeed, jooble, workable_jobs
@@ -17,11 +17,13 @@ from .egypt import tanqeeb, wuzzuf
 from .gulf import dubizzle, gulftalent, naukrigulf
 from .remote import (arbeitnow, dailyremote, himalayas, jobicy, relomote, remoteco, remoteok, remotive,
                      weworkremotely, workingnomads)
+from .startups import builtin, startup_jobs, welcometothejungle, wellfound, ycombinator
 from .companies import company_portals, company_sites
 from .inbox import LINKEDIN_ALERTS, mailboxes
 
 __all__ = ["ERRORS", "Challenge", "Held", "fetch", "time_left", "bayt", "freehire", "indeed", "jooble",
            "workable_jobs", "tanqeeb", "wuzzuf", "dubizzle", "gulftalent", "naukrigulf", "arbeitnow",
            "dailyremote", "himalayas", "jobicy", "relomote", "remoteco", "remoteok", "remotive",
-           "weworkremotely", "workingnomads", "company_portals", "company_sites", "LINKEDIN_ALERTS",
+           "weworkremotely", "workingnomads", "builtin", "startup_jobs", "welcometothejungle", "wellfound",
+           "ycombinator", "company_portals", "company_sites", "LINKEDIN_ALERTS",
            "mailboxes"]

@@ -57,7 +57,7 @@ HEAT = ["#eef4fc", "#1c5cab"] if LIGHT else ["#1a2738", "#86b6ef"]
 HEAT_INK = "#ffffff" if LIGHT else "#0d1b2a"  # the count on the strongest cells
 
 jobs = query("SELECT job_id, role_rank, fresh_level, posted_at, skill_matches, cv_coverage, target_company, title, company,"
-             " role, place, source, status, note, first_seen, job_url, skills_matched, described FROM mart.job_status")
+             " company_size, role, place, source, status, note, first_seen, job_url, skills_matched, described FROM mart.job_status")
 jobs["posted"] = jobs["fresh_level"].map(FRESH)
 jobs["cv_coverage"] = pd.to_numeric(jobs["cv_coverage"])
 
@@ -167,7 +167,7 @@ with jobs_tab:
         edited = st.data_editor(
             shown, key="jobs", hide_index=True,
             column_order=["posted", "posted_at", "skill_matches", "cv_coverage", "target_company", "title", "company",
-                          "role", "place", "source", "status", "note", "first_seen", "job_url", "skills_matched"],
+                          "company_size", "role", "place", "source", "status", "note", "first_seen", "job_url", "skills_matched"],
             disabled=[c for c in shown.columns if c not in ("status", "note")],
             column_config={
                 "posted": st.column_config.TextColumn("Posted", help="Apply within 48 hours of the posting"),
@@ -176,6 +176,8 @@ with jobs_tab:
                 "cv_coverage": st.column_config.ProgressColumn("CV covers", min_value=0, max_value=100, format="%d%%",
                                                                help="How much of what the job asks for your best CV shows"),
                 "target_company": st.column_config.CheckboxColumn("Target"),
+                "company_size": st.column_config.TextColumn(
+                    "Company size", help="Employees, when a job board gives it (Indeed, freehire)"),
                 "status": st.column_config.SelectboxColumn("Status", options=STATUSES, required=True),
                 "job_url": st.column_config.LinkColumn("Link", display_text="View job"),
                 "first_seen": "First seen",
@@ -260,7 +262,7 @@ with skills_tab:
     pool = shown[shown["described"]]
     demand = query("SELECT k.job_id, k.skill, s.track, cs.skill IS NOT NULL AS on_cv FROM core.job_skill k"
                    " JOIN core.skill s USING (skill) LEFT JOIN (SELECT DISTINCT skill FROM core.cv_skill) cs USING (skill)")
-    track = st.segmented_control("Skills", ["All", "Data Engineering", "Generative AI"], default="All", key="track")
+    track = st.segmented_control("Skills", ["All", "Data Engineering", "BI & Analytics", "Generative AI"], default="All", key="track")
     asked = demand[demand["job_id"].isin(pool["job_id"])
                    & ((demand["track"] == track) if track and track != "All" else True)]
     if asked.empty:
@@ -312,7 +314,7 @@ with cv_tab:
     st.caption("Upload your CV as a PDF. The next run shows, for every job, how much of what it asks for "
                "your CV covers, and hands your newest CV to the career-ops export. It stays in your warehouse.")
     with st.form("add_cv", clear_on_submit=True):
-        label = st.text_input("Label", value="AI & Data Engineer")
+        label = st.text_input("Label", value="Data Engineer & BI Developer")
         pdf = st.file_uploader("CV (PDF)", type=["pdf"])
         if st.form_submit_button("Upload", type="primary"):
             if not pdf or not label.strip():

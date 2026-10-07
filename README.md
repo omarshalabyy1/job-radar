@@ -133,6 +133,11 @@ through LinkedIn or Indeed: their terms ban automation, and accounts get banned 
   <img src="https://img.shields.io/badge/Jobicy-1E293B?style=flat-square" alt="Jobicy">
   <img src="https://img.shields.io/badge/Working_Nomads-1E293B?style=flat-square" alt="Working Nomads">
   <img src="https://img.shields.io/badge/Arbeitnow-1E293B?style=flat-square" alt="Arbeitnow">
+  <img src="https://img.shields.io/badge/Wellfound-1E293B?style=flat-square" alt="Wellfound">
+  <img src="https://img.shields.io/badge/Welcome_to_the_Jungle-1E293B?style=flat-square" alt="Welcome to the Jungle">
+  <img src="https://img.shields.io/badge/startup.jobs-1E293B?style=flat-square" alt="startup.jobs">
+  <img src="https://img.shields.io/badge/Built_In-1E293B?style=flat-square" alt="Built In">
+  <img src="https://img.shields.io/badge/Y_Combinator-1E293B?style=flat-square" alt="Y Combinator">
   <img src="https://img.shields.io/badge/DailyRemote-1E293B?style=flat-square" alt="DailyRemote">
   <img src="https://img.shields.io/badge/Remote.co-1E293B?style=flat-square" alt="Remote.co">
   <img src="https://img.shields.io/badge/NaukriGulf-1E293B?style=flat-square" alt="NaukriGulf">
@@ -163,6 +168,7 @@ How each source is read, and the test behind each choice: [docs/scraping-plan.md
 | DailyRemote | its newest remote jobs in your fields (the company is behind its paid plan, so none shows) | about 2 pages a run |
 | Remote.co | its latest-jobs sitemap, then the pages of jobs titled like your roles and not read before (its search sits behind a bot check) | 1 call plus a few pages a run, 1 second apart |
 | [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart (its robots.txt allows them) |
+| Startup platforms: Wellfound, Welcome to the Jungle, startup.jobs, Built In, Y Combinator (Work at a Startup) | Wellfound's role pages and Welcome to the Jungle's public search index, both with the company's size (the tracker's Company size column); startup.jobs' and Built In's newest cards; Y Combinator's job board: the last day's jobs in your roles | about 50 calls a run in their own task, 1 second apart per site |
 | [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
 | Your companies | `settings.yaml` (companies): the 121 that hire in Egypt, each through its Egypt jobs page ([docs/companies.md](docs/companies.md)), only their Egypt jobs kept; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
@@ -178,7 +184,7 @@ and the next run uses it; a schedule change shows in Airflow within a minute.
 |---|---|
 | `schedule` | when it collects and when each email goes, written `11am`, `7pm`, `"7:30pm"` |
 | `roles` | the jobs you want, **in your order** (the email follows it): the words a title needs, and what the job boards are searched for |
-| `search_words` | the plain search words for Himalayas, Workable, freehire and Jooble |
+| `search_words` | the plain search words for Himalayas, Workable, freehire, Jooble and Welcome to the Jungle |
 | `too_senior`, `never` | titles to leave out: above your level, or never yours |
 | `experience` | the words for entry and senior, and the years that make a job entry (1 or less) or senior (5 or more) |
 | `places` | the places, **in email order**, where the boards search, and the words that name each one |

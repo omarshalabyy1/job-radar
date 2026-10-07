@@ -117,6 +117,11 @@ def extract_remote(conn) -> None:
             sources.jobicy, sources.workingnomads, sources.arbeitnow, sources.dailyremote, remoteco)
 
 
+def extract_startups(conn) -> None:
+    extract(conn, sources.welcometothejungle, sources.startup_jobs, sources.builtin, sources.ycombinator,
+            sources.wellfound)  # the slowest last: it reads what the time budget leaves
+
+
 def extract_egypt(conn) -> None:
     extract(conn, sources.wuzzuf, sources.tanqeeb)
 
@@ -178,7 +183,8 @@ def extract_email(conn) -> None:
 
 # where a posting's own time is, by source: an ISO time, or Unix seconds or milliseconds
 POSTED_KEYS = ("posted_at", "publishedAt", "pubDate", "pub_date", "publication_date", "first_published", "postedDate",
-               "posted_date_ts", "LatestPostedDate", "created", "createdAt", "created_at", "first_seen")
+               "posted_date_ts", "LatestPostedDate", "created", "createdAt", "created_at", "first_seen", "liveStartAt",
+               "published_at")
 
 
 def posted_at(payload: dict, date_posted, loaded_at: datetime) -> datetime:
@@ -199,6 +205,17 @@ def posted_at(payload: dict, date_posted, loaded_at: datetime) -> datetime:
     if date_posted and date_posted < loaded_at.date():
         return datetime.combine(date_posted, datetime.min.time(), timezone.utc)
     return loaded_at
+
+
+def company_size(payload: dict) -> str | None:
+    """The company's size in employees when the source gives one, written one way: Indeed's
+    '51 to 200' and freehire's '51-200' both read '51-200', '1000+' reads '1,000+'."""
+    enrichment = payload.get("enrichment")
+    size = (payload.get("company_num_employees") or payload.get("company_size")
+            or (enrichment.get("company_size") if isinstance(enrichment, dict) else None))
+    if not isinstance(size, str) or not size.strip() or size.startswith("Decline"):  # Indeed's "Decline to state"
+        return None
+    return re.sub(r"(\d)(\d{3})\b", r"\1,\2", re.sub(r"\s+to\s+", "-", size.strip()))
 
 
 def job_key(title: str, company: str, job_url: str) -> str:
@@ -255,16 +272,25 @@ def transform(conn) -> None:
         if place == "Remote" and job["place"] != "Remote":  # found by a remote search too: a remote
             # job, shown with that remote listing's location and link
             job.update(place="Remote", location=p["location"], source=p["source"], job_url=p["job_url"])
+    # a company's size from any of its postings that gives one, so its jobs from other sources show it too
+    sizes: dict[str, str] = {}
+    for p in postings:
+        if letters(p["company"]) and (size := company_size(p["payload"])):
+            sizes.setdefault(letters(p["company"]), size)
+    for job in jobs.values():
+        job["company_size"] = sizes.get(letters(job["company"]))
     deleted = {key for (key,) in conn.execute("SELECT job_key FROM core.job_seen")}  # never stored again
     jobs = {key: job for key, job in jobs.items() if key not in deleted}
     with conn.cursor() as cur:
         cur.executemany("""
             INSERT INTO core.job AS j (job_key, title, company, location, place, source, job_url, role_rank, role,
-                                       target_company, date_posted, description, first_seen, posted_at)
+                                       target_company, date_posted, description, first_seen, posted_at, company_size)
             VALUES (%(key)s, %(title)s, %(company)s, %(location)s, %(place)s, %(source)s, %(job_url)s, %(rank)s,
-                    %(role)s, %(target)s, %(date_posted)s, %(description)s, %(first_seen)s, %(posted_at)s)
+                    %(role)s, %(target)s, %(date_posted)s, %(description)s, %(first_seen)s, %(posted_at)s,
+                    %(company_size)s)
             ON CONFLICT (job_key) DO UPDATE SET
                 posted_at = coalesce(j.posted_at, EXCLUDED.posted_at),
+                company_size = coalesce(EXCLUDED.company_size, j.company_size),
                 description = coalesce(j.description, EXCLUDED.description),
                 target_company = j.target_company OR EXCLUDED.target_company,
                 place = CASE WHEN EXCLUDED.place = 'Remote' THEN 'Remote' ELSE j.place END,

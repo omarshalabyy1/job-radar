@@ -88,18 +88,19 @@ sends a job once.
 
 ```mermaid
 %% flowchart: one collect, left to right
-%% clock -> schema -> 10 extract tasks one by one -> raw -> transform -> core -> describe -> match_skills -> export
+%% clock -> schema -> 11 extract tasks one by one -> raw -> transform -> core -> describe -> match_skills -> export
 %% the two email DAGs run once match_skills is done (an Airflow Asset) and read the mart view
 flowchart LR
     clock(["Airflow<br>12pm Cairo,<br>or your Trigger"]):::trigger --> schema["schema<br>settings.yaml to core.company"]
     schema --> extracts
-    subgraph extracts["10 extract tasks, one by one, 150 s each"]
+    subgraph extracts["11 extract tasks, one by one, 150 s each"]
         direction TB
         boards["extract_boards<br>Indeed"]
         bayt["extract_bayt<br>Bayt"]
         egypt["extract_egypt<br>Wuzzuf, Tanqeeb x7"]
         gulf["extract_gulf<br>NaukriGulf, GulfTalent, Dubizzle"]
         remote["extract_remote<br>10 remote boards"]
+        startups["extract_startups<br>5 startup platforms"]
         freehire["extract_freehire"]
         workable["extract_workable<br>once a day"]
         companies["extract_companies<br>Egypt jobs only"]

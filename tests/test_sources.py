@@ -5,11 +5,12 @@ changes its layout or API fails here first. Run on the laptop: .venv\\Scripts\\p
 import importlib.util
 import json
 import time
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 
-from job_radar.sources import egypt, gulf, remote
+from job_radar.sources import egypt, gulf, remote, startups
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -28,7 +29,7 @@ class Saved:
 @pytest.fixture(autouse=True)
 def no_waiting(monkeypatch):
     monkeypatch.setattr(time, "sleep", lambda seconds: None)
-    for module in (egypt, gulf, remote):  # the saved samples are from 2026-10: every date is in the window
+    for module in (egypt, gulf, remote, startups):  # the saved samples are from 2026-10: every date is in the window
         for window in ("since", "week"):
             if hasattr(module, window):
                 monkeypatch.setattr(module, window, lambda: "2000-01-01")
@@ -110,6 +111,45 @@ def test_an_empty_first_page_is_a_warning_not_a_quiet_day(monkeypatch, capsys):
     monkeypatch.setattr(remote, "get", lambda url, **params: Saved("<html></html>"))
     assert remote.dailyremote() == []
     assert "WARNING dailyremote: no job cards on its first page - has the site changed?" in capsys.readouterr().out
+
+
+def test_wellfound_reads_next_data_with_company_size(monkeypatch):
+    monkeypatch.setattr(startups, "WELLFOUND_ROLES", ["data-engineer"])
+    monkeypatch.setattr(startups, "WELLFOUND_PAGES", 1)
+    monkeypatch.setattr(startups, "get", lambda url, **params: Saved("wellfound.html"))
+    rows = startups.wellfound()  # the Egypt page and page 1 give the same job: stored once
+    assert titles(rows) == ["Data Engineer"] and rows[0]["company"] == "Acme AI"
+    assert rows[0]["location"] == "Remote" and rows[0]["payload"]["company_size"] == "51-200"
+    assert rows[0]["job_url"] == "https://wellfound.com/jobs/10-data-engineer"
+
+
+def test_welcometothejungle_reads_algolia_with_headcount(monkeypatch):
+    monkeypatch.setattr(startups, "KEYWORDS", ["data engineer"])
+    monkeypatch.setattr(startups, "fetch", lambda method, url, **kw: Saved("welcometothejungle.json"))
+    rows = startups.welcometothejungle()
+    assert titles(rows) == ["Data Engineer"] and rows[0]["payload"]["company_size"] == "251"
+    assert rows[0]["job_url"] == "https://www.welcometothejungle.com/en/companies/firstup/jobs/data-engineer_abc"
+    assert rows[0]["location"] == "Remote: United States"
+
+
+def test_startup_jobs_stops_at_the_window(monkeypatch):
+    monkeypatch.setattr(startups, "STARTUP_JOBS_ROLES", ["data-engineer"])
+    monkeypatch.setattr(startups, "since", lambda: "2026-01-01")  # the 2020 card is old
+    monkeypatch.setattr(startups, "get", lambda url, **params: Saved("startup_jobs.html"))
+    rows = startups.startup_jobs()
+    assert [r["job_url"] for r in rows] == ["https://startup.jobs/data-engineer-acme-1"] and rows[0]["company"] == "Acme"
+
+
+def test_builtin_and_ycombinator_read_ages_not_dates(monkeypatch):
+    monkeypatch.setattr(startups, "since", lambda: str(date.today() - timedelta(days=1)))
+    monkeypatch.setattr(startups, "get", lambda url, **params: Saved("builtin.html"))
+    rows = startups.builtin()  # "5 Hours Ago" is in the window, "Reposted 9 Days Ago" is not
+    assert [r["job_url"] for r in rows] == ["https://builtin.com/job/data-analyst/1"]
+    assert rows[0]["location"] == "Remote: Austin, TX, USA"
+    monkeypatch.setattr(startups, "YC_PAGES", ["data-science"])
+    monkeypatch.setattr(startups, "get", lambda url, **params: Saved("ycombinator.html"))
+    rows = startups.ycombinator()  # "about 3 hours" is in the window, "8 months" is not
+    assert titles(rows) == ["Data Engineer"] and rows[0]["payload"]["is_remote"]
 
 
 def test_companies_doc_matches_settings():

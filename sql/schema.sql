@@ -3,7 +3,7 @@
 --   raw.job_posting   bronze: each posting once (source + link), as the source gave it the first time
 --   core.job          silver: one row per job (same title and company on any board), in scope
 --   core.application  your status for a job, set in the tracker
---   core.skill        your skills: the Data Engineering and Generative AI courses, as patterns
+--   core.skill        your skills: Data Engineering, BI & Analytics and Generative AI, as patterns
 --   core.job_skill    which of your skills each job asks for, stored once by match_skills
 --   mart.*            gold: views for the email and the tracker
 
@@ -53,6 +53,9 @@ CREATE INDEX IF NOT EXISTS job_first_seen ON core.job (first_seen);
 -- when the posting went up (steps.posted_at: the source's time, else its date, else when the radar
 -- captured it); a warehouse made before the column existed gets it here
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS posted_at timestamptz;
+-- the company's size in employees ('51-200'), from any posting of that company that gives it
+-- (Indeed, freehire); empty when no source does
+ALTER TABLE core.job ADD COLUMN IF NOT EXISTS company_size text;
 -- A job first seen over 4 days ago (config.KEEP_DAYS) is deleted by transform with its raw postings,
 -- unless you noted or applied to it; only its key stays here, so a job still posted later is never
 -- stored or emailed again.
@@ -105,13 +108,17 @@ ALTER TABLE core.application DROP CONSTRAINT IF EXISTS application_status_check;
 ALTER TABLE core.application ADD CONSTRAINT application_status_check
     CHECK (status IN ('new', 'saved', 'applied', 'interview', 'offer', 'rejected', 'ignored'));
 
--- Your skills (Data Engineering and Generative AI). Reloaded on every run, so this list is the
--- only place to change them.
+-- Your skills (Data Engineering, BI & Analytics and Generative AI). Reloaded on every run, so this
+-- list is the only place to change them.
 CREATE TABLE IF NOT EXISTS core.skill (
     skill   text PRIMARY KEY,
-    track   text NOT NULL CHECK (track IN ('Data Engineering', 'Generative AI')),
+    track   text NOT NULL CHECK (track IN ('Data Engineering', 'BI & Analytics', 'Generative AI')),
     pattern text NOT NULL  -- Postgres regular expression, matched case-insensitively (~*)
 );
+-- 'BI & Analytics' came later; warehouses made before that get the wider check here.
+ALTER TABLE core.skill DROP CONSTRAINT IF EXISTS skill_track_check;
+ALTER TABLE core.skill ADD CONSTRAINT skill_track_check
+    CHECK (track IN ('Data Engineering', 'BI & Analytics', 'Generative AI'));
 DELETE FROM core.skill;
 INSERT INTO core.skill (track, skill, pattern) VALUES
     ('Data Engineering', 'SQL', '\msql\M'),
@@ -141,11 +148,28 @@ INSERT INTO core.skill (track, skill, pattern) VALUES
     ('Data Engineering', 'Informatica', 'informatica'),
     ('Data Engineering', 'Linux / shell', 'linux|shell script|\mbash\M'),
     ('Data Engineering', 'Docker', 'docker'),
-    ('Data Engineering', 'Power BI', 'power ?bi|\mdax\M|power query'),
-    ('Data Engineering', 'Excel', '\mexcel\M'),
     ('Data Engineering', 'Git', '\mgit\M|github|gitlab'),
     ('Data Engineering', 'AWS', '\maws\M|amazon web services|redshift'),
     ('Data Engineering', 'GCP / BigQuery', '\mgcp\M|google cloud|bigquery'),
+    ('BI & Analytics', 'Power BI', 'power ?bi'),
+    ('BI & Analytics', 'DAX', '\mdax\M'),
+    ('BI & Analytics', 'Power Query', 'power query'),
+    ('BI & Analytics', 'Row-level security (RLS)', 'row[- ]level security|\mrls\M'),
+    ('BI & Analytics', 'Incremental refresh', 'incremental refresh'),
+    ('BI & Analytics', 'Report interactions', 'drill[- ]?(through|down)|cross[- ]filter|bookmarks|slicers'),
+    ('BI & Analytics', 'Dashboards / data visualization', 'dashboard|data visuali[sz]ation'),
+    ('BI & Analytics', 'KPIs', '\mkpis?\M|key performance indicator'),
+    ('BI & Analytics', 'Excel', '\mexcel\M'),
+    ('BI & Analytics', 'Advanced Excel (pivots, VBA)', 'pivot ?tables?|power pivot|\mvba\M|[xv]lookup|macros'),
+    ('BI & Analytics', 'Tableau', 'tableau'),
+    ('BI & Analytics', 'Looker / Qlik', 'looker|qlik'),
+    ('BI & Analytics', 'SSRS / SSAS', '\mssrs\M|\mssas\M'),
+    ('BI & Analytics', 'Statistics / analysis', 'statistic|trend analysis|variance analysis|hypothesis|a/b test'),
+    ('BI & Analytics', 'Segmentation (RFM, cohorts)', 'segmentation|\mrfm\M|cohort'),
+    ('BI & Analytics', 'Data cleaning', 'data clean|data cleansing|data preparation|data wrangling'),
+    ('BI & Analytics', 'Reconciliation', 'reconcil'),
+    ('BI & Analytics', 'Requirements / stakeholders', 'requirements gathering|business requirements|stakeholder'),
+    ('BI & Analytics', 'Reporting automation', 'reporting automation|report automation|automated report'),
     ('Generative AI', 'LLMs', '\mllms?\M|large language model'),
     ('Generative AI', 'Generative AI', 'generative ai|\mgen ?ai\M'),
     ('Generative AI', 'Prompt engineering', 'prompt engineering|prompt design|few-shot'),
@@ -188,7 +212,7 @@ DROP VIEW IF EXISTS mart.job_status, mart.skill_demand, mart.jobs_daily, mart.jo
 -- your status ('new' until you set one).
 CREATE VIEW mart.job_status AS
 SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j.source, j.job_url,
-       j.target_company, coalesce(k.skill_matches, 0) AS skill_matches, k.skills_matched,
+       j.target_company, j.company_size, coalesce(k.skill_matches, 0) AS skill_matches, k.skills_matched,
        j.description IS NOT NULL AS described, j.date_posted, j.first_seen, j.emailed_at,
        coalesce(a.status, 'new') AS status, a.note, a.updated_at, v.cv_label, v.cv_coverage, j.posted_at,
        -- apply within 48 hours of the posting: 1 within 12 hours, 2 within 24, 3 within 48, 4 older
