@@ -36,6 +36,8 @@ with psycopg.connect(host="127.0.0.1", port=5433, dbname="jobradar", user="jobra
     with sync_playwright() as p:
         browser = p.chromium.launch_persistent_context(ROOT / "output" / "browser-profile", headless=False)
         page = browser.pages[0]
+        # read once, on the blank first page: a site still navigating after you press Enter cannot answer
+        user_agent = page.evaluate("navigator.userAgent")
         for url in urls:
             host = urlsplit(url).hostname
             try:
@@ -43,7 +45,7 @@ with psycopg.connect(host="127.0.0.1", port=5433, dbname="jobradar", user="jobra
             except Exception as e:  # a site that drops the first try: reload it in the window
                 print(f"{url} did not open ({e.__class__.__name__}): try reloading it in the window")
             input(f"{url}\n  Pass the check, accept the cookies or log in in the window, then press Enter here... ")
-            session = {"user_agent": page.evaluate("navigator.userAgent"),
+            session = {"user_agent": user_agent,
                        "cookies": [c for c in browser.cookies() if host == c["domain"].lstrip(".")
                                    or host.endswith("." + c["domain"].lstrip("."))]}
             (ROOT / "output" / "sessions").mkdir(parents=True, exist_ok=True)
