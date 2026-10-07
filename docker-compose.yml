@@ -104,7 +104,7 @@ services:
       STREAMLIT_THEME_BASE: dark  # a theme setting replaces the default theme: keep it dark
       STREAMLIT_THEME_PRIMARY_COLOR: "#3987e5"  # the charts' blue on chips, sliders and progress bars
     ports:
-      - "127.0.0.1:8501:8501"
+      - "8501:8501"  # all interfaces: the tracker opens on the phone over home Wi-Fi
     volumes:
       - .:/opt/job-radar
     depends_on:
