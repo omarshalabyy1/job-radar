@@ -215,9 +215,12 @@ SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j
        j.target_company, j.company_size, coalesce(k.skill_matches, 0) AS skill_matches, k.skills_matched,
        j.description IS NOT NULL AS described, j.date_posted, j.first_seen, j.emailed_at,
        coalesce(a.status, 'new') AS status, a.note, a.updated_at, v.cv_label, v.cv_coverage, j.posted_at,
-       -- apply within 48 hours of the posting: 1 within 12 hours, 2 within 24, 3 within 48, 4 older
-       CASE WHEN now() - j.posted_at <= interval '12 hours' THEN 1 WHEN now() - j.posted_at <= interval '24 hours' THEN 2
-            WHEN now() - j.posted_at <= interval '48 hours' THEN 3 ELSE 4 END AS fresh_level
+       -- apply within 48 hours of the posting: 1 within 12 hours, 2 within 24, 3 over 1 day, 4 over 2 days,
+       -- 5 over 3 days; 6 deleted by tomorrow's transform (first seen 4 days ago, config.KEEP_DAYS, no status set)
+       CASE WHEN a.job_id IS NULL AND j.first_seen < current_date - 3 THEN 6
+            WHEN now() - j.posted_at <= interval '12 hours' THEN 1 WHEN now() - j.posted_at <= interval '24 hours' THEN 2
+            WHEN now() - j.posted_at <= interval '48 hours' THEN 3 WHEN now() - j.posted_at <= interval '72 hours' THEN 4
+            ELSE 5 END AS fresh_level
 FROM core.job j
 LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
            FROM core.job_skill GROUP BY job_id) k USING (job_id)

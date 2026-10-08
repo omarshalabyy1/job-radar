@@ -78,6 +78,8 @@ search_words: [data engineer, analytics engineer, ETL developer, databricks, AI 
 # free plan ($5 credit a month): max_jobs 50 a day is about $3 a month.
 linkedin:
   max_jobs: 50
+  # a run that worked holds the next for this many hours: a manual collect the same day costs nothing
+  every_hours: 20
   words: [data engineer, AI engineer, BI developer, data analyst]
   places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
 
@@ -85,7 +87,7 @@ linkedin:
 # against your CVs, the CV to send and one line why, into core.claude_grade. enabled: false turns it off; it
 # also stops by itself when the API credit runs out. Sonnet 5.5 at ~100 jobs a day is about $14 a month.
 claude:
-  enabled: true
+  enabled: false  # off since 2026-10-08: jobs are judged in /job-radar; Claude grades client-radar's gigs instead
   model: claude-sonnet-5-5
   max_jobs: 100
 

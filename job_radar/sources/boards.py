@@ -142,10 +142,14 @@ def linkedin() -> list[dict]:
     """LinkedIn's public job search, through the Apify Actor curious_coder/linkedin-jobs-scraper
     (logged out, so no account at risk; LinkedIn itself is never opened from this laptop): each of
     linkedin.words in each of linkedin.places, posted in the last day, remote outside Egypt, all in
-    one Actor run a collect. Pay per result: linkedin.max_jobs caps a run. Skipped without APIFY_TOKEN."""
+    one Actor run a collect. Pay per result: linkedin.max_jobs caps a run, and a run that worked holds the
+    next for linkedin.every_hours, so a manual collect in between costs nothing. Skipped without APIFY_TOKEN."""
     token = os.environ.get("APIFY_TOKEN")
     if not token:
         print("linkedin: no APIFY_TOKEN in .env, skipped")
+        return []
+    if left := waiting("api.apify.com"):
+        print(f"linkedin: next Apify run in {duration(left)} (linkedin.every_hours)")
         return []
     cfg = SETTINGS["linkedin"]
     searches = [(place, location, keyword) for place, location in cfg["places"].items() for keyword in cfg["words"]]
@@ -159,6 +163,7 @@ def linkedin() -> list[dict]:
                       timeout=280, json={"urls": urls, "scrapeCompany": False,
                                          "limitPerSource": math.ceil(cfg["max_jobs"] / len(urls))})
     r.raise_for_status()
+    hold("api.apify.com", cfg["every_hours"] * 3600)
     return [row("linkedin", place_of_url.get(j.get("inputUrl")), j["title"], j.get("companyName"), j.get("location"),
                 j["link"].split("?")[0], j.get("postedAt"), j.get("descriptionText"),
                 {k: v for k, v in j.items() if k not in ("descriptionText", "descriptionHtml")})

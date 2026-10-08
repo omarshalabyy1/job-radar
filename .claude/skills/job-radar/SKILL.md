@@ -148,7 +148,8 @@ LIMIT 15;
 ```
 
 He applies within 48 hours of a posting: `fresh_level` 1-3 (within 12, 24, 48 hours of `posted_at`,
-the source's own time, else its date, else when the radar first found it) come first; say how fresh each is.
+the source's own time, else its date, else when the radar first found it) come first; 4 and 5 are over 2
+and 3 days; 6 is deleted by tomorrow's transform unless he sets a status. Say how fresh each is.
 
 Grade each against his CV like a recruiter who wants him hired, and is honest:
 

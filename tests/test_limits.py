@@ -163,3 +163,17 @@ def test_company_sites_keep_only_their_jobs_in_egypt(monkeypatch, web):
 def test_6_october_is_an_onsite_area():
     assert config.place_of("Qesm 2nd 6 October") == config.HOME
     assert config.in_reach(config.HOME, "Qesm 2nd 6 October", "Costing Analyst")
+
+
+def test_linkedin_runs_apify_once_then_holds_for_every_hours(monkeypatch, web):
+    posts = []
+
+    class Done(Answer):
+        def json(self):
+            return []
+    monkeypatch.setenv("APIFY_TOKEN", "test-token")
+    monkeypatch.setattr(sources.boards.requests, "post", lambda *a, **kw: posts.append(kw) or Done(200))
+    sources.boards.linkedin()
+    sources.boards.linkedin()  # a manual collect the same day: no second paid run
+    assert len(posts) == 1
+    assert sources.base.waiting("api.apify.com") > (config.SETTINGS["linkedin"]["every_hours"] - 1) * 3600

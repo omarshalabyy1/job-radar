@@ -22,7 +22,8 @@ from job_radar.db import connect  # noqa: E402
 STATUSES = ["new", "saved", "applied", "interview", "offer", "rejected", "ignored"]
 OPEN = ["new", "saved", "applied", "interview", "offer"]
 # Apply within 48 hours of the posting: mart.job_status.fresh_level, from when the job was posted
-FRESH = {1: "Within 12 hours", 2: "Within 24 hours", 3: "Within 48 hours", 4: "Over 48 hours"}
+FRESH = {1: "Within 12 hours", 2: "Within 24 hours", 3: "Over 1 day", 4: "Over 2 days", 5: "Over 3 days",
+         6: "Deleted tomorrow"}
 # Sort by any of these, in the order picked: ↓ is highest, newest or Z first; ↑ is lowest, oldest or A first
 SORTS = {"Role": "role_rank", "Target": "target_company", "Skills": "skill_matches", "CV covers": "cv_coverage",
          "Posted": "posted_at", "First seen": "first_seen", "Title": "title", "Company": "company", "Where": "place",
@@ -61,8 +62,10 @@ st.title("Job tracker")
 LIGHT = st.context.theme.type == "light"
 INK = "#31333f" if LIGHT else "#e6e6e6"  # chart text: never a series color
 SURFACE = "#ffffff" if LIGHT else "#0e1117"  # the page behind the charts, for the gaps between cells
-# one blue ramp: the freshest jobs brightest on a dark page (darkest on a light one); the heatmap from faint to strong
-FRESH_COLORS = ["#184f95", "#256abf", "#3987e5", "#86b6ef"][::-1] if not LIGHT else ["#0d366b", "#1c5cab", "#3987e5", "#86b6ef"]
+# one blue ramp: the freshest jobs brightest on a dark page (darkest on a light one), then orange for the ones
+# deleted tomorrow; the heatmap from faint to strong
+FRESH_COLORS = (["#86b6ef", "#5c9eea", "#3987e5", "#256abf", "#184f95"] if not LIGHT
+                else ["#0d366b", "#1c5cab", "#3987e5", "#5c9eea", "#86b6ef"]) + [ORANGE]
 HEAT = ["#eef4fc", "#1c5cab"] if LIGHT else ["#1a2738", "#86b6ef"]
 HEAT_INK = "#ffffff" if LIGHT else "#0d1b2a"  # the count on the strongest cells
 
