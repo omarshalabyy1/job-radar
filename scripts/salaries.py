@@ -16,8 +16,9 @@ so each page opens in a fresh context (tested 2026-10-07). An unpassed check cou
 login, no CAPTCHA solving. Glassdoor answered 429 at 7 pages at once, so this reads one page at a
 time and, on a 429, waits and tries the page again.
 
-Rows go to output/salaries/<date>.jsonl (gitignored) and are printed per job. Figures are EGP or the
-country's currency a month, as Glassdoor shows them. The salary you ask for is still your own rule
+Rows go to output/salaries/<date>.jsonl (gitignored) and are printed per job. Figures are in the
+country's currency as Glassdoor shows them, with the same figures in EGP beside them (low_egp, high_egp,
+median_egp; today's rate from open.er-api.com, free, no key). The salary you ask for is still your own rule
 (output/applications/application-answers.md); this is the evidence behind it.
 """
 
@@ -31,6 +32,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import psycopg
+import requests
 from dotenv import load_dotenv
 from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
@@ -56,6 +58,25 @@ SCIENTIST = ("data scientist", r"data scien")
 MONEY = r"([A-Z]{3}|[$£€])\s?([\d,.]+K?)"  # the currency, then the figure
 HEAD = re.compile(rf"Total pay range\s+{MONEY}\s*-\s*{MONEY}\s*/(mo|yr)\s+{MONEY}\s*/(?:mo|yr)\s+Median total pay")
 LISTED = re.compile(rf"([A-Z][\w&/,()\- ]{{2,60}}?)\s+([\d,]+) Salaries submitted\s+{MONEY}\s*-\s*{MONEY}\s*/(mo|yr)")
+
+
+SYMBOLS = {"$": "USD", "£": "GBP", "€": "EUR"}  # Glassdoor's symbols; on Canada's pages $ is the Canadian dollar
+
+
+def rates() -> dict[str, float]:
+    """Each currency per US dollar, today (open.er-api.com, updated daily)."""
+    r = requests.get("https://open.er-api.com/v6/latest/USD", timeout=30)
+    r.raise_for_status()
+    return r.json()["rates"]
+
+
+def in_egp(row: dict, country: int, per_usd: dict[str, float]) -> dict:
+    """The row's figures in Egyptian pounds too ({} when they already are, or the currency is unknown)."""
+    code = "CAD" if row["currency"] == "$" and country == COUNTRIES["Canada"] else SYMBOLS.get(row["currency"], row["currency"])
+    if code == "EGP" or code not in per_usd:
+        return {}
+    egp = per_usd["EGP"] / per_usd[code]
+    return {f"{k}_egp": round(row[k] * egp) for k in ("low", "high", "median") if row.get(k)}
 
 
 def amount(text: str) -> int:
@@ -191,6 +212,7 @@ def main() -> None:
     skip = done_before(out.parent) if every else set()
     stop = time.monotonic() + 12 * 3600
     markets, employers, companies = {}, {}, {}  # each page read once per run
+    per_usd = rates()
     with sync_playwright() as p, open(out, "a", encoding="utf-8") as f:
         session = p.chromium.launch(headless=False, args=["--window-position=-32000,-32000"])
         for job_id, title, company, role, place, location in jobs:
@@ -215,10 +237,12 @@ def main() -> None:
                 print("\nGlassdoor still answers 429 or its bot check after four tries: stopped. Run it again later to go on.")
                 break
             for r in rows:
+                r |= in_egp(r, country, per_usd)
                 median = f", median {r['median']:,}" if r.get("median") else ""
                 reports = f" ({r['reports']} reports)" if r.get("reports") else ""
                 print(f"  {r['source']:8} {r['title']}{reports}: {r['currency']} {r['low']:,} - {r['high']:,}"
-                      f" /{r['per']}{median}")
+                      f" /{r['per']}{median}"
+                      + (f" (EGP {r['low_egp']:,} - {r['high_egp']:,})" if r.get("low_egp") else ""))
                 f.write(json.dumps({"job_id": job_id, "company": company, "country": where, "role": role,
                                     **r}, ensure_ascii=False) + "\n")
             if not rows:

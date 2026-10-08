@@ -213,7 +213,8 @@ ids for every saved job; `<job_id>=<name>` when the radar has the company in Ara
 company's own Glassdoor salaries for that role and country, and the role's market range, with
 Playwright in an off-screen window (Glassdoor's bot check stops every headless mode; the company
 search is not yet verified past it), into
-`output/salaries/<date>.jsonl`. `--all` does every company, country and role in the radar's jobs, by
+`output/salaries/<date>.jsonl`, each figure in its own currency and in EGP beside it (`low_egp`,
+`high_egp`, `median_egp`, today's rate): quote both. `--all` does every company, country and role in the radar's jobs, by
 hand only (never scheduled): it stops after 12 hours and a second run goes on where it stopped.
 The figure he asks for follows his rule in
 `output/applications/application-answers.md`.

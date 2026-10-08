@@ -45,7 +45,8 @@ freelance. Jobs at your companies get a ⭐.
 
 **Also on your laptop**
 
-- 📋 **Tracker**, port 8501: filter jobs, mark saved / applied / interview / offer,
+- 📋 **Tracker**, port 8501: filter jobs (by role, place, the board in Egypt or the Gulf, and age: within
+  12 or 24 hours, over 1, 2 or 3 days, or *deleted tomorrow*), mark saved / applied / interview / offer,
   see the skills each role asks for, upload your CV, see how each company's careers page is read.
 - 🌀 **Airflow**, port 8081: every run, every task's log, and *Trigger* to run now.
 - 🤖 **Claude**, `/job-radar` in Claude Code: reviews your matches, tailors your CV, helps you apply.
@@ -112,6 +113,9 @@ would, against your CV.
 | `/job-radar apply <job>` | writes a CV, a cover letter and interview notes for that job, then fills its application form once you say yes |
 | `/job-radar emails` | sends both emails now |
 
+For a salary question, `scripts/salaries.py <job_id>` reads the company's and the market's pay on
+Glassdoor, each figure in its own currency with EGP beside it (today's rate).
+
 Everything lands in `output/applications/<date>/<company>-<title>/` and the job shows as *saved*
 in the tracker. Nothing is ever sent without your yes, logins stay yours, and nothing applies
 through LinkedIn or Indeed: their terms ban automation, and accounts get banned for it.
@@ -173,6 +177,7 @@ How each source is read, and the test behind each choice: [docs/scraping-plan.md
 | Your companies | `settings.yaml` (companies): the 119 that hire in Egypt, each through its Egypt jobs page ([docs/companies.md](docs/companies.md)), only their Egypt jobs kept; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
 | Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
+| LinkedIn search | the Apify Actor `curious_coder/linkedin-jobs-scraper`, logged out (`linkedin` in `settings.yaml`, `APIFY_TOKEN` in `.env`) | 50 jobs a run, at most one run every 20 hours (`every_hours`): about $3 a month |
 | Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 2 emails a day of 500 |
 
 ## ⚙️ Make it yours: `settings.yaml`
