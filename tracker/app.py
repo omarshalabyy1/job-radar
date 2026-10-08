@@ -17,6 +17,7 @@ from pypdf import PdfReader
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
+from job_radar.config import BAYT_PLACES, HOME  # noqa: E402
 from job_radar.db import connect  # noqa: E402
 
 STATUSES = ["new", "saved", "applied", "interview", "offer", "rejected", "ignored"]
@@ -32,6 +33,8 @@ SORT_OPTIONS = [f"{name} {arrow}" for name in SORTS for arrow in ("↓", "↑")]
 DEFAULT_SORT = ["Role ↑", "Target ↓", "Skills ↓", "Posted ↓"]
 # the sidebar's list filters: widget key -> column
 FILTERS = {"role": "role", "where": "place", "posted": "posted", "status": "status"}
+# the boards dropdowns: widget key -> (label, places); picking boards keeps only their jobs in those places
+BOARDS = {"egypt_board": ("Egypt boards", {HOME}), "gulf_board": ("Gulf boards", BAYT_PLACES - {HOME})}
 # Small companies: the most employees a company can have to pass. A range passes by its top ("11-50" is in
 # 1-50), "1,000+" never does, and a company of unknown size is left out while one is picked.
 SIZES = {"1-10": 10, "1-20": 20, "1-50": 50, "1-100": 100, "1-200": 200}
@@ -76,15 +79,16 @@ jobs["cv_coverage"] = pd.to_numeric(jobs["cv_coverage"])
 jobs["most_employees"] = pd.to_numeric(jobs["company_size"].map(most_employees))
 
 OPTIONS = {"role": sorted(jobs["role"].unique()), "where": sorted(jobs["place"].unique()),
-           "posted": list(FRESH.values()), "status": STATUSES}
-DEFAULTS = {"role": [], "where": [], "posted": [], "status": OPEN, "size": None, "skills": 0, "q": "",
+           "posted": list(FRESH.values()), "status": STATUSES,
+           **{name: sorted(jobs.loc[jobs["place"].isin(places), "source"].unique()) for name, (_, places) in BOARDS.items()}}
+DEFAULTS = {"role": [], "where": [], "posted": [], "status": OPEN, "egypt_board": [], "gulf_board": [], "size": None, "skills": 0, "q": "",
             "sort": DEFAULT_SORT}
 # The filters live in the address, so a reload or a bookmark keeps them.
 if "role" not in st.session_state:
     url = st.query_params
     skills_in_url = url.get("skills", "0")
     st.session_state.update(
-        {name: [o for o in url.get_all(name) if o in OPTIONS[name]] or list(DEFAULTS[name]) for name in FILTERS},
+        {name: [o for o in url.get_all(name) if o in OPTIONS[name]] or list(DEFAULTS[name]) for name in [*FILTERS, *BOARDS]},
         skills=min(int(skills_in_url), 10) if skills_in_url.isdigit() else 0,
         size=url.get("size") if url.get("size") in SIZES else None,
         q=url.get("q", ""),
@@ -102,6 +106,9 @@ def passing(skip: str = "") -> pd.Series:
     for name, column in FILTERS.items():
         if f[name] and name != skip:
             keep &= jobs[column].isin(f[name])
+    for name, (_, places) in BOARDS.items():
+        if f[name] and name != skip:
+            keep &= ~jobs["place"].isin(places) | jobs["source"].isin(f[name])
     if f.size and skip != "size":
         keep &= jobs["most_employees"] <= SIZES[f.size]
     if f.q:
@@ -111,6 +118,9 @@ def passing(skip: str = "") -> pd.Series:
 
 def option_counts(name: str) -> pd.Series:
     """How many jobs each option of a filter gives with the other filters as they are, in option order."""
+    if name in BOARDS:
+        return (jobs.loc[passing(skip=name) & jobs["place"].isin(BOARDS[name][1]), "source"]
+                .value_counts().reindex(OPTIONS[name], fill_value=0))
     return jobs.loc[passing(skip=name), FILTERS[name]].value_counts().reindex(OPTIONS[name], fill_value=0)
 
 
@@ -127,6 +137,11 @@ with st.sidebar:
     counts_line("role")
     places = st.multiselect("Where", OPTIONS["where"], key="where")
     counts_line("where")
+    boards = {}
+    for name, (label, board_places) in BOARDS.items():
+        boards[name] = st.multiselect(label, OPTIONS[name], key=name,
+                                      help=f"Only the jobs from these boards in {', '.join(sorted(board_places))}")
+        counts_line(name)
     posted = st.multiselect("Posted", OPTIONS["posted"], key="posted",
                             help="Apply within 48 hours of the posting. When a site gives no time, the time the "
                                  "radar first found the job counts (or the posting date, when that is older).")
@@ -144,7 +159,7 @@ with st.sidebar:
                           help="First pick first: ↓ is highest, newest or Z first, ↑ lowest, oldest or A first "
                                "(Role ↑ is your order in settings.yaml). A column picked twice counts once.")
 st.query_params.from_dict({k: v for k, v in {"role": roles, "where": places, "posted": posted, "status": statuses,
-                                             "size": size, "skills": min_skills, "q": text, "sort": sort}.items() if v})
+                                             "size": size, "skills": min_skills, "q": text, "sort": sort, **boards}.items() if v})
 
 shown = jobs[passing()]
 by, ascending = [], []
@@ -181,7 +196,7 @@ jobs_tab, dashboard_tab, skills_tab, companies_tab, cv_tab = st.tabs(
 with jobs_tab:
     st.caption(f"{plural(len(shown), 'job')} of {len(jobs)} match these filters")
     if shown.empty:
-        empty = [o for name in FILTERS for o in st.session_state[name] if option_counts(name)[o] == 0]
+        empty = [o for name in [*FILTERS, *BOARDS] for o in st.session_state[name] if option_counts(name)[o] == 0]
         st.info("No jobs match these filters"
                 + (f": {', '.join(empty)} {'has' if len(empty) == 1 else 'have'} no jobs with the other filters"
                    if empty else "")
