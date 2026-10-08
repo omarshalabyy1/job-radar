@@ -1,18 +1,22 @@
-"""The big job boards and job searches: Indeed and Bayt (JobSpy), Workable's search, freehire.me, Jooble."""
+"""The big job boards and job searches: Indeed and Bayt (JobSpy), Workable's search, freehire.me, Jooble,
+LinkedIn (through an Apify Actor)."""
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urlencode
 
-from ..config import BAYT_PLACES, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, ONSITE_PLACES, PLACES, ROLES, place_of, role_of
+from ..config import BAYT_PLACES, SETTINGS, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, ONSITE_PLACES, PLACES, ROLES, place_of, role_of
 from .base import ERRORS, Held, duration, fetch, get, hold, row, since, time_left, waiting
 
 
@@ -132,6 +136,33 @@ def jooble() -> list[dict]:
 
     with ThreadPoolExecutor(4) as pool:
         return [r for rows in pool.map(search, [(k, p) for k in KEYWORDS for p in PLACES]) for r in rows]
+
+
+def linkedin() -> list[dict]:
+    """LinkedIn's public job search, through the Apify Actor curious_coder/linkedin-jobs-scraper
+    (logged out, so no account at risk; LinkedIn itself is never opened from this laptop): each of
+    linkedin.words in each of linkedin.places, posted in the last day, remote outside Egypt, all in
+    one Actor run a collect. Pay per result: linkedin.max_jobs caps a run. Skipped without APIFY_TOKEN."""
+    token = os.environ.get("APIFY_TOKEN")
+    if not token:
+        print("linkedin: no APIFY_TOKEN in .env, skipped")
+        return []
+    cfg = SETTINGS["linkedin"]
+    searches = [(place, location, keyword) for place, location in cfg["places"].items() for keyword in cfg["words"]]
+    urls = ["https://www.linkedin.com/jobs/search/?" + urlencode(
+        {"keywords": keyword, "location": location, "f_TPR": "r86400",
+         **({} if place in ONSITE_PLACES else {"f_WT": "2"})}) for place, location, keyword in searches]
+    place_of_url = {url: place for url, (place, _, _) in zip(urls, searches)}
+    # straight to Apify's API, not through fetch(): its retry would start a second paid run on a slow one
+    r = requests.post("https://api.apify.com/v2/acts/curious_coder~linkedin-jobs-scraper/run-sync-get-dataset-items",
+                      params={"maxItems": cfg["max_jobs"]}, headers={"Authorization": f"Bearer {token}"},
+                      timeout=280, json={"urls": urls, "scrapeCompany": False,
+                                         "limitPerSource": math.ceil(cfg["max_jobs"] / len(urls))})
+    r.raise_for_status()
+    return [row("linkedin", place_of_url.get(j.get("inputUrl")), j["title"], j.get("companyName"), j.get("location"),
+                j["link"].split("?")[0], j.get("postedAt"), j.get("descriptionText"),
+                {k: v for k, v in j.items() if k not in ("descriptionText", "descriptionHtml")})
+            for j in r.json() if j.get("title") and j.get("link") and role_of(j["title"])]
 
 
 def workable_jobs() -> list[dict]:

@@ -73,6 +73,14 @@ roles:
 search_words: [data engineer, analytics engineer, ETL developer, databricks, AI engineer, machine learning engineer,
                NLP engineer, LLM engineer, generative AI, data scientist, BI developer, power bi, data analyst]
 
+# LinkedIn through an Apify Actor (APIFY_TOKEN in .env; skipped when empty): each word in each place,
+# posted in the last day, remote outside Egypt, in one run a collect. Each job costs $0.002 on Apify's
+# free plan ($5 credit a month): max_jobs 50 a day is about $3 a month.
+linkedin:
+  max_jobs: 50
+  words: [data engineer, AI engineer, BI developer, data analyst]
+  places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
+
 # Above your level: a title with any of these words is left out (entry, mid and senior stay in)
 too_senior: [lead, principal, staff, head, director, manager, vp, chief, architect]
 

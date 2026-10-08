@@ -1,7 +1,7 @@
 """The pipeline steps, one Airflow task each (python -m job_radar <step>):
 
     schema -> extract_boards, extract_bayt, extract_remote, extract_egypt, extract_gulf, extract_workable,
-              extract_freehire, extract_companies, extract_portals, extract_email (one by one)
+              extract_freehire, extract_linkedin, extract_companies, extract_portals, extract_email (one by one)
               -> transform -> describe -> match_skills -> export_career_ops
     email_egypt, email_abroad: the two emails, right after each collect (the HTML is in digest.py)
 
@@ -136,6 +136,10 @@ def extract_workable(conn) -> None:
 
 def extract_freehire(conn) -> None:
     extract(conn, sources.freehire)
+
+
+def extract_linkedin(conn) -> None:
+    extract(conn, sources.linkedin)
 
 
 def extract_companies(conn) -> None:

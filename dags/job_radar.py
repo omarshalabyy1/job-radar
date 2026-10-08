@@ -79,6 +79,7 @@ with DAG(
     extracts = [step(name) for name in ("extract_boards", "extract_bayt", "extract_remote", "extract_startups",
                                         "extract_egypt", "extract_gulf", "extract_workable", "extract_freehire",
                                         "extract_companies", "extract_portals", "extract_email")]
+    extracts.append(step("extract_linkedin", execution_timeout=timedelta(seconds=300)))  # one Apify run, up to 280 s
     step("schema") >> extracts
     matched = step("match_skills", trigger_rule="all_done", outlets=[COLLECTED])
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=150)) >> matched
