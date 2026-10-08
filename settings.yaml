@@ -81,6 +81,14 @@ linkedin:
   words: [data engineer, AI engineer, BI developer, data analyst]
   places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
 
+# Claude grading, a side step after each collect (ANTHROPIC_API_KEY in .env): each new job scored 0-10
+# against your CVs, the CV to send and one line why, into core.claude_grade. enabled: false turns it off; it
+# also stops by itself when the API credit runs out. Sonnet 5.5 at ~100 jobs a day is about $14 a month.
+claude:
+  enabled: true
+  model: claude-sonnet-5-5
+  max_jobs: 100
+
 # Above your level: a title with any of these words is left out (entry, mid and senior stay in)
 too_senior: [lead, principal, staff, head, director, manager, vp, chief, architect]
 

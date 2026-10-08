@@ -4,6 +4,7 @@ Steps, in order: schema extract_boards extract_bayt extract_remote extract_start
 extract_workable extract_freehire extract_linkedin extract_companies extract_portals extract_email transform describe
 match_skills export_career_ops
 email_egypt email_abroad
+grade_claude (a side step: Claude scores the new jobs, settings.yaml claude)
 Settings come from the environment, or from .env in the repo root (see .env.example).
 """
 
@@ -17,7 +18,7 @@ from .db import connect
 
 STEPS = ["schema", "extract_boards", "extract_bayt", "extract_remote", "extract_startups", "extract_egypt",
          "extract_gulf", "extract_workable", "extract_freehire", "extract_linkedin", "extract_companies", "extract_portals", "extract_email",
-         "transform", "describe", "match_skills", "export_career_ops", "email_egypt", "email_abroad"]
+         "transform", "describe", "match_skills", "export_career_ops", "email_egypt", "email_abroad", "grade_claude"]
 
 
 def main() -> None:

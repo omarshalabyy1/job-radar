@@ -247,3 +247,13 @@ CREATE VIEW mart.jobs_daily AS
 SELECT first_seen, place, role_rank, role, source, count(*) AS jobs
 FROM core.job
 GROUP BY first_seen, place, role_rank, role, source;
+
+-- Claude's grade of a job (grade.py, a side step: nothing else reads it yet); goes with its job
+CREATE TABLE IF NOT EXISTS core.claude_grade (
+    job_id    bigint PRIMARY KEY REFERENCES core.job ON DELETE CASCADE,
+    score     smallint    NOT NULL,  -- 0-10, 10 = apply today
+    cv        text        NOT NULL,  -- the label of the CV to send (core.cv)
+    reason    text        NOT NULL,
+    model     text        NOT NULL,
+    graded_at timestamptz NOT NULL DEFAULT now()
+);

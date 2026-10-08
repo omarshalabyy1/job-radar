@@ -30,6 +30,7 @@ from . import sources
 from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, ROLE_LABEL, ROOT, SETTINGS,
                      in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
+from .grade import grade_claude  # noqa: F401  (a side step, python -m job_radar grade_claude)
 
 DAYS = HOURS_OLD // 24
 

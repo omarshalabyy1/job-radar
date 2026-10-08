@@ -10,3 +10,4 @@ streamlit
 pyyaml
 curl_cffi
 python-dateutil
+anthropic

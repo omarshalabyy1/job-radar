@@ -91,3 +91,9 @@ for dag_id, name in (("job_radar_email_egypt", "email_egypt"), ("job_radar_email
              catchup=False, max_active_runs=1, is_paused_upon_creation=False,
              default_args={"retries": 0, "execution_timeout": timedelta(seconds=240)}):
         step(name)
+
+# a side step, after each collect too: Claude scores the new jobs (settings.yaml claude), never holding up the emails
+with DAG(dag_id="job_radar_grade_claude", schedule=[COLLECTED], start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
+         catchup=False, max_active_runs=1, is_paused_upon_creation=False,
+         default_args={"retries": 0, "execution_timeout": timedelta(seconds=600)}):
+    step("grade_claude")
