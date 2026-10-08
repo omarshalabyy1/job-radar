@@ -78,6 +78,8 @@ services:
       # before they ran, and the warehouse crashed (2026-10-06). LocalExecutor also keeps one worker
       # process per slot (default 32: ~1.4 GB idle).
       AIRFLOW__CORE__PARALLELISM: "1"
+      # one at a time, the last extracts wait over 10 min in the queue; Airflow's default fails them unrun
+      AIRFLOW__SCHEDULER__TASK_QUEUED_TIMEOUT: "3600"
       # reading the DAG file may take longer than 30 s when the laptop is busy
       AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "120"
       # the DAG file changes only when you edit it: read every 5 minutes, not every 30 seconds
