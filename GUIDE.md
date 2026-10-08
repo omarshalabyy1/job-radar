@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="100%" src="docs/mental-model.svg" alt="The mental model: job-radar is a scout that works for you. 1 Sweep, the scout walks the job market: 22 sources at 12pm. 2 Sift, it keeps only what fits you: your roles, places and level in settings.yaml. 3 Merge, one card per job, never twice. 4 Rank, best first, in your inbox. 5 Act, you decide and your coach helps: the tracker and Claude's /job-radar.">
+  <img width="100%" src="docs/mental-model.svg" alt="The mental model: job-radar is a scout that works for you. 1 Sweep, the scout walks the job market: 28 sources at 12pm. 2 Sift, it keeps only what fits you: your roles, places and level in settings.yaml. 3 Merge, one card per job, never twice. 4 Rank, best first, in your inbox. 5 Act, you decide and your coach helps: the tracker and Claude's /job-radar.">
 </p>
 
 # 👣 job-radar, in baby steps
@@ -14,7 +14,7 @@ Think of job-radar as **a scout that works for you**. Five stations, always in t
 
 | # | Station | Picture it as | What does it in job-radar |
 |---|---|---|---|
-| 1 | 🔵 **Sweep** | The scout walks the whole job market | Airflow runs the *collect* at 12pm: 22 sources, from Wuzzuf and Indeed to 120+ company career pages in Egypt and your Gmail alerts |
+| 1 | 🔵 **Sweep** | The scout walks the whole job market | Airflow runs the *collect* at 12pm: 28 sources, from Wuzzuf and Indeed to 119 company career pages in Egypt and your Gmail alerts |
 | 2 | 🟢 **Sift** | It keeps only what fits you | your rules in `settings.yaml`: roles, places, level; onsite only in Cairo or Giza, remote anywhere else |
 | 3 | 🟠 **Merge** | One card per job, never twice | the warehouse: every posting lands in `raw`, each job becomes one row in `core`, even when three boards carry it |
 | 4 | 🟣 **Rank** | The best first, delivered to your inbox | your skills are matched; two emails right after the collect, junior to senior, your companies first |

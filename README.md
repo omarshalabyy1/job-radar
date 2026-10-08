@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="100%" src="docs/header.svg" alt="job-radar: data and AI jobs, found for you. A terminal runs a collect over 22 sources and 120+ career pages in Egypt, ranks the jobs by your skills and emails them at 12:30pm, while a radar sweeps for new jobs.">
+  <img width="100%" src="docs/header.svg" alt="job-radar: data and AI jobs, found for you. A terminal runs a collect over 28 sources and 119 career pages in Egypt, ranks the jobs by your skills and emails them at 12:30pm, while a radar sweeps for new jobs.">
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Claude_Code-%2Fjob--radar-D97757?style=for-the-badge&logo=claude&logoColor=white" alt="Claude Code: /job-radar">
 </p>
 
-<h3 align="center">Your own job search, on autopilot: every new data and AI job from 22 sources,<br>ranked by your skills, in two emails a day.</h3>
+<h3 align="center">Your own job search, on autopilot: every new data and AI job from 28 sources,<br>ranked by your skills, in two emails a day.</h3>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Runs_on_your_laptop-1E293B?style=flat-square" alt="Runs on your laptop">
@@ -57,7 +57,7 @@ freelance. Jobs at your companies get a ⭐.
 ## 🧭 How it works
 
 <p align="center">
-  <img width="100%" src="docs/how-it-works.svg" alt="How it works: 01 Collect, job boards, job APIs, 120+ career pages in Egypt and your Gmail alerts; 02 Rank, your roles, places and level, one row per job, scored by your skills; 03 Email, Egypt and outside Egypt, junior to senior, your companies first, sent once; 04 Apply, /job-radar in Claude Code reviews, tailors your CV and applies with your yes.">
+  <img width="100%" src="docs/how-it-works.svg" alt="How it works: 01 Collect, job boards and APIs, LinkedIn search via Apify, 119 career pages in Egypt and your Gmail alerts; 02 Rank, your roles, places and level, one row per job, scored by your skills; 03 Email, Egypt and outside Egypt, junior to senior, your companies first, sent once; 04 Apply, /job-radar in Claude Code reviews, tailors your CV and applies with your yes.">
 </p>
 
 The machine in four diagrams (two ways to run, a mind map of the sources, the pipeline, the
@@ -81,7 +81,8 @@ request ladder) and where to change what: [docs/architecture.md](docs/architectu
 - **Every public page is read**, whatever a site's robots.txt says; a site that turns scripts away
   is asked again with a real Chrome's handshake. The code never logs in and never gets past a bot
   check: a site that shows one is opened by you once (`scripts/open_blocked.py`) and read with your
-  saved session after that. LinkedIn is never opened: its jobs come only from your alert emails. A
+  saved session after that. LinkedIn is never opened from the laptop: its jobs come from your alert
+  emails and from its logged-out search through Apify. A
   careers page that cannot be read shows why in the tracker and is tried again a day later.
 
 </details>
@@ -94,9 +95,10 @@ request ladder) and where to change what: [docs/architecture.md](docs/architectu
 
 | Airflow DAG | When | Does |
 |---|---|---|
-| `job_radar` | 12pm | extract (10 tasks, one by one) → transform → describe → match_skills → export_career_ops |
+| `job_radar` | 12pm | extract (12 tasks, one by one) → transform → describe → match_skills → export_career_ops |
 | `job_radar_email_egypt` | right after the collect | emails Egypt's new jobs |
 | `job_radar_email_abroad` | right after the collect | emails everywhere else's new jobs |
+| `job_radar_grade_claude` | right after the collect | off (`claude.enabled: false`): jobs are judged in `/job-radar` |
 
 No AI runs on this schedule. Airflow keeps its own records in its own small Postgres, and when
 one of its parts stops, Docker restarts it.
@@ -147,6 +149,7 @@ through LinkedIn or Indeed: their terms ban automation, and accounts get banned 
   <img src="https://img.shields.io/badge/NaukriGulf-1E293B?style=flat-square" alt="NaukriGulf">
   <img src="https://img.shields.io/badge/GulfTalent-1E293B?style=flat-square" alt="GulfTalent">
   <img src="https://img.shields.io/badge/Dubizzle_Jobs-1E293B?style=flat-square" alt="Dubizzle Jobs">
+  <img src="https://img.shields.io/badge/LinkedIn_via_Apify-1E293B?style=flat-square" alt="LinkedIn via Apify">
   <img src="https://img.shields.io/badge/28%2C000_career_pages-1E293B?style=flat-square" alt="28,000 career pages">
   <img src="https://img.shields.io/badge/Your_119_companies_in_Egypt-1E293B?style=flat-square" alt="Your 119 companies in Egypt">
   <img src="https://img.shields.io/badge/Your_Gmail_alerts-1E293B?style=flat-square" alt="Your Gmail alerts">
@@ -177,7 +180,7 @@ How each source is read, and the test behind each choice: [docs/scraping-plan.md
 | Your companies | `settings.yaml` (companies): the 119 that hire in Egypt, each through its Egypt jobs page ([docs/companies.md](docs/companies.md)), only their Egypt jobs kept; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
 | Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
-| LinkedIn search | the Apify Actor `curious_coder/linkedin-jobs-scraper`, logged out (`linkedin` in `settings.yaml`, `APIFY_TOKEN` in `.env`) | 50 jobs a run, at most one run every 20 hours (`every_hours`): about $3 a month |
+| LinkedIn search | the Apify Actor `curious_coder/linkedin-jobs-scraper`, logged out (`linkedin` in `settings.yaml`, `APIFY_TOKEN` in `.env`) | 50 jobs a run, at most one run every 20 hours (`every_hours`): about $3 a month (one run on 8 October 2026: 30 postings, $0.098) |
 | Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 2 emails a day of 500 |
 
 ## ⚙️ Make it yours: `settings.yaml`
@@ -190,6 +193,7 @@ and the next run uses it; a schedule change shows in Airflow within a minute.
 | `schedule` | when it collects and when each email goes, written `11am`, `7pm`, `"7:30pm"` |
 | `roles` | the jobs you want, **in your order** (the email follows it): the words a title needs, and what the job boards are searched for |
 | `search_words` | the plain search words for Himalayas, Workable, freehire, Jooble and Welcome to the Jungle |
+| `linkedin` | LinkedIn's search through Apify: its words and places, jobs a run (`max_jobs`) and hours between runs (`every_hours`) |
 | `too_senior`, `never` | titles to leave out: above your level, or never yours |
 | `experience` | the words for entry and senior, and the years that make a job entry (1 or less) or senior (5 or more) |
 | `places` | the places, **in email order**, where the boards search, and the words that name each one |
@@ -233,6 +237,7 @@ docker compose up -d --build  # Airflow, the warehouse and the tracker
 | `MAIL_TO` | where the emails go (empty: `GMAIL_USER`) |
 | `MAILBOXES` | the inboxes to read job alerts from: `you@gmail.com:apppassword,other@gmail.com:apppassword` |
 | `JOOBLE_API_KEY` | optional, a free key from [Jooble](https://jooble.org/api/about) |
+| `APIFY_TOKEN` | optional, your Apify API token (Apify Console > Settings > API & Integrations): adds LinkedIn's search, paid per result |
 
 Then turn on LinkedIn and Wuzzuf job alerts for your roles, sent to those inboxes, upload your CV
 in the tracker, and keep Docker Desktop running. The first emails arrive at the next email time;
@@ -242,7 +247,8 @@ in the tracker, and keep Docker Desktop running. The first emails arrive at the 
 
 ## 🏗️ For engineers
 
-Every table in the warehouse, the tables it is built from, and its row count on 6 October 2026:
+Every table in the warehouse, the tables it is built from, and its row count on 6 October 2026 (the
+LinkedIn and startup extracts, `core.job_seen` and `core.claude_grade` show no count):
 
 ![Data flow, table by table](docs/data-flow.svg)
 
@@ -254,9 +260,9 @@ The collect DAG in Airflow's graph view, every task green:
 
 ![Airflow graph view of job_radar: schema, ten extract tasks side by side, then transform, describe, match_skills and export_career_ops, all successful](docs/airflow-dag.png)
 
-The tracker's main page, every job with how many of your skills it asks for:
+The tracker's Dashboard, with the sidebar's Egypt boards and Gulf boards filters:
 
-![The job tracker: counts by status, then the Jobs tab with each job's skills, title, company and role](docs/app.png)
+![The job tracker's Dashboard: counts by status; the sidebar's Role, Where, Egypt boards and Gulf boards filters with counts per option; a donut of how fresh the jobs are, from within 12 hours to over 3 days, with the jobs deleted tomorrow in orange; and new jobs a day](docs/app.png)
 
 ## 🧰 Built with
 

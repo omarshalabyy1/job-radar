@@ -18,7 +18,7 @@ fixes or unlocks (a saved login, a repaired reader) the daily run uses from then
 flowchart LR
     subgraph auto["Docker + Airflow: on its own, once a day"]
         direction TB
-        noon(["12pm Cairo,<br>or your Trigger"]):::trigger --> collect["collect<br>22 sources, one by one"]
+        noon(["12pm Cairo,<br>or your Trigger"]):::trigger --> collect["collect<br>28 sources, one by one"]
         collect --> warehouse[("warehouse<br>core.job")]
         warehouse --> mails(["right after<br>2 emails"]):::success
     end
@@ -47,18 +47,20 @@ only remote jobs.
 %% mindmap: where every job comes from, grouped by Omar's place rule
 %% Egypt (onsite or hybrid in Cairo and Giza) | Gulf (remote only) | Remote (open to Egypt) | your companies | your inboxes
 mindmap
-  root((job-radar<br>22 sources))
+  root((job-radar<br>28 sources))
     Egypt<br>onsite in Cairo and Giza
       Wuzzuf<br>every job, last 24 h
       Tanqeeb Egypt
       Indeed and Bayt
       freehire.me
+      LinkedIn search via Apify
     Gulf<br>remote only
       NaukriGulf
       GulfTalent
       Dubizzle Jobs UAE
       Tanqeeb, 6 Gulf sites
       Indeed and Bayt
+      LinkedIn search via Apify<br>UAE and Saudi Arabia
     Remote<br>open to Egypt
       APIs and feeds
         Himalayas, Remotive, Remote OK
@@ -69,6 +71,9 @@ mindmap
         Remote.co sitemap
       Searches
         Indeed, Workable, freehire.me
+      Startup platforms
+        Wellfound, Welcome to the Jungle
+        startup.jobs, Built In, Y Combinator
     Your companies<br>Egypt jobs only
       Their own career sites
       28,000-company feed
@@ -80,20 +85,22 @@ mindmap
 
 ## One collect
 
-Ten extract tasks run one by one, each within 150 seconds, so a busy laptop is not swamped; a whole
-collect takes about 15 minutes, and both emails go right after it. A job first seen over 4 days ago
+Twelve extract tasks run one by one, each within 150 seconds (LinkedIn's Apify run within 280), so a
+busy laptop is not swamped; a task may wait up to an hour for its turn (`task_queued_timeout` 3600 in
+`docker-compose.yml`), so the last extracts are never failed unrun. A whole collect takes about 15
+minutes, and both emails go right after it. A job first seen over 4 days ago
 is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key).
 Every posting is stored once (its source and link), every job once (`core.job`), every email
 sends a job once.
 
 ```mermaid
 %% flowchart: one collect, left to right
-%% clock -> schema -> 11 extract tasks one by one -> raw -> transform -> core -> describe -> match_skills -> export
+%% clock -> schema -> 12 extract tasks one by one -> raw -> transform -> core -> describe -> match_skills -> export
 %% the two email DAGs run once match_skills is done (an Airflow Asset) and read the mart view
 flowchart LR
     clock(["Airflow<br>12pm Cairo,<br>or your Trigger"]):::trigger --> schema["schema<br>settings.yaml to core.company"]
     schema --> extracts
-    subgraph extracts["11 extract tasks, one by one, 150 s each"]
+    subgraph extracts["12 extract tasks, one by one, 150 s each"]
         direction TB
         boards["extract_boards<br>Indeed"]
         bayt["extract_bayt<br>Bayt"]
@@ -102,6 +109,7 @@ flowchart LR
         remote["extract_remote<br>10 remote boards"]
         startups["extract_startups<br>5 startup platforms"]
         freehire["extract_freehire"]
+        linkedin["extract_linkedin<br>LinkedIn search via Apify,<br>once in 20 hours, 280 s"]
         workable["extract_workable<br>once a day"]
         companies["extract_companies<br>Egypt jobs only"]
         portals["extract_portals<br>28,000-company feed"]
@@ -143,7 +151,7 @@ flowchart TD
     js -->|yes| browser["3 · headless Chromium<br>read 10 s after load"]
     browser -->|"bot check"| blocked["marked blocked"]:::error
     blocked --> you["4 · you, once:<br>scripts/open_blocked.py<br>session saved for Airflow"]:::ai
-    never["linkedin.com<br>never asked"]:::error
+    never["linkedin.com<br>never asked from the laptop"]:::error
 
     classDef trigger fill:#fed7aa,stroke:#c2410c,color:#374151
     classDef success fill:#a7f3d0,stroke:#047857,color:#374151
@@ -158,6 +166,7 @@ flowchart TD
 |---|---|---|
 | a role, a place, your level, the schedule | `settings.yaml` | the next run uses it; a schedule change shows in Airflow within a minute |
 | add or remove a company, or its Egypt jobs page | `settings.yaml` (companies), then `.venv\Scripts\python scripts\companies_doc.py` rewrites [companies.md](companies.md) | the schema step copies the list to `core.company`; a changed link is detected again |
+| LinkedIn's search words, places, jobs a run | `settings.yaml` (linkedin), `APIFY_TOKEN` in `.env` | the next Apify run, at most one every `every_hours` (20) |
 | an inbox, an app password, Gmail | `.env` | `docker compose up -d` (the containers read `.env` when they start) |
 | a site that shows a bot check or needs a login | run `scripts/open_blocked.py` (or `/job-radar` starts it) | your session is saved in `output/sessions/` and used by the next run |
 | add a job source | a function in the module of its group in `job_radar/sources/` (`egypt.py`, `gulf.py`, `remote.py`, `boards.py`, `companies.py`, `inbox.py`) that asks through `get()` / `fetch()` from `base.py` and returns `row(...)` rows; add it to an `extract_*` step in `job_radar/steps.py` (a new step also goes in `__main__.py` STEPS and `dags/job_radar.py`) | a saved sample in `tests/fixtures/` and a test in `tests/test_sources.py`; a row in [scraping-plan.md](scraping-plan.md) |
@@ -166,5 +175,5 @@ flowchart TD
 | a table or a view | `sql/schema.sql` | applied at the start of every collect |
 | the tracker | `tracker/app.py` | refresh the page |
 
-Before a change goes in: `.venv\Scripts\python -m pytest tests` (24 tests, no network, about 10 seconds): the rate limits,
+Before a change goes in: `.venv\Scripts\python -m pytest tests` (29 tests, no network, about 10 seconds): the rate limits,
 every reader against a saved sample of its site, and `companies.md` against `settings.yaml`.

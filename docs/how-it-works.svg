@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 290" width="1000" height="290" role="img" aria-label="How it works: 01 Collect, job boards, job APIs, 120+ career pages in Egypt and your Gmail alerts; 02 Rank, your roles, places and level, one row per job, your skills matched; 03 Email, two digests (Egypt, outside Egypt), junior to senior, each job sent once; 04 Apply, /job-radar in Claude Code reviews, tailors and applies with your yes per job.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 290" width="1000" height="290" role="img" aria-label="How it works: 01 Collect, job boards and APIs, LinkedIn search via Apify, 119 career pages in Egypt and your Gmail alerts; 02 Rank, your roles, places and level, one row per job, your skills matched; 03 Email, two digests (Egypt, outside Egypt), junior to senior, each job sent once; 04 Apply, /job-radar in Claude Code reviews, tailors and applies with your yes per job.">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0B1220"/>
@@ -31,9 +31,9 @@
   <circle cx="84" cy="140" r="18" fill="#3B82F6" fill-opacity="0.35"/>
   <text x="84" y="145" class="num" text-anchor="middle">01</text>
   <text x="112" y="146" class="step">Collect</text>
-  <text x="70" y="184" class="desc">Job boards, job APIs,</text>
-  <text x="70" y="203" class="desc">120+ career pages and</text>
-  <text x="70" y="222" class="desc">your Gmail job alerts</text>
+  <text x="70" y="184" class="desc">Job boards and APIs,</text>
+  <text x="70" y="203" class="desc">LinkedIn via Apify, 119</text>
+  <text x="70" y="222" class="desc">career pages, Gmail alerts</text>
 
   <!-- 02 -->
   <rect x="285" y="105" width="205" height="140" rx="14" fill="#14B8A6" fill-opacity="0.08" stroke="#14B8A6" stroke-opacity="0.7"/>
