@@ -1,7 +1,7 @@
 """track_applications: your applications as your mailboxes tell them, read-only, into core.application_email.
 
 Gmail's All Mail is searched over IMAP, in each Gmail account of MAILBOXES in .env (else GMAIL_USER), for application
-words in the subject (nothing is marked read, moved or deleted, and nothing leaves the laptop but the few emails no
+words in the subject, and for every email from the addresses or domains of APPLICATION_SENDERS in .env (nothing is marked read, moved or deleted, and nothing leaves the laptop but the few emails no
 pattern fits, which go to Claude as 2,000 characters each). A mailbox with no email stored yet is read 400 days back,
 one with some 3 days; an email is stored once, whichever mailbox it came from (its Message-ID). Each email is told
 apart by plain patterns on its sender and subject first (PATTERNS: free); only the leftovers go to
@@ -30,7 +30,7 @@ import email.policy
 import imaplib
 import os
 import re
-from email.utils import parsedate_to_datetime
+from email.utils import parseaddr, parsedate_to_datetime
 from datetime import date, datetime, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -43,7 +43,9 @@ from .config import OUTPUT, SETTINGS
 from .sources.inbox import MAIL_BYTES
 from .tailor import RULES, slug
 
-SEARCH = "subject:(applying OR application OR applied OR interview OR candidate OR position OR interest OR steps)"
+# an offer only as a job offer's words ("Offer Letter", "Job Offer", "Offer of Employment"): "offer" alone brought food deals
+SEARCH = ("(subject:(applying OR application OR applied OR interview OR candidate OR position OR interest OR steps)"
+          " OR subject:(offer letter) OR subject:(job offer) OR subject:(employment offer))")
 BACKFILL_DAYS, DAILY_DAYS = 400, 3
 BODY_CHARS = 2000  # of an email sent to Claude
 # the statuses in the order an application moves up; 'viewed' and 'other' move nothing, 'ignored' is yours
@@ -177,6 +179,32 @@ def accounts() -> dict[str, str]:
     return found
 
 
+def senders() -> dict[str, str | None]:
+    """APPLICATION_SENDERS in .env, comma-separated: {address or domain: its company}. An entry is an address or a domain,
+    with "=Company" to name it; a domain alone names its own ("acme-labs.io": Acme Labs), an address alone none."""
+    found = {}
+    for entry in os.environ.get("APPLICATION_SENDERS", "").split(","):
+        who, _, company = entry.partition("=")
+        if who := who.strip().lower():
+            found[who] = company.strip() or (None if "@" in who else re.sub(r"[-_.]", " ", who.rsplit(".", 1)[0]).title())
+    return found
+
+
+def search() -> str:
+    """SEARCH, and with APPLICATION_SENDERS every email from them too: people who hire you without an application
+    word in the subject (an intro call, a welcome)."""
+    listed = senders()
+    return f"({SEARCH} OR from:({' OR '.join(listed)}))" if listed else SEARCH
+
+
+def sender_company(sender: str) -> str | None:
+    """The company APPLICATION_SENDERS gives the sender's address, or its domain (a subdomain too), or None."""
+    address = parseaddr(sender)[1].lower()
+    domain = address.rpartition("@")[2]
+    return next((company for who, company in senders().items()
+                 if who == address or domain == who or domain.endswith(f".{who}")), None)
+
+
 def read_mailbox(user: str, password: str, days: int, stored: set[str]) -> tuple[list[dict], list[dict], int]:
     """(classified, leftovers, found): the emails of the last `days` days not stored yet, those a
     pattern told apart and those no pattern fits (with their text), and how many the search found."""
@@ -186,7 +214,7 @@ def read_mailbox(user: str, password: str, days: int, stored: set[str]) -> tuple
         if imap.select('"[Gmail]/All Mail"', readonly=True)[0] != "OK":
             raise RuntimeError("track_applications: Gmail's [Gmail]/All Mail could not be opened")
         # X-GM-RAW takes Gmail's own search; no inner quotes (imaplib cannot parse them)
-        uids = imap.uid("search", None, "X-GM-RAW", f'"{SEARCH} newer_than:{days}d"')[1][0].split()
+        uids = imap.uid("search", None, "X-GM-RAW", f'"{search()} newer_than:{days}d"')[1][0].split()
         for uid in uids:
             info, head = imap.uid("fetch", uid, "(RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT MESSAGE-ID DATE)])")[1][0]
             h = email.message_from_bytes(head, policy=email.policy.default)
@@ -225,22 +253,40 @@ def fetch_body(user: str, password: str, message_id: str) -> str | None:
         return body_text(email.message_from_bytes(imap.uid("fetch", uids[0], "(BODY.PEEK[])")[1][0][1], policy=email.policy.default))
 
 
-def ask_claude(leftovers: list[dict], cfg: dict) -> list[dict]:
-    """Claude's kind, company and title for each leftover; one it could not be asked (the credit ran out, an error
-    or a timeout) is left out, for the next run."""
+# What each kind means, for Claude. The mistakes it made with a one-line definition are named (2026-10-11): the
+# candidate's own replies read as offers, "track your application" as viewed, a thank-you as rejected, a job board as
+# the company.
+CLASSIFY = """You read one email from a job seeker's mailbox and say what it tells about one of their job applications.
+
+kind, judged from the whole email, not its subject alone:
+- applied: the employer confirms it received the application ("we received", "thank you for applying", "track your
+  application"), or the candidate themself sends an application, a CV or an expression of interest to an employer.
+- viewed: the employer says it opened or is reviewing the application, with no decision yet.
+- interview: the employer invites them to, schedules or confirms an interview, a call with a recruiter or hiring
+  manager, an assessment or a test, or writes to arrange one (a recruiter's introduction leading to a call counts).
+- offer: the employer offers the job or welcomes them as hired: an offer letter, a contract to sign, "welcome to the team".
+- rejected: the employer says it will not move forward with them. A thank-you with no decision is applied, not rejected.
+- other: everything else - newsletters, articles and posts about interviews or offers, job alerts and "jobs similar to
+  your application", marketing and deals, "complete" or "finish your application" (not sent yet), account or security
+  notices, bounces, and the candidate's own replies, forwards and calendar answers in a thread.
+
+The mailbox belongs to the candidate: an email from that address was written by them.
+company: the employer, never a job board, an applicant-tracking or e-signature service or a newsletter (LinkedIn, Bayt,
+Wuzzuf, Glassdoor, Workable, Dropbox Sign ...); empty when the email does not name the employer. title: the job, empty
+when it does not say."""
+
+
+def ask_claude(leftovers: list[dict], cfg: dict, me: str = "") -> list[dict]:
+    """Claude's kind, company and title for each leftover of the mailbox `me`; one it could not be asked (the credit ran
+    out, an error or a timeout) or whose answer did not come back whole is left out, for the next run."""
     import anthropic  # for its errors; the SDK loads only in a run that calls Claude, and the tracker imports this module
     client = claude.client()  # a stuck call gives up inside the DAG's 300 s
-    system = ("You read one email from a job seeker's mailbox. kind: applied (their application was received or "
-              "sent), viewed (an employer looked at it), rejected (not moving forward), interview (an interview or "
-              "test is offered or scheduled), offer (a job offer), other (anything else: newsletters, alerts, "
-              "marketing, security notices). company and title: the employer and the job the email is about, "
-              "empty when it does not say.")
     classified = []
     for mail in leftovers:
         try:
-            r = client.messages.parse(
-                model=cfg["model"], max_tokens=200, system=system, output_format=Mail, output_config={"effort": "low"},
-                messages=[{"role": "user", "content": f"From: {mail['sender']}\nTo: {mail['to']}\n"
+            r = client.messages.parse(  # 1,024 tokens: it thinks first, and 200 could cut an answer off
+                model=cfg["model"], max_tokens=1024, system=CLASSIFY, output_format=Mail, output_config={"effort": "low"},
+                messages=[{"role": "user", "content": f"Mailbox: {me}\nFrom: {mail['sender']}\nTo: {mail['to']}\n"
                                                       f"Subject: {mail['subject']}\n\n{mail['text']}"}])
         except (anthropic.APIStatusError, anthropic.APIConnectionError) as e:  # a timeout is a connection error
             if claude.out_of_credit(e):  # the balance ran out: every call would be refused
@@ -511,6 +557,7 @@ def store(cur, jobs: list[tuple], mailbox: str, mails: list[dict]) -> tuple[int,
     matched to a job, statuses moved up, new by kind)."""
     added, matched, moved, kinds = 0, 0, 0, {}
     for m in mails:
+        m = {**m, "company": m["company"] or sender_company(m["sender"])}  # the email named none: its sender's, when listed
         job_id = find_job(jobs, m["title"], m["company"], m["received_at"].date())
         cur.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, company, title, kind, job_id, mailbox)"
                     " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (message_id) DO NOTHING",
@@ -554,7 +601,7 @@ def track_applications(conn) -> None:
             print(f"track_applications: mailbox {n}: {len(leftovers)} emails left for Claude: no ANTHROPIC_API_KEY in .env")
         elif leftovers:
             # features.track_applications is this step's switch (checked above); this reads a few emails a day
-            by_claude = ask_claude(leftovers, cfg)
+            by_claude = ask_claude(leftovers, cfg, address)
         mails = sorted(classified + by_claude, key=lambda m: m["received_at"])
         with conn.cursor() as cur:
             new, linked, up, new_kinds = store(cur, jobs, address, mails)
@@ -569,10 +616,14 @@ def track_applications(conn) -> None:
             kinds[k] = kinds.get(k, 0) + c
     if failed == len(boxes):
         raise RuntimeError("track_applications: no mailbox could be read")
-    # after the commit, so a failing draft never undoes the mailbox read; each is off unless its switch is on
+    # after the commit, so a failing draft never undoes the mailbox read; each is off unless its switch is on. No prep for
+    # a company that already sent an offer: its interviews are behind you.
     interviews = [dict(zip(("message_id", "company", "title", "sender", "subject", "received_at", "job_id", "mailbox"), row))
-                  for row in conn.execute("SELECT message_id, company, title, sender, subject, received_at, job_id, mailbox"
-                                          " FROM core.application_email WHERE kind = 'interview' ORDER BY received_at").fetchall()]
+                  for row in conn.execute(
+                      "SELECT message_id, company, title, sender, subject, received_at, job_id, mailbox FROM core.application_email e"
+                      " WHERE kind = 'interview' AND NOT EXISTS (SELECT 1 FROM core.application_email o WHERE o.kind = 'offer'"
+                      " AND regexp_replace(lower(o.company), '[\\W_]+', '', 'g') = regexp_replace(lower(e.company), '[\\W_]+', '', 'g'))"
+                      " ORDER BY received_at").fetchall()]
     prep_written, prep_asked = interview_prep(conn, interviews)
     follow_written, follow_due = follow_up_drafts(conn)
     print(f"track_applications: {len(boxes) - failed} of {len(boxes)} mailboxes read, {emails} emails found, {added} new "

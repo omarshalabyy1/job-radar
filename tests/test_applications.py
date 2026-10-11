@@ -523,3 +523,41 @@ def test_interview_prep_reads_the_email_from_its_own_mailbox(monkeypatch, tmp_pa
     assert applications.interview_prep(FakeConn(), [{**INTERVIEW, "mailbox": "one@gmail.com"}, second, gone], TODAY)[:2] == (2, 3)
     assert asked == [("one@gmail.com", "aaaa", "<a@hirevue.example>"), ("two@gmail.com", "bbbb", "<b@hirevue.example>")]  # its own password
     assert claude.calls == 2  # the mailbox no longer in MAILBOXES is skipped, not guessed
+
+
+def test_the_search_takes_offers_and_every_email_from_the_application_senders(monkeypatch):
+    monkeypatch.delenv("APPLICATION_SENDERS", raising=False)
+    assert applications.search() == applications.SEARCH and "subject:(offer letter)" in applications.SEARCH
+    assert "OR offer)" not in applications.SEARCH  # "offer" alone brought food deals
+    monkeypatch.setenv("APPLICATION_SENDERS", " zyntra-fold.example , Jo@ZZ.example = Zyntra Fold, kim@zz.example,")
+    assert applications.senders() == {"zyntra-fold.example": "Zyntra Fold", "jo@zz.example": "Zyntra Fold", "kim@zz.example": None}
+    assert applications.search() == f"({applications.SEARCH} OR from:(zyntra-fold.example OR jo@zz.example OR kim@zz.example))"
+
+
+@pytest.mark.parametrize("sender, company", [
+    ("Jo Doe <jo@zz.example>", "Zyntra Fold"),               # a listed address, with its company
+    ("Ann <ann@zyntra-fold.example>", "Zyntra Fold"),        # a listed domain names its own
+    ("noreply@mail.zyntra-fold.example", "Zyntra Fold"),     # a subdomain of it
+    ("x@notzyntra-fold.example", None), ("kim@zz.example", None), ("hr@other.example", None)])
+def test_an_email_that_names_no_company_takes_its_listed_senders(monkeypatch, sender, company):
+    monkeypatch.setenv("APPLICATION_SENDERS", "zyntra-fold.example,jo@zz.example=Zyntra Fold,kim@zz.example")
+    assert applications.sender_company(sender) == company
+
+
+def test_no_interview_prep_for_a_company_that_already_sent_an_offer(conn, monkeypatch):
+    read_from(monkeypatch, {"zz-a@gmail.com": [mail("<zz-int-1>", "interview", "Zyntrafold Labs"), mail("<zz-off-1>", "offer", "ZYNTRAFOLD LABS"),
+                                               mail("<zz-int-2>", "interview", "Zz Quorvex")]})
+    prepped = []
+    monkeypatch.setattr(applications, "interview_prep", lambda conn, mails: prepped.extend(m["message_id"] for m in mails) or (0, 0))
+    applications.track_applications(NoCommit(conn))
+    assert "<zz-int-2>" in prepped and "<zz-int-1>" not in prepped  # its interview is behind you
+
+
+def test_a_stored_email_with_no_company_gets_its_senders(conn, monkeypatch):
+    monkeypatch.setenv("APPLICATION_SENDERS", "jo@zz.example=Zyntra Fold")
+    intro = {**mail("<zz-intro>", "interview", None), "sender": "Jo <jo@zz.example>"}
+    named = {**mail("<zz-named>", "offer", "Zz Quorvex"), "sender": "Jo <jo@zz.example>"}  # Claude's company is kept
+    read_from(monkeypatch, {"zz-a@gmail.com": [intro, named]})
+    applications.track_applications(NoCommit(conn))
+    assert conn.execute("SELECT message_id, company FROM core.application_email WHERE message_id IN ('<zz-intro>', '<zz-named>')"
+                        " ORDER BY 1").fetchall() == [("<zz-intro>", "Zyntra Fold"), ("<zz-named>", "Zz Quorvex")]

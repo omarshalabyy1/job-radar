@@ -84,6 +84,7 @@ Open `.env` in any text editor and fill in:
 | `GMAIL_APP_PASSWORD` | the 16-letter code from step 3 | `abcdefghijklmnop` |
 | `MAIL_TO` | where the emails go; empty means `GMAIL_USER` | |
 | `MAILBOXES` | the inboxes to read job alerts from, as `address:app-password`, comma-separated | `you@gmail.com:abcdefghijklmnop` |
+| `APPLICATION_SENDERS` | optional: people and domains who hire you directly (every email from them is application news); `=Company` names the company | `acme-labs.example,jane@gmail.com=Acme Labs` |
 | `JOOBLE_API_KEY` | optional; leave empty | |
 
 Save the file. It is listed in `.gitignore`, so it never leaves your laptop.
