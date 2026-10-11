@@ -48,6 +48,8 @@ freelance. Jobs at your companies get a ⭐.
 - 📋 **Tracker**, port 8501: filter jobs (by role, place, the board in Egypt or the Gulf, and age: within
   12 or 24 hours, over 1, 2 or 3 days, or *deleted tomorrow*), mark saved / applied / interview / offer,
   see the skills each role asks for, Claude's score and why, the drafts ready to apply, your applications' funnel, your contacts, upload your CV, see how each company's careers page is read and each step's last run.
+  Jobs you cannot legally take from Cairo are hidden (the board's own "who can apply" field, else Claude Haiku), and your
+  applications are counted by company from your mailbox: applied, interviews, rejections, offers, and the ones that ghosted you.
 - 🌀 **Airflow**, port 8081: every run, every task's log, and *Trigger* to run now.
 - 🤖 **Claude**, `/job-radar` in Claude Code: reviews your matches, tailors your CV, helps you apply.
 - 🗄️ **SQL**, port 5433 (database and user `jobradar`): query the `mart` views.
@@ -282,9 +284,9 @@ The collect DAG in Airflow's graph view, every task green:
 
 ![Airflow graph view of job_radar: schema, ten extract tasks side by side, then transform, describe, match_skills and export_career_ops, all successful](docs/airflow-dag.png)
 
-The tracker's Dashboard, with the sidebar's Egypt boards and Gulf boards filters:
+The tracker's Dashboard, in the brand's navy theme (light and dark follow the system):
 
-![The job tracker's Dashboard: counts by status; the sidebar's Role, Where, Egypt boards and Gulf boards filters with counts per option; a donut of how fresh the jobs are, from within 12 hours to over 3 days, with the jobs deleted tomorrow in orange; and new jobs a day](docs/app.png)
+![The job tracker's Dashboard on 11 October 2026: 432 new jobs and 16 saved; tabs Jobs, Ready, Applications, Dashboard, Skills, Companies, Contacts, CV and Last run; the sidebar's search, Role, Where and Posted filters with a count per option; 461 jobs kept, 133 within 48 hours, 36 at your companies, 197 remote, median CV coverage 89%; Egypt jobs by Claude's score from 10 down; and new jobs a day](docs/app.png)
 
 ## 🧰 Built with
 
