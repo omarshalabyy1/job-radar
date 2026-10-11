@@ -13,8 +13,8 @@ from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from ..config import HOURS_OLD, role_of
-from .base import row
+from ..config import EXTRACT_SECONDS, HOURS_OLD, role_of
+from .base import row, time_left
 
 
 IMAP_HOSTS = {"gmail.com": "imap.gmail.com", "googlemail.com": "imap.gmail.com",
@@ -46,11 +46,18 @@ LINKEDIN_ALERTS = r"(jobalerts-noreply|jobs-listings)@linkedin\.com"
 MAIL_BYTES = 5_000_000
 
 
-def mailboxes(seen: set[str]) -> list[dict]:
+def company_of_subject(subject: str) -> str | None:
+    """The employer of a "New jobs posted from Capgemini Group" email (jobs2web, an employer's own alerts), or None:
+    the subject names it; the email's body does not say it in a place the parser can trust."""
+    m = re.match(r"New jobs posted from (.+)", subject.strip(), re.I)
+    return m.group(1).strip() if m else None
+
+
+def mailboxes(seen: set[str], empty: set[str]) -> list[dict]:
     """Jobs in every email of your inboxes and spam folders (LinkedIn, Indeed, Wuzzuf, Wellfound,
     Bayt alerts, an employer's email ...), over IMAP and read-only: nothing is marked read, moved or
-    deleted, and nothing leaves the laptop. An email already read for jobs (its Message-ID in
-    `seen`) is not read again.
+    deleted, and nothing leaves the laptop. An email already read (its Message-ID in `seen`) is not read again;
+    the Message-ID of each email read that had no job in it is added to `empty`, for the caller to remember.
 
     MAILBOXES in .env: address:app-password[:imap-host], comma-separated; the host is known for
     Gmail, Yahoo, iCloud and Outlook addresses."""
@@ -63,13 +70,13 @@ def mailboxes(seen: set[str]) -> list[dict]:
         address, password, *host = account.split(":")
         try:
             rows += read_mailbox(address, password.replace(" ", ""),
-                                 host[0] if host else IMAP_HOSTS[address.split("@")[-1].lower()], seen)
+                                 host[0] if host else IMAP_HOSTS[address.split("@")[-1].lower()], seen, empty)
         except Exception as e:  # one mailbox down is a short day
             print(f"WARNING email {address}: {e!r}"[:300])
     return rows
 
 
-def read_mailbox(address: str, password: str, host: str, seen: set[str]) -> list[dict]:
+def read_mailbox(address: str, password: str, host: str, seen: set[str], empty: set[str]) -> list[dict]:
     rows = []
     with imaplib.IMAP4_SSL(host) as imap:
         imap.login(address, password)
@@ -79,6 +86,9 @@ def read_mailbox(address: str, password: str, host: str, seen: set[str]) -> list
         for folder in ["INBOX", *spam]:
             imap.select(f'"{folder}"', readonly=True)
             for uid in imap.uid("search", None, "SINCE", since_day)[1][0].split():
+                if time_left(EXTRACT_SECONDS) < 20:  # room left for one more email and the load
+                    print(f"email {address}: time budget reached, the rest waits for the next run")
+                    return rows
                 info, head = imap.uid("fetch", uid, "(RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID DATE)])")[1][0]
                 h = email.message_from_bytes(head, policy=email.policy.default)
                 message_id = str(h["Message-ID"] or f"{address}/{folder}/{uid.decode()}")
@@ -92,8 +102,11 @@ def read_mailbox(address: str, password: str, host: str, seen: set[str]) -> list
                 jobs = jobs_in_email(body.get_content(), alert) if body else []
                 if not re.search(JOB_SENDERS, str(h["From"]), re.I):
                     jobs = [job for job in jobs if re.search(JOB_PAGE, job[3], re.I)]
-                    if not jobs:  # not a job email
-                        continue
+                if not jobs:  # not a job email, or one with no job: remembered, so the next run does not download it again
+                    empty.add(message_id)
+                    continue
+                if employer := company_of_subject(str(h["Subject"])):
+                    jobs = [(title, employer, location, url) for title, _, location, url in jobs]
                 posted = str(parsedate_to_datetime(str(h["Date"])).date()) if h["Date"] else None
                 meta = {"mailbox": address, "folder": folder, "message_id": message_id, "from": str(h["From"]),
                         "subject": str(h["Subject"])}
@@ -138,8 +151,9 @@ def jobs_in_email(page: str, alert: bool = False) -> list[tuple[str, str, str, s
             continue
         urls.add(url)
         after = card.split("\n")[0] if card else lines[i + 1] if i + 1 < len(lines) else ""
-        if (next_link := re.fullmatch(r"@@(\d+)@@", after)):  # the company is a link of its own
-            after = links[int(next_link.group(1))][0].split("\n")[0]
+        if (next_link := re.fullmatch(r"@@(\d+)@@", after)):  # the company is a link of its own, unless it is the next job
+            text_of_next, href_of_next = links[int(next_link.group(1))]
+            after = "" if re.search(JOB_PAGE, href_of_next, re.I) else text_of_next.split("\n")[0]
         company, location = (part.strip(" -") for part in (re.split(r"\s+[·•|–-]\s+", after, maxsplit=1) + [""])[:2])
         if not location and not card and i + 2 < len(lines) and not lines[i + 2].startswith("@@"):
             location = lines[i + 2]  # the location on a line of its own

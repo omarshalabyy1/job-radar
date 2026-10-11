@@ -2,8 +2,10 @@
 
     schema -> extract_boards, extract_bayt, extract_remote, extract_egypt, extract_gulf, extract_workable,
               extract_freehire, extract_linkedin, extract_companies, extract_portals, extract_email (one by one)
-              -> transform -> describe -> match_skills -> export_career_ops
-    email_egypt, email_abroad: the two emails, right after each collect (the HTML is in digest.py)
+              -> transform -> describe -> match_skills -> embed -> grade_claude -> ranked -> tailor; export_career_ops
+    email_egypt, email_abroad: the two emails, right after grade_claude has ended, red or green (the DAG's `ranked`
+              task carries the Asset; the HTML is in digest.py)
+    track_applications: its own DAG, every hour
 
 A source that fails is a warning and the run goes on with the others; only a crash of the step
 itself (the warehouse down, the email not sent) or no network at all fails its task.
@@ -16,7 +18,7 @@ import json
 import re
 import socket
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
@@ -27,10 +29,13 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import sources
-from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, ROLE_LABEL, ROOT, SETTINGS,
-                     in_reach, is_target, place_of, role_of, too_senior)
+from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
+from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT, ROLE_LABEL, ROOT,
+                     SETTINGS, hidden_reason, in_reach, is_target, place_of, restriction, role_of, too_senior)
 from .digest import digest, send, subject
-from .grade import grade_claude  # noqa: F401  (a side step, python -m job_radar grade_claude)
+from .embed import embed  # noqa: F401  (python -m job_radar embed)
+from .grade import grade_claude  # noqa: F401  (python -m job_radar grade_claude)
+from .tailor import tailor  # noqa: F401  (python -m job_radar tailor)
 
 DAYS = HOURS_OLD // 24
 
@@ -38,7 +43,9 @@ DAYS = HOURS_OLD // 24
 def schema(conn) -> None:
     """The warehouse's tables, then your companies: core.company is made the same as settings.yaml
     (companies), so a company removed there is removed here. A changed link is read and its
-    platform detected again."""
+    platform detected again. It waits at most 10 seconds for a lock (the tracker reads the views it drops): a
+    deadlock becomes a failed task Airflow retries, never a hang."""
+    conn.execute("SET LOCAL lock_timeout = '10s'")  # until the commit below
     conn.execute((ROOT / "sql" / "schema.sql").read_text(encoding="utf-8"))
     companies = SETTINGS.get("companies") or []  # an empty "companies:" is no companies
     conn.execute("DELETE FROM core.company WHERE company <> ALL(%s)", ([c["name"] for c in companies],))
@@ -177,13 +184,23 @@ def extract_portals(conn) -> None:
 
 
 def extract_email(conn) -> None:
+    """The jobs in your mailboxes. An email read is not downloaded again: one with jobs is known by its raw
+    postings, one with none (a newsletter) by core.email_seen, kept 7 days."""
+    conn.execute("DELETE FROM core.email_seen WHERE seen_at < now() - interval '7 days'")
     seen = {r[0] for r in conn.execute(
-        "SELECT DISTINCT payload->>'message_id' FROM raw.job_posting WHERE source = 'email'")}
+        "SELECT payload->>'message_id' FROM raw.job_posting WHERE source = 'email'"
+        " UNION SELECT message_id FROM core.email_seen")}
+    empty: set[str] = set()
 
     def mailboxes():
-        return sources.mailboxes(seen)
+        return sources.mailboxes(seen, empty)
 
-    extract(conn, mailboxes)
+    extract(conn, mailboxes)  # commits the postings first
+    with conn.cursor() as cur:
+        cur.executemany("INSERT INTO core.email_seen (message_id) VALUES (%s) ON CONFLICT DO NOTHING",
+                        [(message_id,) for message_id in empty])
+    conn.commit()
+    print(f"extract_email: {len(empty)} emails without a job remembered")
 
 
 # where a posting's own time is, by source: an ISO time, or Unix seconds or milliseconds
@@ -239,14 +256,19 @@ def job_key(title: str, company: str, job_url: str) -> str:
 def transform(conn) -> None:
     """raw -> core.job: the window's postings with a role, not above senior, in a place in scope and
     in reach (remote, or onsite/hybrid in Cairo or Giza), one row per job (job_key: the same job on
-    several boards, or reposted, is one job). A job of the window not emailed yet that no longer
-    passes the rules (they changed) is removed, and so is a job first seen over KEEP_DAYS ago (with
-    the raw postings of then) unless you noted or applied to it. Re-running it changes nothing."""
+    several boards, or reposted, is one job). A posting whose text bars someone living in Egypt is stored like
+    any other: match_skills sets its restriction and the email and the tracker hide it (config.hidden_reason). A job of the
+    window not emailed yet that no longer passes the rules (they changed) is removed, and so is a job first seen over
+    KEEP_DAYS ago (with the raw postings of then) unless you noted or applied to it. With no posting in the window at
+    all it fails before deleting anything (every extract failed, or the raw table was emptied). Re-running it
+    changes nothing."""
     postings = conn.cursor(row_factory=dict_row).execute(
         "SELECT run_date, source, searched_for, title, company, location, job_url, date_posted, description,"
         " payload->>'is_remote' = 'true' AS is_remote, payload->>'from' AS sender, payload, loaded_at"
         " FROM raw.job_posting WHERE run_date >= current_date - %s"
         " ORDER BY posting_id", (DAYS,)).fetchall()
+    if not postings:  # nothing to rank: going on would delete every job of the window that was not emailed yet
+        raise RuntimeError(f"transform: 0 raw postings in the last {DAYS} day(s): nothing to rank, nothing deleted")
     # your companies: a name of 4+ letters as a whole word ("Vodafone Egypt" is Vodafone); a shorter
     # one only as the whole company name, or "ag" and "db" would star "Siemens AG" and "DB Schenker"
     def letters(name: str) -> str:
@@ -254,15 +276,32 @@ def transform(conn) -> None:
     names = [name for (name,) in conn.execute("SELECT company FROM core.company WHERE starred")]
     short = {letters(n) for n in names if len(letters(n)) <= 3}
     yours = re.compile("|".join(rf"\b{re.escape(n)}\b" for n in names if len(letters(n)) > 3) or r"(?!)", re.I)
+    # a job whose own posting has no text takes the text of the same job_key from another source, from any posting
+    # still kept (KEEP_DAYS): the Indeed page of 3 days ago describes the same job's LinkedIn alert of today
+    described = {job_key(title, company, job_url): description for title, company, job_url, description in conn.execute(
+        "SELECT title, company, job_url, description FROM raw.job_posting WHERE run_date >= current_date - %s"
+        " AND description <> '' AND title <> '' AND company <> '' ORDER BY posting_id", (KEEP_DAYS,))}
     jobs: dict[str, dict] = {}
+    skipped: Counter = Counter()  # postings left out, by the first rule that left them out
+
+    def left_out(p: dict, rank: int | None, place: str) -> str | None:
+        """Why this posting is not a job in scope (the first rule it fails), or None."""
+        if not (rank and place and p["job_url"]):
+            return "no role"
+        if too_senior(p["title"]):
+            return "too senior"
+        if not in_reach(place, p["location"] or "", p["title"], bool(p["is_remote"]), p["description"] or ""):
+            return "not in reach"
+        return None
+
     for p in postings:
         rank = role_of(p["title"] or "", alert=p["source"] == "email" and "linkedin.com/jobs/view/" in (p["job_url"] or "")
                        and re.search(sources.LINKEDIN_ALERTS, p["sender"] or "", re.I) is not None)
         # the place searched, else the location's, else the title's ("Data Engineer - Cairo"); a job
         # whose place none of them gives (only job alerts get this far) is "Unknown location"
         place = p["searched_for"] or place_of(p["location"] or "") or place_of(p["title"] or "") or "Unknown location"
-        if (not (rank and place and p["job_url"]) or too_senior(p["title"])
-                or not in_reach(place, p["location"] or "", p["title"], bool(p["is_remote"]), p["description"] or "")):
+        if reason := left_out(p, rank, place):
+            skipped[reason] += 1
             continue
         key = job_key(p["title"], p["company"], p["job_url"])
         job = jobs.setdefault(key, {
@@ -273,7 +312,7 @@ def transform(conn) -> None:
                        or letters(p["company"]) in short),
             "description": p["description"], "first_seen": p["run_date"],
             "posted_at": posted_at(p["payload"], p["date_posted"], p["loaded_at"])})
-        job["description"] = job["description"] or p["description"]
+        job["description"] = job["description"] or p["description"] or described.get(key)
         if place == "Remote" and job["place"] != "Remote":  # found by a remote search too: a remote
             # job, shown with that remote listing's location and link
             job.update(place="Remote", location=p["location"], source=p["source"], job_url=p["job_url"])
@@ -315,7 +354,8 @@ def transform(conn) -> None:
         cur.execute("DELETE FROM raw.job_posting WHERE run_date < current_date - %s", (KEEP_DAYS,))
     conn.commit()
     print(f"transform: {len(postings)} postings -> {len(jobs)} jobs in scope, {dropped} no longer in scope removed,"
-          f" {aged} first seen over {KEEP_DAYS} days ago deleted")
+          f" {aged} first seen over {KEEP_DAYS} days ago deleted; postings left out: "
+          + ", ".join(f"{skipped[reason]} {reason}" for reason in ("no role", "too senior", "not in reach")))
 
 
 def describe(conn) -> None:
@@ -352,36 +392,54 @@ def describe(conn) -> None:
     with conn.cursor() as cur:
         cur.executemany("UPDATE core.job SET description = %s, described_at = now() WHERE job_id = %s", read)
     conn.commit()
-    print(f"describe: {sum(text is not None for text, _ in read)} of {len(todo)} descriptions found")
+    found = sum(text is not None for text, _ in read)
+    if len(todo) >= 10 and found * 10 < len(todo):  # a site that hides its text wastes the step every run
+        print(f"WARNING describe: only {found} of {len(todo)} pages gave a description - a site may hide it (config.NO_FETCH)")
+    print(f"describe: {found} of {len(todo)} descriptions found")
 
 
 def match_skills(conn) -> None:
     """Store which of your skills each job of the window asks for (core.job_skill), so the email
-    and the tracker read a small table instead of matching every job's text each time.
-    Re-running it gives the same rows."""
+    and the tracker read a small table instead of matching every job's text each time; and, for every
+    job with a description, the phrase that bars someone living in Egypt (core.job.restriction,
+    config.restriction), NULL when there is none. A barred job is kept, not deleted: the email and the tracker
+    hide it (config.hidden_reason, features.eligibility), and Show hidden jobs in the tracker brings it back. With
+    features.eligibility false (the default: the text rules misjudged about 1 phrasing in 3) it sets no restriction
+    and keeps the ones there (they hide nothing while it is off). Re-running it gives the same rows."""
     window = "SELECT job_id FROM core.job WHERE first_seen >= current_date - %s"
     conn.execute(f"DELETE FROM core.job_skill WHERE job_id IN ({window})", (DAYS,))
     matched = conn.execute(
         "INSERT INTO core.job_skill (job_id, skill) SELECT j.job_id, s.skill FROM core.job j"
         " JOIN core.skill s ON j.title || ' ' || coalesce(j.description, '') ~* s.pattern"
         f" WHERE j.job_id IN ({window})", (DAYS,)).rowcount
+    barred = []
+    if FEATURES["eligibility"]:
+        barred = [(restriction(f"{title} {description}"), job_id) for job_id, title, description in conn.execute(
+            "SELECT job_id, title, description FROM core.job WHERE description IS NOT NULL")]
+        with conn.cursor() as cur:
+            cur.executemany("UPDATE core.job SET restriction = %s WHERE job_id = %s AND restriction IS DISTINCT FROM %s",
+                            [(phrase, job_id, phrase) for phrase, job_id in barred])
     conn.execute("DELETE FROM core.cv_skill")  # your CVs: few and small, matched again every run
     conn.execute("INSERT INTO core.cv_skill (label, skill) SELECT c.label, s.skill FROM core.cv c"
                  " JOIN core.skill s ON c.text ~* s.pattern")
     conn.commit()
-    print(f"match_skills: {matched} skill matches")
+    print(f"match_skills: {matched} skill matches, " + (f"{sum(phrase is not None for phrase, _ in barred)} of"
+          f" {len(barred)} jobs with a description barred to someone in Egypt (hidden)"
+          if FEATURES["eligibility"]
+          else "restrictions off in settings.yaml (features.eligibility)"))
 
 
 def export_career_ops(conn) -> None:
     """Hand the window's best matches to career-ops (github.com/career-ops-hq/career-ops), which
     scores them against your CV and tailors it when you run it in Claude Code: writes
     output/career-ops/pipeline.md (one job link per line, best first) and cv.md (your newest CV).
-    Copy both into your career-ops folder (data/pipeline.md, cv.md)."""
-    jobs = conn.execute(
-        "SELECT job_url, title, company, place, skill_matches FROM mart.job_status"
+    Copy both into your career-ops folder (data/pipeline.md, cv.md). A job you ignored or rejected is left out, and so
+    is one config.hidden_reason hides (as the switches stand): the 25 are the best of the rest."""
+    jobs = [(url, title, company, place, skills) for url, title, company, place, skills, *hide in conn.execute(
+        "SELECT job_url, title, company, place, skill_matches, status, restriction, score FROM mart.job_status"
         " WHERE first_seen >= current_date - %s AND skill_matches >= 3 AND status NOT IN ('ignored', 'rejected')"
-        " ORDER BY role_rank, target_company DESC, skill_matches DESC LIMIT 25", (DAYS,)).fetchall()
-    folder = ROOT / "output" / "career-ops"
+        " ORDER BY role_rank, target_company DESC, skill_matches DESC", (DAYS,)) if not hidden_reason(*hide)][:25]
+    folder = OUTPUT / "career-ops"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "pipeline.md").write_text(
         "# Pipeline\n\n" + "".join(f"- [ ] {url} | {company} | {title} | {place} | {skills} of your skills\n"
@@ -415,21 +473,40 @@ def email_abroad(conn) -> None:
     email(conn, home=False)
 
 
+# The window's jobs of one side (home or not) not emailed yet, best first; Claude's score counts only with features.grade
+EMAIL_JOBS = """
+    SELECT s.*, j.description, r.payload->>'job_type' AS job_type FROM mart.job_status s
+    JOIN core.job j USING (job_id) LEFT JOIN raw.job_posting r ON (r.source, r.job_url) = (s.source, s.job_url)
+    WHERE s.emailed_at IS NULL AND s.first_seen >= current_date - %s AND (s.place = %s) = %s
+      AND s.status NOT IN ('ignored', 'rejected')
+    ORDER BY s.role_rank, s.target_company DESC, CASE WHEN %s THEN s.score END DESC NULLS LAST, s.skill_matches DESC,
+             s.date_posted DESC NULLS LAST"""
+
+
 def email(conn, home: bool) -> None:
     """Email the window's jobs at home (or outside it) not emailed yet, by place, experience, role
-    and employment type, best first in each: target companies, then how many of your skills they
-    ask for; nothing when there is no new job. Each job is marked emailed, so it is never sent
-    twice. Without Gmail settings, write it to output/ instead and mark nothing."""
+    and employment type, best first in each: target companies, then Claude's score, then how many of
+    your skills they ask for; nothing when there is no new job and no follow-up (or when the follow-ups alone were already sent today). A job you ignored or rejected is left out,
+    and so is one config.hidden_reason hides (a restriction, a score of 3 or lower, as the switches stand).
+    The home email also lists the oldest 10 applications to follow up (applications.due_follow_ups: the same rule and the same
+    company matching as the follow-up drafts), and is sent on a day with no new job when one is due: its subject says follow-ups.
+    Each job is marked emailed, so it is never sent twice. Without Gmail settings, write it to output/
+    instead and mark nothing."""
     name = HOME if home else f"Outside {HOME}"
-    jobs = conn.cursor(row_factory=dict_row).execute(
-        "SELECT s.*, j.description, r.payload->>'job_type' AS job_type FROM mart.job_status s"
-        " JOIN core.job j USING (job_id) LEFT JOIN raw.job_posting r ON (r.source, r.job_url) = (s.source, s.job_url)"
-        " WHERE s.emailed_at IS NULL AND s.first_seen >= current_date - %s AND (s.place = %s) = %s"
-        " ORDER BY s.role_rank, s.target_company DESC, s.skill_matches DESC, s.date_posted DESC NULLS LAST",
-        (DAYS, HOME, home)).fetchall()
-    if not jobs:
+    jobs = conn.cursor(row_factory=dict_row).execute(EMAIL_JOBS, (DAYS, HOME, home, FEATURES["grade"])).fetchall()
+    jobs = [j for j in jobs if not hidden_reason(j["status"], j["restriction"], j["score"])]
+    if not FEATURES["grade"]:  # off: no score or reason in the email either
+        for j in jobs:
+            j["score"] = j["grade_reason"] = None
+    follow_ups = [{"company": company, "title": title, "applied_at": day}
+                  for company, title, day, _ in due_now(conn)[:10]] if home and FEATURES["follow_up"] else []
+    sent_marker = OUTPUT / f"followups-emailed-{cairo_today()}"  # the Cairo day the follow-ups went out: a second collect that day has none to add
+    if not jobs and (not follow_ups or sent_marker.exists()):
         print(f"email {name}: no new jobs, nothing sent")
         return
-    if send(digest(jobs, name), subject(jobs, name), name):
+    if send(digest(jobs, name, follow_ups), subject(jobs, name, follow_ups), name):
         conn.execute("UPDATE core.job SET emailed_at = now() WHERE job_id = ANY(%s)", ([j["job_id"] for j in jobs],))
         conn.commit()
+        if follow_ups:
+            sent_marker.parent.mkdir(parents=True, exist_ok=True)
+            sent_marker.touch()

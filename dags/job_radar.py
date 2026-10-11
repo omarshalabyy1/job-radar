@@ -1,19 +1,27 @@
-"""job_radar: find the new jobs and rank them; two email DAGs send them right after. The collect's
-time is in settings.yaml (schedule), Cairo time; as shipped:
+"""job_radar: find the new jobs, rank them, have Claude grade them; two email DAGs send them right after.
+The collect's time is in settings.yaml (schedule), Cairo time; as shipped:
 
     job_radar               12pm: schema -> extract_boards, extract_bayt, extract_remote, extract_startups, extract_egypt,
                             extract_gulf, extract_workable, extract_freehire, extract_companies, extract_portals,
                             extract_email (one by one) -> transform -> describe -> match_skills
-                            -> export_career_ops
-    job_radar_email_egypt   after each collect: your home's jobs (Egypt) not emailed yet
-    job_radar_email_abroad  after each collect: the jobs everywhere else (remote only) not emailed yet
+                            -> embed -> grade_claude -> ranked -> tailor; match_skills -> export_career_ops
+    job_radar_email_egypt   after ranked: your home's jobs (Egypt) not emailed yet
+    job_radar_email_abroad  after ranked: the jobs everywhere else (remote only) not emailed yet
+    job_radar_applications  every hour: track_applications reads your mailbox (read-only) for your applications
 
-No AI runs on this schedule. Claude works only when you call /job-radar in Claude Code: it runs
-this DAG, reviews the matches against your CV and tailors applications (the job-radar skill).
+The smart steps have a switch each in settings.yaml (features) and print that they are off when it is false.
+embed gives each job a local vector (how close it is to your CV). grade_claude (Claude,
+settings.yaml claude) scores each job in ai_places that has a description 0-10 against your CV and learns from
+your clicks in the tracker, so a job scored 3 or lower or one you cannot legally take from Egypt
+is hidden in the tracker and left out of the emails; tailor drafts a CV and cover letter for the 8+ ones. You
+finish and send them in Claude Code with /job-radar (the job-radar skill).
 
 Each task is one step of `python -m job_radar`, run from the job_radar virtual environment.
 Airflow runs one task at a time (docker-compose.yml: parallelism), so a collect never swamps a busy
-laptop; it takes about 15 minutes, and the emails start once match_skills is done (its Asset).
+laptop; it takes about 15 minutes, and the emails start once grade_claude has ended, red or green: `ranked`,
+a task that always succeeds, carries the Asset (Airflow emits an Asset event only for a task that succeeds).
+They carry the scores of the jobs graded; when grade_claude fails (it selected jobs and graded none: key,
+credit or network) its task is red, the jobs go out ungraded and the next run grades them.
 
 - A laptop asleep or switched off at a run time runs once as soon as it is back (catchup off),
   and Trigger (top right in Airflow) runs it now. Every run, scheduled or not, backfills the
@@ -24,8 +32,11 @@ laptop; it takes about 15 minutes, and the emails start once match_skills is don
   scheduled one, or a retry adds nothing twice.
 
 A source that fails is a warning in its task's log and the task stays green; a failed task (the
-warehouse down, no network, the email not sent) is not retried: the next run catches up, and the
-tasks after it still run on what is there (all_done).
+warehouse down, no network, the email not sent) is not retried (schema is: twice, a minute apart, as the
+tracker can hold a lock on a view it drops): the next run catches up, and the tasks after it still run on
+what is there (all_done). The last task of the collect, check_extracts, is an empty task behind every extract with
+Airflow's default rule (all_success): when schema or any extract did not succeed it is upstream_failed, which turns
+the run red, so a run whose extracts never ran is red, not green.
 
 Each step stops itself at its time budget (config: 150 s an extract, describe 60 s) and leaves
 the rest for the next run. execution_timeout stops a
@@ -46,10 +57,11 @@ from pathlib import Path
 import pendulum
 import yaml
 from airflow.providers.standard.operators.bash import BashOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.sdk import DAG, Asset
 
 SCHEDULE = yaml.safe_load(Path("/opt/job-radar/settings.yaml").read_text(encoding="utf-8"))["schedule"]
-COLLECTED = Asset("job_radar_collected")  # updated when a collect has ranked its jobs; the emails run on it
+COLLECTED = Asset("job_radar_collected")  # updated by `ranked`, when a collect has tried to grade its jobs; the emails run on it
 
 
 def cron(times: list) -> str:
@@ -80,9 +92,17 @@ with DAG(
                                         "extract_egypt", "extract_gulf", "extract_workable", "extract_freehire",
                                         "extract_companies", "extract_portals", "extract_email")]
     extracts.append(step("extract_linkedin", execution_timeout=timedelta(seconds=300)))  # one Apify run, up to 280 s
-    step("schema") >> extracts
-    matched = step("match_skills", trigger_rule="all_done", outlets=[COLLECTED])
+    step("schema", retries=2, retry_delay=timedelta(seconds=60)) >> extracts
+    matched = step("match_skills", trigger_rule="all_done")
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=150)) >> matched
+    embedded = step("embed", trigger_rule="all_done", execution_timeout=timedelta(seconds=240))
+    graded = step("grade_claude", trigger_rule="all_done", execution_timeout=timedelta(seconds=600))
+    # Airflow emits an asset event only when its task succeeds: on a red grade_claude the emails would never start.
+    # So the Asset sits on this task, which ends green whatever grade_claude did (a trivial task with outlets still runs).
+    ranked = EmptyOperator(task_id="ranked", trigger_rule="all_done", outlets=[COLLECTED])
+    # all_success, unlike the tasks after the extracts (all_done, they run on what is there): red when schema or an extract is
+    extracts >> EmptyOperator(task_id="check_extracts")
+    matched >> embedded >> graded >> ranked >> step("tailor", trigger_rule="all_done", execution_timeout=timedelta(seconds=300))
     matched >> step("export_career_ops")
 
 # your two emails, right after each collect (a manual one too: they hold only jobs not emailed yet)
@@ -92,8 +112,8 @@ for dag_id, name in (("job_radar_email_egypt", "email_egypt"), ("job_radar_email
              default_args={"retries": 0, "execution_timeout": timedelta(seconds=240)}):
         step(name)
 
-# a side step, after each collect too: Claude scores the new jobs (settings.yaml claude), never holding up the emails
-with DAG(dag_id="job_radar_grade_claude", schedule=[COLLECTED], start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
+# your applications as your mailbox tells them, every hour (read-only)
+with DAG(dag_id="job_radar_applications", schedule="0 * * * *", start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
          catchup=False, max_active_runs=1, is_paused_upon_creation=False,
-         default_args={"retries": 0, "execution_timeout": timedelta(seconds=600)}):
-    step("grade_claude")
+         default_args={"retries": 0, "execution_timeout": timedelta(seconds=300)}):
+    step("track_applications")

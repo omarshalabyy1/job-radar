@@ -47,7 +47,7 @@ freelance. Jobs at your companies get a ⭐.
 
 - 📋 **Tracker**, port 8501: filter jobs (by role, place, the board in Egypt or the Gulf, and age: within
   12 or 24 hours, over 1, 2 or 3 days, or *deleted tomorrow*), mark saved / applied / interview / offer,
-  see the skills each role asks for, upload your CV, see how each company's careers page is read.
+  see the skills each role asks for, Claude's score and why, the drafts ready to apply, your applications' funnel, your contacts, upload your CV, see how each company's careers page is read and each step's last run.
 - 🌀 **Airflow**, port 8081: every run, every task's log, and *Trigger* to run now.
 - 🤖 **Claude**, `/job-radar` in Claude Code: reviews your matches, tailors your CV, helps you apply.
 - 🗄️ **SQL**, port 5433 (database and user `jobradar`): query the `mart` views.
@@ -57,7 +57,7 @@ freelance. Jobs at your companies get a ⭐.
 ## 🧭 How it works
 
 <p align="center">
-  <img width="100%" src="docs/how-it-works.svg" alt="How it works: 01 Collect, job boards and APIs, LinkedIn search via Apify, 119 career pages in Egypt and your Gmail alerts; 02 Rank, your roles, places and level, one row per job, scored by your skills; 03 Email, Egypt and outside Egypt, junior to senior, your companies first, sent once; 04 Apply, /job-radar in Claude Code reviews, tailors your CV and applies with your yes.">
+  <img width="100%" src="docs/how-it-works.svg" alt="How it works: 01 Collect, job boards and APIs, LinkedIn search via Apify, 119 career pages in Egypt and your Gmail alerts; 02 Rank and grade, your roles, places and skills, a CV match, and Claude's 0-10 score on Egypt's jobs; 03 Email, Egypt and outside Egypt, Top 5 first, each job's score, follow-up reminders, sent once; 04 Apply, drafts ready for Egypt jobs scoring 8+, /job-radar in Claude Code reviews, tailors your CV and applies with your yes. Your mailbox is read every hour for news on your applications.">
 </p>
 
 The machine in four diagrams (two ways to run, a mind map of the sources, the pipeline, the
@@ -90,17 +90,37 @@ request ladder) and where to change what: [docs/architecture.md](docs/architectu
 ## 🗓️ A day with job-radar
 
 <p align="center">
-  <img width="100%" src="docs/day.svg" alt="A day with job-radar, Cairo time: Airflow collects once, at 12pm, and sends both emails 30 minutes later, at 12:30pm. Claude works only when you type /job-radar, at any time; you can also trigger a collect yourself.">
+  <img width="100%" src="docs/day.svg" alt="A day with job-radar, Cairo time: at 12pm Airflow collects, ranks and has Claude grade and draft Egypt's best jobs, then sends both emails, at about 12:30pm. Every hour it reads your mailbox, read-only, for news on your applications. /job-radar in Claude Code, at any time, is where you review, tailor and apply; nothing is sent without your yes.">
 </p>
 
 | Airflow DAG | When | Does |
 |---|---|---|
-| `job_radar` | 12pm | extract (12 tasks, one by one) → transform → describe → match_skills → export_career_ops |
-| `job_radar_email_egypt` | right after the collect | emails Egypt's new jobs |
-| `job_radar_email_abroad` | right after the collect | emails everywhere else's new jobs |
-| `job_radar_grade_claude` | right after the collect | off (`claude.enabled: false`): jobs are judged in `/job-radar` |
+| `job_radar` | 12pm | extract (12 tasks, one by one) → transform → describe → match_skills → embed → grade_claude → ranked → tailor; match_skills → export_career_ops; check_extracts turns the run red when `schema` or an extract did not succeed |
+| `job_radar_email_egypt` | right after grade_claude, red or green | emails Egypt's new jobs |
+| `job_radar_email_abroad` | right after grade_claude, red or green | emails everywhere else's new jobs |
+| `job_radar_applications` | every hour | reads your mailbox (read-only) for news on your applications |
 
-No AI runs on this schedule. Airflow keeps its own records in its own small Postgres, and when
+Claude works in this schedule, on Egypt's jobs only (`ai_places: [Egypt]` in `settings.yaml`). features.eligibility is off by default: the text rules misjudged about 1 phrasing in 3, and a source-level plus Claude Haiku filter is meant to replace them. With it on, a job only someone outside Egypt can take (US citizens only, a security clearance, GCC nationals only ...) is hidden, not deleted: match_skills reads its restriction from its text, and the tracker and the emails leave it out (switch on *Show hidden jobs* in the tracker to see it). Claude's own restriction hides a job the same way (also only with eligibility on), and a status you set shows it again.
+
+grade_claude has Claude (Sonnet 5.5) grade each Egypt job that has a description, 0-10 against your CV with one line why, learning from your last 30 clicks in the tracker: about $3.70 a month at today's volume. Claude grades only jobs that have a description. LinkedIn pages are never opened, so paste the description in `/job-radar` to get a grade. A grade made before your newest CV upload counts as ungraded and is overwritten on the next run. A job scored 3 or lower is hidden with features.auto_hide on, in the tracker (a sidebar toggle shows it) and in the emails; each email opens with its Top 5 (scores 7+), and the Egypt one with the applications to follow up (sent 7 or 14 days ago, no answer yet). grade_claude turns its task red when it selected jobs and graded none (a wrong key, no credit or no network).
+
+tailor writes cv.md, cover-letter.md and notes.md to `output/applications/<day>/<company>-<title>/` for up to 5 jobs a run scoring 8+ in ai_places, and marks them saved ('draft ready <day>'); the Ready to apply tab shows them. About $0.05 a draft.
+
+embed (features.embeddings) gives each Egypt job with a description, and each CV, a local nomic-embed-text vector (Ollama, $0, on the CPU) in core.job_vector and core.cv_vector. It sets core.job.cv_similarity (cosine to the closest CV); a CV is embedded again only when it changed. If Ollama isn't running, it skips and stays green.
+
+track_applications (hourly DAG job_radar_applications) reads the All Mail of every Gmail account in `MAILBOXES` (else `GMAIL_USER`) read-only over IMAP for application news (a mailbox with nothing stored yet is read 400 days back, the others 3 days; each row keeps its `mailbox`): confirmations, views, interviews, rejections, offers. Rows go into core.application_email, one per message. Plain sender and subject patterns classify most emails; Claude gets only the leftovers (2,000 chars each). An email moves its job's status in core.application up only, and only when it names that job (same title and company) or the company's only job seen before the email. Switch: features.track_applications. Newsletters with no jobs are remembered in core.email_seen for 7 days, so the next run does not download them again.
+
+- **Follow-up drafts:** when features.follow_up_drafts is on, an application with no answer exactly 7 or 14 days (Cairo calendar days, as in the Egypt email) after its first confirmation email gets a draft in `output/followups/<day>/`, in your voice from your CV; never sent. The tracker's Follow up list shows the same ones: exactly 7 or 14 Cairo days, as in the email.
+- **Interview prep:** when features.interview_prep is on, interview notes are written from the interview email's own text (fetched read-only) and the matching job's description, never from anything else; a section with no source says 'No detail given in the email'; once per company and title; notes the checks throw away are asked for again the next day, not every hour. They land in `output/interviews/<company>-<title>/notes.md`.
+- **In the tracker:** the Applications tab shows the funnel (applied → viewed → interview → offer, by month and by channel) and a Drafts list of these files; the Contacts tab lists recruiters and hiring managers from `data/contacts.csv` (gitignored; nothing sends).
+
+Every step `python -m job_radar` runs leaves a row in core.step_run: when, how long, ok / warn / failed / off / running, its summary (warnings kept), and its Claude tokens and exact dollars. The tracker's Last run tab shows each step's latest run (a 'running' row older than its timeout shows as killed?), 14 days of Claude $ and failures, and this month's total.
+
+In Docker, `output/` is a bind mount into the airflow and tracker containers of the folder `JOB_RADAR_OUTPUT` in `.env` names when it is set (Omar sets `E:/job-radar/output`), else the repo's own `output/`. What Claude Code writes goes to that same folder, so the tracker finds it. With it set in `.env`, `python -m job_radar`, the tracker and the scripts on the laptop write the same folder (a login saved by `scripts/open_blocked.py` then reaches Airflow).
+
+Each of these has a switch under `features` in `settings.yaml` (grade, eligibility, auto_hide, top5, follow_up,
+follow_up_drafts, tailor, track_applications, interview_prep, embeddings): `false` removes its effect from the next pipeline run; the tracker reads the switches when it starts, so run `docker restart job-radar-tracker-1` to apply a change there. Airflow keeps its own
+records in its own small Postgres, and when
 one of its parts stops, Docker restarts it.
 
 ## 🤖 Claude, when you call it
@@ -118,7 +138,7 @@ would, against your CV.
 For a salary question, `scripts/salaries.py <job_id>` reads the company's and the market's pay on
 Glassdoor, each figure in its own currency with EGP beside it (today's rate).
 
-Everything lands in `output/applications/<date>/<company>-<title>/` and the job shows as *saved*
+Everything lands in `E:\job-radar\output\applications\<date>\<company>-<title>\` and the job shows as *saved*
 in the tracker. Nothing is ever sent without your yes, logins stay yours, and nothing applies
 through LinkedIn or Indeed: their terms ban automation, and accounts get banned for it.
 
@@ -160,7 +180,7 @@ request a second at most to any site (Workable's search, limited by the day inst
 faster). A site that answers 429 Too Many Requests is left alone for as long as it asks, and one
 that still answers 403 to a real Chrome's handshake for 6 hours, by every step and run (one file
 per site in `output/waits/`; delete it to lift the hold early).
-How each source is read, and the test behind each choice: [docs/scraping-plan.md](docs/scraping-plan.md).
+How each source is read, and the reasoning behind each choice: [docs/scraping-plan.md](docs/scraping-plan.md).
 
 | Source | How | Within its limits |
 |---|---|---|
@@ -179,7 +199,7 @@ How each source is read, and the test behind each choice: [docs/scraping-plan.md
 | [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
 | Your companies | `settings.yaml` (companies): the 119 that hire in Egypt, each through its Egypt jobs page ([docs/companies.md](docs/companies.md)), only their Egypt jobs kept; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
-| Job pages (descriptions) | the schema.org JobPosting on each new job's page | 1 second apart per site, at most 300 a run |
+| Job pages (descriptions) | the schema.org JobPosting on each new job's page; LinkedIn and dailyremote.com pages are not fetched (dailyremote hides its description). A job whose own posting has no text takes the text of the same job from another posting of the last 4 days | 1 second apart per site, at most 300 a run |
 | LinkedIn search | the Apify Actor `curious_coder/linkedin-jobs-scraper`, logged out (`linkedin` in `settings.yaml`, `APIFY_TOKEN` in `.env`) | 50 jobs a run, at most one run every 20 hours (`every_hours`): about $3 a month (one run on 8 October 2026: 30 postings, $0.098) |
 | Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 2 emails a day of 500 |
 
@@ -235,7 +255,7 @@ docker compose up -d --build  # Airflow, the warehouse and the tracker
 | `WAREHOUSE_PASSWORD` | any password you choose, letters and digits |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | the Gmail that sends the emails, and its [app password](https://myaccount.google.com/apppasswords) (2-Step Verification on) |
 | `MAIL_TO` | where the emails go (empty: `GMAIL_USER`) |
-| `MAILBOXES` | the inboxes to read job alerts from: `you@gmail.com:apppassword,other@gmail.com:apppassword` |
+| `MAILBOXES` | the inboxes to read job alerts from, and, for the Gmail ones, your applications: `you@gmail.com:apppassword,other@gmail.com:apppassword` |
 | `JOOBLE_API_KEY` | optional, a free key from [Jooble](https://jooble.org/api/about) |
 | `APIFY_TOKEN` | optional, your Apify API token (Apify Console > Settings > API & Integrations): adds LinkedIn's search, paid per result |
 
@@ -248,7 +268,8 @@ in the tracker, and keep Docker Desktop running. The first emails arrive at the 
 ## 🏗️ For engineers
 
 Every table in the warehouse, the tables it is built from, and its row count on 6 October 2026 (the
-LinkedIn and startup extracts, `core.job_seen` and `core.claude_grade` show no count):
+LinkedIn and startup extracts and the tables added since, `core.job_seen`, `core.claude_grade`, `core.job_vector`,
+`core.cv_vector`, `core.application_email`, `core.email_seen` and `core.step_run`, show no count):
 
 ![Data flow, table by table](docs/data-flow.svg)
 
@@ -284,6 +305,7 @@ The tracker's Dashboard, with the sidebar's Egypt boards and Gulf boards filters
 | You see | Do |
 |---|---|
 | No email arrived | Airflow → the email DAG's last run → its log. "no new jobs, nothing sent" is normal between collections. |
+| A collect shows red at its last task, `check_extracts` | `schema` or an extract did not succeed (the tasks after them still ran on what was there). Open the task named in its log; `schema` is retried twice by itself. The tracker's Last run tab shows what each step printed, with a WARN for a WARNING and killed? for a step Airflow stopped. |
 | A `.env` change does nothing | `docker compose up -d` (the containers read `.env` when they are created). |
 | A `settings.yaml` change broke the runs | Airflow shows an import error at the top; fix the line it names (YAML: lists in `[...]`, a space after `:`). |
 | Docker is slow or stuck | `wsl --shutdown`, then restart Docker Desktop. |

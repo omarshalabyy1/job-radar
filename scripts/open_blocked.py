@@ -25,6 +25,8 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
+sys.path.insert(0, str(ROOT))
+from job_radar.config import OUTPUT  # noqa: E402
 
 with psycopg.connect(host="127.0.0.1", port=5433, dbname="jobradar", user="jobradar",
                      password=os.environ["WAREHOUSE_PASSWORD"]) as conn:
@@ -34,7 +36,7 @@ with psycopg.connect(host="127.0.0.1", port=5433, dbname="jobradar", user="jobra
     if not urls:
         sys.exit("No site is blocked.")
     with sync_playwright() as p:
-        browser = p.chromium.launch_persistent_context(ROOT / "output" / "browser-profile", headless=False)
+        browser = p.chromium.launch_persistent_context(OUTPUT / "browser-profile", headless=False)
         page = browser.pages[0]
         # read once, on the blank first page: a site still navigating after you press Enter cannot answer
         user_agent = page.evaluate("navigator.userAgent")
@@ -48,9 +50,9 @@ with psycopg.connect(host="127.0.0.1", port=5433, dbname="jobradar", user="jobra
             session = {"user_agent": user_agent,
                        "cookies": [c for c in browser.cookies() if host == c["domain"].lstrip(".")
                                    or host.endswith("." + c["domain"].lstrip("."))]}
-            (ROOT / "output" / "sessions").mkdir(parents=True, exist_ok=True)
-            (ROOT / "output" / "sessions" / f"{host}.json").write_text(json.dumps(session), encoding="utf-8")
-            (ROOT / "output" / "waits" / host).unlink(missing_ok=True)
+            (OUTPUT / "sessions").mkdir(parents=True, exist_ok=True)
+            (OUTPUT / "sessions" / f"{host}.json").write_text(json.dumps(session), encoding="utf-8")
+            (OUTPUT / "waits" / host).unlink(missing_ok=True)
             conn.execute("UPDATE core.company SET checked_at = NULL WHERE careers_url = %s", (url,))
             conn.commit()
             print(f"  saved output/sessions/{host}.json ({len(session['cookies'])} cookies)")

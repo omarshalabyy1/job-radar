@@ -1,12 +1,35 @@
 ---
 name: job-radar
-description: Run Omar's job-radar (C:\Users\DELL\GitHub\job-radar) and bring Claude into it - start a collect and check it, then grade the best new matches against his CV, tailor a CV and cover letter for the ones he picks, and help him apply. Use this whenever Omar types /job-radar, or says things like "run the radar", "any new jobs?", "check today's matches", "review my matches", "tailor my CV for this job", "write a cover letter for job 123", "apply to the best ones", "send the job emails now", or asks whether job-radar's last run worked - even if he never names the skill. Airflow's scheduled runs never use Claude; this skill is where Claude works on his job search. Not for the Argus project.
+description: Run Omar's job-radar (C:\Users\DELL\GitHub\job-radar) and bring Claude into it - start a collect and check it, then grade the best new matches against his CV, tailor a CV and cover letter for the ones he picks, and help him apply. Use this whenever Omar types /job-radar, or says things like "run the radar", "any new jobs?", "check today's matches", "review my matches", "tailor my CV for this job", "write a cover letter for job 123", "apply to the best ones", "send the job emails now", or asks whether job-radar's last run worked - even if he never names the skill. Airflow's daily run has Claude grade Egypt's jobs and draft the best (settings.yaml features); this skill is where Claude works on his job search with him. Not for the Argus project.
 ---
 
 # job-radar, with Claude
 
 job-radar finds data and AI jobs for Omar every day: Airflow collects once a day at 12pm (Cairo) and
-emails him right after it (about 12:15pm), with no AI involved. This skill is the Claude side: run a collect
+emails him right after it (about 12:30pm). At the end of the collect, on Egypt's jobs only (`ai_places`), embed
+gives each job a local vector (its closeness to his CV), grade_claude has Claude (Sonnet 5.5) grade each job that
+has a description 0-10 against his CV (`core.claude_grade`, shown as Score and Why in the tracker and the emails;
+about $3.70 a month at today's volume), and tailor writes cv.md, cover-letter.md and notes.md to
+output/applications/<day>/<company>-<title>/ for up to 5 jobs a run scoring 8+ in ai_places, and marks them saved
+('draft ready <day>'); the Ready to apply tab shows them. About $0.05 a draft. Each step has a switch under
+`features` in settings.yaml.
+
+features.eligibility is off by default: the text rules misjudged about 1 phrasing in 3, and a source-level plus Claude Haiku filter is meant to replace them. With it on, a job only someone outside Egypt can take (US citizens only, a security clearance, GCC
+nationals only ...) is hidden: match_skills reads its restriction from its text, and the tracker and the emails leave
+it out; switch on Show hidden jobs in the tracker to see it. Claude's own restriction hides a job the same way, and
+a score of 3 or lower hides it with features.auto_hide (`config.hidden_reason`); a status you set shows it again. A grade made
+before his newest CV upload counts as ungraded and is overwritten on the next run. grade_claude turns its task red
+when it selected jobs and graded none (key, credit or network); the emails still go out, ungraded. Every step `python -m job_radar` runs leaves a row
+in core.step_run (status, summary, Claude tokens and exact dollars); the tracker's Last run tab shows it.
+
+Every hour the job_radar_applications DAG reads his mailboxes (every Gmail account in MAILBOXES, read-only) for news on his applications
+(core.application_email). With features.follow_up_drafts on, an application with no answer exactly 7 or 14 days
+after its first confirmation email (Cairo calendar days) gets a draft in output/followups/<day>/, in his voice from his CV; with
+features.interview_prep on, an interview email gets notes in output/interviews/<company>-<title>/notes.md, written
+from the email's own text and the matching job's description only (a section with no source says 'No detail given in
+the email'). They are files; nothing is ever sent.
+
+This skill is the Claude side: run a collect
 on demand, judge the matches against his CV the way a recruiter would, and prepare and send
 applications with him.
 
@@ -26,6 +49,10 @@ There are two ways to run it (docs/architecture.md draws them):
   is a link to that folder, so there is one copy. Any change to the repo that this file describes
   (containers, DAGs, steps, schedule, sources, tables, rules) updates this file in the same commit,
   and a session that finds them out of step fixes this file first. Public repo: no secrets here.
+- `output/`: in Docker it is a bind mount of the folder `JOB_RADAR_OUTPUT` in `.env` names when set (Omar sets `E:/job-radar/output`),
+  else the repo's own `output/`, into the airflow and tracker containers, and the tracker reads it. Everything Claude Code writes there (drafts, CVs, reviews) goes to that same
+  folder, by its full path. With `JOB_RADAR_OUTPUT` set in `.env`, the
+  laptop's own runs (`python -m job_radar`, the scripts) use the same folder.
 - Containers: `job-radar-warehouse-1` (Postgres, localhost:5433; database `jobradar`, user
   `jobradar`), `job-radar-airflow-db-1` (Airflow's own records: database and user `airflow`, no
   port outside Docker), `job-radar-airflow-1` (Airflow, http://127.0.0.1:8081, no login; one task
@@ -117,7 +144,8 @@ SELECT task_id, state, round(extract(epoch FROM end_date - start_date))
 
 Do not poll with the `airflow` command: each call loads all of Airflow, and a loop of them once
 starved a run until every task failed. A run takes about 15 minutes: the tasks run one by one,
-and both emails follow it on their own (an Airflow Asset), a manual run's too.
+and both emails follow grade_claude on their own, red or green (the `ranked` task carries the Airflow Asset), a manual run's too. A run red at its last
+task, `check_extracts`, means `schema` or an extract did not succeed (`schema` retries twice).
 
 Report each task with its result lines, from its log
 `/opt/airflow/logs/dag_id=job_radar/run_id=<run id>/task_id=<task>/attempt=1.log`: grep the
@@ -158,15 +186,17 @@ Grade each against his CV like a recruiter who wants him hired, and is honest:
 - One line of why; the CV strengths it matches; the gaps; red flags - above his level, a location
   that breaks his rules, signs of a ghost or reposted ad, an unknown company.
 - A job without a description: read its page (WebFetch) - except LinkedIn, whose pages job-radar
-  never fetches; ask him to paste those.
+  never opens, and dailyremote.com, which hides its description. Claude grades only jobs that have a
+  description, so such a job stays ungraded in Airflow: ask him to paste the description in `/job-radar`, and grade
+  it from the paste like any other.
 
 Show a table sorted by grade (#, grade, title @ company, place, why, link), save it as
-`output/applications/<YYYY-MM-DD>/review.md`, then ask which ones to tailor (AskUserQuestion with
+`E:\job-radar\output\applications\<YYYY-MM-DD>\review.md`, then ask which ones to tailor (AskUserQuestion with
 the A and B jobs, multi-select).
 
 ## 4. Tailor what he picks
 
-One folder per job: `output/applications/<YYYY-MM-DD>/<company>-<title>/` (lowercase, dashes),
+One folder per job: `E:\job-radar\output\applications\<YYYY-MM-DD>\<company>-<title>\` (lowercase, dashes),
 holding:
 
 - `cv.md` - his CV rewritten for this job: reorder, reword and cut what is true, and use the job's
@@ -178,7 +208,7 @@ holding:
   is always his own, never theirs. In short: one column, A4, plain
   sans-serif (Calibri-like, about 10 pt), narrow margins, no photo, icons or graphics, so ATS reads
   it. Header centred: his name large and bold in navy, a "Role | Specialty" line under it, then one
-  contact line ("Rehab, Cairo, Egypt", phone, email, github.com/omarshalabyy1,
+  contact line ("Cairo, Egypt", phone, email, github.com/omarshalabyy1,
   "Portfolio: omarlabs.dev") separated by " • ". omarlabs.dev always carries the "Portfolio:" label.
   Every link is short and clickable in the PDF (email as mailto, a project repo shown as "GitHub").
   His fixed CV facts (each job's place and dates) are in the same `cv-look.md`; they beat `core.cv`.
@@ -190,15 +220,19 @@ holding:
   number. Each project the same, plus an italic "Technologies:" line under its bullets.
 - `cover-letter.md` - at most one page: why this company, why him for this role (two or three
   facts from his CV that answer the job's main needs), a short close. Plain, specific English.
-  Write it with the copywriting skill so it persuades the reader to call him: open with what he
-  can do for them, back each claim with a fact from his CV, end with a clear ask. Short
+  In his voice (below), so it persuades the reader to call him. Short
   paragraphs: two or three sentences each, about 200-250 words in all.
 - `notes.md` - the grade, the gaps and how to address them, and three likely interview questions
   with answers drawn from his experience.
 
-Before any of this text goes to him, run the humanizer skill over the cover letter and every
-answer to an application form's questions (and the interview answers in `notes.md`), so none of
-it reads as AI-written. Humanizer changes the wording only, never the facts.
+Every email, DM, LinkedIn note, cover letter and application-form answer drafted here (and the
+interview answers in `notes.md`) is written in his voice. Load and apply three skills, in this order:
+`omar-brand` (his voice, tone and banned words; its truth files win), `copywriting` (open with what he
+can do for them, back each claim with a fact from his CV, end with a clear ask), then `humanizer` (it
+strips AI tells, wording only, never the facts). Cover letters, CVs, emails and DMs never mention a
+gap or something he hasn't done: they are confident and lead with his strengths, impact and
+achievements (numbers only from his CV). Gaps, and how to address them, go only in `notes.md`.
+These are drafts: each one is sent only after his yes for that message.
 
 He wants files to send: offer PDFs (the pdf skill) or Word (the docx skill).
 
@@ -217,11 +251,11 @@ search is not yet verified past it), into
 `high_egp`, `median_egp`, today's rate): quote both. `--all` does every company, country and role in the radar's jobs, by
 hand only (never scheduled): it stops after 12 hours and a second run goes on where it stopped.
 The figure he asks for follows his rule in
-`output/applications/application-answers.md`.
+`E:\job-radar\output\applications\application-answers.md`.
 
 Applying sends his personal data in his name, so it never happens on its own: for one job, show
-what will be submitted (which CV, the letter, his answers to the form's questions, each answer
-run through the humanizer skill first) and ask. Only
+what will be submitted (which CV, the letter, his answers to the form's questions, each in his
+voice as in step 4) and ask. Only
 after a clear yes, open the application page in the browser and fill the form from that job's
 folder. Logins, passwords and CAPTCHAs are his to do; if a form needs one, hand over. Never apply
 through LinkedIn or Indeed - their terms ban automation and accounts get banned: give him the link
@@ -229,8 +263,8 @@ and the prepared texts instead. When he confirms it was sent, set the job's stat
 (same SQL, `'applied'`).
 
 When a job says to apply by email, write that email too: to the address in the posting, the job
-title in the subject, the tailored CV and cover letter PDFs attached, and a short body (written
-with the copywriting skill, three short paragraphs at most, run through humanizer) that always carries his GitHub (github.com/omarshalabyy1) and portfolio
+title in the subject, the tailored CV and cover letter PDFs attached, and a short body (in his
+voice, as in step 4, three short paragraphs at most) that always carries his GitHub (github.com/omarshalabyy1) and portfolio
 ("Portfolio: https://omarlabs.dev") links. Show it with the rest and send it only after his yes, like a form.
 
 ## /job-radar emails

@@ -1,10 +1,12 @@
 """What job_radar looks for, from settings.yaml: the roles in rank order, the places, your companies."""
 
 import functools
+import os
 import re
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 
 HOURS_OLD = 24  # every run looks back this far: a run after the laptop was asleep or off backfills the last day
 KEEP_DAYS = 4  # a job first seen longer ago is deleted (transform), unless you noted or applied to it
@@ -14,9 +16,14 @@ EXTRACT_SECONDS = 150
 DESCRIBE_SECONDS = 60
 
 ROOT = Path(__file__).resolve().parent.parent  # the repo
+load_dotenv(ROOT / ".env")  # so OUTPUT below sees .env however the code is started
+# the one folder for drafts, sessions, waits and digests: set JOB_RADAR_OUTPUT to put it on the E: drive
+OUTPUT = Path(os.environ.get("JOB_RADAR_OUTPUT") or ROOT / "output")
 # What you look for, where and when live in settings.yaml at the repo root, as plain words; this
 # module turns them into the rules below. What stays here is plumbing, not choices.
 SETTINGS = yaml.safe_load((ROOT / "settings.yaml").read_text(encoding="utf-8"))
+FEATURES = SETTINGS["features"]  # each smart feature on or off, read at run time
+AI_PLACES = SETTINGS["ai_places"]  # the AI features work on the jobs in these places only
 
 
 def words(items: list) -> str:
@@ -71,8 +78,9 @@ NOT_REMOTE = r"hybrid|on-?site|in[- ]office|\b(not|non|no)[- ]remote"
 ONSITE_PLACES = {HOME}
 EXPERIENCE = SETTINGS["experience"]
 SCHEDULE = SETTINGS["schedule"]
-# job pages never fetched: LinkedIn (its jobs come only from your alert emails)
-NO_FETCH = r"linkedin\.com"
+# job pages never fetched: LinkedIn (its jobs come only from your alert emails) and Daily Remote (290 pages tried,
+# 0 descriptions found, 2026-10-11: it hides them)
+NO_FETCH = r"linkedin\.com|dailyremote\.com"
 
 # companies whose jobs are starred and listed first, from any source (with every company in core.company)
 TARGET_COMPANIES = words(SETTINGS["your_companies"])
@@ -143,3 +151,72 @@ def in_reach(place: str, location: str, title: str, remote: bool = False, descri
 
 def is_target(company: str) -> bool:
     return re.search(TARGET_COMPANIES, company, re.I) is not None
+
+
+# Where a posting names a country, a bloc or a nationality that someone living in Egypt cannot meet.
+# "Egyptian nationals", "based in Egypt", "no visa sponsorship", "offices in the US" and "US clients"
+# are not restrictions and match nothing here. US, UK, EU and KSA only count in capitals ("for us only").
+# restriction() writes U.S., U.S.A. and U.K. as US, USA and UK first, so these never see a dot.
+_COUNTRY = (r"(?:(?-i:USA?|UK|EU)|United States|America|United Kingdom|Britain|Canada|Europe|"
+            r"European Union|Australia)(?!\w)")
+_NATION = r"(?:(?-i:USA?\.?|UK|EU)|American|British|Canadian|European|Australian)"  # "US. citizenship" is a typo seen live
+_GULF = r"(?:GCC|Saudi|Emirati|UAE|Qatari|Kuwaiti|Omani|Bahraini)"
+RESTRICTION = re.compile("|".join([
+    rf"{_NATION}\s+citizen(?:s|ship)?\b",
+    # a clearance "preferred" or "an advantage" is no bar, nor is a form field "Security Clearance: None"
+    # (no \b after None: "Requirement:** NoneThis position")
+    r"(?:TS/SCI|(?:(?-i:SC)|security|secret|top[- ]secret)\s+clearance\b|public\s+trust\b)"
+    r"(?!(?:\s+requirements?)?\W{0,8}(?:none|n/a))"
+    r"(?![^.\n]{0,60}\b(?:preferred|advantag\w+|a\s+plus|desirable|beneficial|nice\s+to\s+have|bonus)\b)",
+    rf"(?:authori[sz]ed|eligible|legally\s+(?:able|entitled|permitted))\s+to\s+work\s+in\s+(?:the\s+)?{_COUNTRY}",
+    rf"right\s+to\s+work\s+in\s+(?:the\s+)?{_COUNTRY}",
+    rf"must\s+(?:be\s+)?(?:(?:located|based|living|resident)\s+in|reside\s+in|(?:a\s+)?resident\s+of)"
+    rf"\s+(?:the\s+)?{_COUNTRY}",
+    rf"{_COUNTRY}[- ]based\s+(?:candidates?\s+)?only\b",
+    r"(?-i:\b(?:US|USA|UK|KSA|EU))\s+only\b",
+    rf"{_GULF}\s+(?:nationals?|citizens?)\s+only\b",
+    r"Saudi[sz]ation",
+]), re.I)
+# a clause that says the thing is not asked for: "US citizenship is not required", "No security clearance
+# required", "You do not need to be authorized to work in the US", "The employer does not require a clearance",
+# "Nor will we require US citizenship"
+NOT_ASKED = re.compile(r"\b(?:not|isn['’]t|aren['’]t)\s+(?:required|needed|necessary|mandatory|a\s+requirement)\b"
+                       r"|\bno\b[^.;\n]{0,50}\b(?:required|needed)\b|\b(?:do|does)(?:\s+not|n['’]t)\s+(?:need|require)\b"
+                       r"|\bnor\s+will\b[^.;\n]{0,60}\brequire\b", re.I)
+
+
+# where a sentence ends, so a "not required" cancels only its own sentence: a full stop, semicolon or new line
+SENTENCE_BREAK = re.compile(r"[.;\n]")
+DOTTED = re.compile(r"\bU\.([SK])\b\.?(?:(A)\b\.?)?")  # U.S., U.S.A., U.K. (a last dot missing too): not sentence ends
+
+
+def restriction(text: str | None) -> str | None:
+    """The phrase that bars someone living in Egypt (a citizenship, a clearance, a right to work or a
+    residence in the US, UK, Canada, EU or Australia; Gulf nationals only), or None; U.S., U.S.A. and U.K. are
+    read, and come back, as US, USA and UK. A phrase in a sentence that says it is not required or needed
+    ("US citizenship is not required") bars nobody; the next sentence ("No clearance required for the first
+    round. Must be a US citizen.") still counts. A flag hides a job (the tracker's Show hidden jobs brings it
+    back) and a missed flag leaves it visible, so a negation anywhere in the sentence cancels the flag, even
+    "US citizenship is required, clearance is not required" (an accepted miss). A benefit line "(US only)" is
+    flagged although it bars nobody (a known false flag: the job is hidden, not lost)."""
+    text = DOTTED.sub(lambda d: f"U{d[1]}{d[2] or ''}", text or "")
+    for m in RESTRICTION.finditer(text):
+        start = max((b.end() for b in SENTENCE_BREAK.finditer(text, 0, m.start())), default=0)
+        after = SENTENCE_BREAK.search(text, m.end())
+        if not NOT_ASKED.search(text[start:after.start() if after else len(text)]):
+            return " ".join(m.group(0).split())
+    return None
+
+
+def hidden_reason(status: str, restriction: str | None, score, features: dict = FEATURES) -> str | None:
+    """Why the email and the tracker leave a job out, as the switches stand now, or None: only a job with no
+    status of yours ('new'). Its restriction hides it with features.eligibility alone; 'score N' (3 or lower)
+    hides it with features.auto_hide and features.grade both on. Read at run time, so a switch turned off stops
+    hiding on the next run and turned on hides again; the facts themselves (mart.job_status) are never changed."""
+    if status != "new":
+        return None
+    if isinstance(restriction, str) and restriction and features["eligibility"]:  # pandas gives NaN for none
+        return restriction
+    if features["auto_hide"] and features["grade"] and score is not None and score == score and score <= 3:  # score == score: not NaN
+        return f"score {int(score)}"
+    return None

@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 import requests
 from curl_cffi import requests as chrome_requests
 
-from ..config import HOURS_OLD, ROOT
+from ..config import HOURS_OLD, OUTPUT
 
 
 STARTED = time.monotonic()  # each step is its own process: its time budget counts from here
@@ -22,6 +22,20 @@ STARTED = time.monotonic()  # each step is its own process: its time budget coun
 
 def time_left(budget: float) -> float:
     return STARTED + budget - time.monotonic()
+
+
+SITE = threading.local()  # .until: when the site this thread is reading must be done (company_sites sets it)
+
+
+def site_left(cap: float) -> float:
+    """`cap` seconds, or what is left of this thread's site time when that is less. When none is left it raises
+    requests.Timeout, which every caller already treats as a site that did not answer."""
+    until = getattr(SITE, "until", None)
+    if until is None:
+        return cap
+    if (left := until - time.monotonic()) < 1:
+        raise requests.Timeout("the site's time is spent")
+    return min(cap, left)
 
 
 def since() -> str:
@@ -52,7 +66,7 @@ BROWSER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 # when it gives none); one that still answers 401 or 403 to a real Chrome's handshake, for 6 hours;
 # a host can also be held on our side (Workable: one round a day). One file per host in output/waits/
 # holds the time, as the extract steps are separate processes side by side.
-WAITS = ROOT / "output" / "waits"
+WAITS = OUTPUT / "waits"
 
 # Seconds between two requests to one host, across a step's threads (request()): 1, unless named here.
 # Workable's search is limited by the day, not the second (one round a day); the 28,000-company feed
@@ -103,7 +117,7 @@ def duration(seconds: float) -> str:
 
 
 # A site you opened by hand (scripts/open_blocked.py): its cookies and that browser's user agent
-SESSIONS = ROOT / "output" / "sessions"
+SESSIONS = OUTPUT / "sessions"
 
 # A request that failed, from either client
 ERRORS = (requests.RequestException, chrome_requests.exceptions.RequestException)
@@ -148,7 +162,7 @@ def request(method: str, url: str, **kwargs):
     if saved := session(host):
         headers["User-Agent"] = saved["user_agent"]
         kwargs["cookies"] = {c["name"]: c["value"] for c in saved["cookies"]}
-    timeout, started = kwargs.pop("timeout", 60), time.monotonic()
+    timeout, started = site_left(kwargs.pop("timeout", 60)), time.monotonic()
     if host not in CHROME_ONLY:
         try:
             r = requests.request(method, url, headers=headers, timeout=timeout / 2, **kwargs)
@@ -216,15 +230,16 @@ def rendered(url: str) -> str:
         user_agent=saved["user_agent"] if saved else BROWSER["User-Agent"],
         storage_state={"cookies": saved["cookies"], "origins": []} if saved else None)
     try:
+        context.set_default_timeout(site_left(30) * 1000)  # every wait of this page ends within the site's time
         page = context.new_page()
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.goto(url, wait_until="domcontentloaded", timeout=site_left(30) * 1000)
         except PageError as e:
             if "ERR_HTTP2_PROTOCOL_ERROR" in str(e):  # how McKinsey's site (Akamai) drops headless Chromium
                 raise Challenge("it drops headless Chromium (ERR_HTTP2_PROTOCOL_ERROR)") from e
             raise
         try:
-            page.wait_for_load_state("networkidle", timeout=10000)
+            page.wait_for_load_state("networkidle", timeout=site_left(10) * 1000)
         except PageTimeout:  # still busy: what has loaded is read
             pass
         html = page.content()

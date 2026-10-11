@@ -38,6 +38,8 @@ from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
+sys.path.insert(0, str(ROOT))
+from job_radar.config import OUTPUT  # noqa: E402
 GD = "https://www.glassdoor.com"
 
 # Glassdoor's country ids, each checked on its role page ("How much does a ... make in <country>?")
@@ -207,7 +209,7 @@ def main() -> None:
                 "SELECT job_id FROM core.application WHERE status = 'saved' ORDER BY job_id")]
             jobs = conn.execute("SELECT job_id, title, company, role, place, location FROM mart.job_status"
                                 " WHERE job_id = ANY(%s) ORDER BY job_id", (ids,)).fetchall()
-    out = ROOT / "output" / "salaries" / f"{date.today()}.jsonl"
+    out = OUTPUT / "salaries" / f"{date.today()}.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
     skip = done_before(out.parent) if every else set()
     stop = time.monotonic() + 12 * 3600

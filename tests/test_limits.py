@@ -3,6 +3,7 @@ r"""The rate limits and the LinkedIn alert rule, without the network. Run on the
     .venv\Scripts\python -m pytest tests     (once: .venv\Scripts\pip install pytest)
 """
 
+import gzip
 import json
 import threading
 import time
@@ -177,3 +178,111 @@ def test_linkedin_runs_apify_once_then_holds_for_every_hours(monkeypatch, web):
     sources.boards.linkedin()  # a manual collect the same day: no second paid run
     assert len(posts) == 1
     assert sources.base.waiting("api.apify.com") > (config.SETTINGS["linkedin"]["every_hours"] - 1) * 3600
+
+
+def test_a_site_still_reading_when_the_budget_ends_is_left_for_the_next_run(monkeypatch, web):
+    """company_sites returns at the batch's end whatever a site is doing; the site that never ends is not in what it returns
+    (so its checked_at stays, and the next run reads it), and its thread is left behind (__main__ leaves without it)."""
+    stuck = threading.Event()
+    monkeypatch.setitem(sources.companies.READERS, "rss", lambda company, api: [] if company == "Quick" or not stuck.wait(30) else [])
+    monkeypatch.setattr(sources.base, "STARTED", time.monotonic() + sources.companies.SITE_SECONDS + 1.5 - config.EXTRACT_SECONDS)
+    began = time.monotonic()
+    try:
+        rows, found = sources.company_sites([("Quick", "https://q.test/feed", "rss", "x"), ("Stuck", "https://s.test/feed", "rss", "x")])
+        assert time.monotonic() - began < 5  # the batch's 1.5 s, not the stuck site's 30
+        assert [f[3] for f in found] == ["Quick"] and rows == []
+    finally:
+        stuck.set()
+
+
+def test_a_request_after_the_sites_time_is_spent_is_not_sent(web):
+    sources.base.SITE.until = time.monotonic() - 1
+    try:
+        with pytest.raises(sources.base.requests.Timeout):
+            sources.fetch("GET", "https://slow.test/x")
+        assert web.calls == []
+        sources.base.SITE.until = time.monotonic() + 5  # a site with 5 s left: no request may wait longer
+        sources.fetch("GET", "https://slow.test/x", timeout=60)
+        assert web.calls[0][2]["timeout"] <= 2.5  # requests gets half of what is left
+    finally:
+        del sources.base.SITE.until
+
+
+def test_a_browser_wait_is_never_under_a_second_for_the_site_time_left_is_raised_before():
+    """Playwright gets site_left(cap) * 1000: at least 1000 ms or the Timeout raised here, never a zero or a negative."""
+    try:
+        sources.base.SITE.until = time.monotonic() + 0.5
+        with pytest.raises(sources.base.requests.Timeout):
+            sources.base.site_left(30)
+        sources.base.SITE.until = time.monotonic() + 1.5
+        assert 1 <= sources.base.site_left(30) <= 1.5
+        assert sources.base.site_left(1) == 1  # the cap still wins when it is smaller
+    finally:
+        del sources.base.SITE.until
+
+
+FEED = {"last_updated": "v1", "chunks": ["c0.gz", "c1.gz", "c2.gz", "c3.gz"]}
+
+
+@pytest.fixture
+def portals(monkeypatch, tmp_path):
+    """The 28,000-company feed from memory: 4 chunks of one Egypt job each, read one at a time; `portals.read` lists the
+    chunks downloaded, `portals.budget` is the seconds of the step's time budget left (a function of the chunks read)."""
+    today = time.strftime("%Y-%m-%d")
+    box = type("Portals", (), {"read": [], "feed": dict(FEED), "failing": set(), "budget": lambda self: 100})()
+
+    def job(name):
+        return gzip.compress(json.dumps([{"ats": "Lever", "title": "Data Engineer", "company": "Acme", "location": "Cairo, Egypt",
+                                          "url": f"https://acme.test/{name}", "first_seen": today}]).encode())
+
+    def fake_fetch(method, url, **kw):
+        name = url.rsplit("/", 1)[1]
+        box.read.append(name)
+        if name in box.failing:
+            raise sources.base.requests.ConnectionError("down")
+        assert kw["timeout"] == sources.companies.CHUNK_SECONDS
+        return type("Response", (), {"content": job(name)})()
+
+    monkeypatch.setattr(sources.companies, "FEED_READ", tmp_path / "feed.txt")
+    monkeypatch.setattr(sources.companies, "CHUNK_THREADS", 1)  # one at a time: the budget below is checked chunk by chunk
+    monkeypatch.setattr(sources.companies, "get", lambda url, **p: type("Response", (), {"json": lambda self: box.feed})())
+    monkeypatch.setattr(sources.companies, "fetch", fake_fetch)
+    monkeypatch.setattr(sources.companies, "time_left", lambda budget: box.budget())
+    return box
+
+
+def test_a_portal_feed_that_runs_out_of_time_keeps_what_it_read_and_the_next_run_continues(portals, capsys):
+    portals.budget = lambda: 100 if len(portals.read) < 2 else 10  # under CHUNK_SECONDS once two chunks are read
+    first = sources.company_portals()
+    assert portals.read == ["c0.gz", "c1.gz"] and [r["job_url"] for r in first] == ["https://acme.test/c0.gz", "https://acme.test/c1.gz"]
+    assert "company_portals: read 2 of 4 chunks (feed v1)" in capsys.readouterr().out
+    assert json.loads(sources.companies.FEED_READ.read_text()) == {"version": "v1", "chunks": ["c0.gz", "c1.gz"]}
+    portals.read.clear()
+    portals.budget = lambda: 100
+    second = sources.company_portals()  # resumes: only the chunks not read, so no job twice
+    assert portals.read == ["c2.gz", "c3.gz"] and [r["job_url"] for r in second] == ["https://acme.test/c2.gz", "https://acme.test/c3.gz"]
+    assert "company_portals: read 4 of 4 chunks (feed v1)" in capsys.readouterr().out
+    portals.read.clear()
+    assert sources.company_portals() == [] and portals.read == []  # whole feed read: nothing downloaded
+    assert "unchanged since v1" in capsys.readouterr().out
+
+
+def test_a_new_feed_version_or_an_old_state_file_reads_every_chunk(portals):
+    sources.company_portals()
+    assert len(portals.read) == 4
+    portals.read.clear()
+    portals.feed = {**FEED, "last_updated": "v2"}
+    assert len(sources.company_portals()) == 4 and len(portals.read) == 4  # a new version: all again
+    portals.read.clear()
+    sources.companies.FEED_READ.write_text("v2")  # the bare time the file held before chunks were remembered
+    assert len(sources.company_portals()) == 4 and len(portals.read) == 4
+
+
+def test_a_chunk_that_fails_is_not_marked_read_and_the_others_are_kept(portals, capsys):
+    portals.failing = {"c1.gz"}
+    rows = sources.company_portals()
+    assert sorted(r["job_url"][-5:] for r in rows) == ["c0.gz", "c2.gz", "c3.gz"]
+    assert "WARNING company_portals: c1.gz" in capsys.readouterr().out
+    assert json.loads(sources.companies.FEED_READ.read_text())["chunks"] == ["c0.gz", "c2.gz", "c3.gz"]
+    portals.failing, portals.read = set(), []
+    assert [r["job_url"][-5:] for r in sources.company_portals()] == ["c1.gz"] and portals.read == ["c1.gz"]

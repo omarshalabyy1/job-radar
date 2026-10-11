@@ -107,7 +107,8 @@ You should see `job-radar-warehouse-1`, `job-radar-airflow-db-1`, `job-radar-air
 ### Step 6 · Run your first collect
 
 1. Open Airflow on port 8081 (no login).
-2. You see three DAGs: `job_radar` (the collect) and the two email ones.
+2. You see four DAGs: `job_radar` (the collect; Claude grades Egypt's jobs at its end), the two email ones and
+   `job_radar_applications` (your mailbox, every hour).
 3. Click `job_radar`, then **Trigger** (top right).
 4. Wait about 15 minutes (the tasks run one by one). Every task box turns green; click a box and **Logs** to read what each
    source found ("freehire: 175 postings, 91 new").
@@ -142,13 +143,18 @@ Open [`settings.yaml`](settings.yaml). Everything is plain words; save, and the 
 - **Your companies** under `companies`: a name, and a careers link if you have one. Jobs at
   companies in `your_companies` get a ⭐ and come first.
 - **The times** under `schedule`, like `11am` or `"7:30pm"`.
+- **The smart features** under `features`: Claude's score, the eligibility check (off by default, as the text rules misjudged about 1 phrasing in 3; on, a job only someone
+  outside Egypt can take is hidden), hiding a low score (`auto_hide`), Top 5, follow-ups, drafts, the mailbox tracker, follow-up drafts, interview notes,
+  embeddings; `false` turns one off from the next run. Claude's score, the CV drafts and the embeddings work on
+  Egypt's jobs only (`ai_places`); the eligibility check applies to every job, wherever it is.
 
 > Broke something? Airflow shows an error at the top of its page naming the line: lists go in
 > `[...]`, and every `:` needs a space after it.
 
 ## ☀️ Your daily routine
 
-1. **Open the email** after the 12pm collect (about 12:15pm). Junior jobs first, senior last; ⭐ are your companies.
+1. **Open the email** after the 12pm collect (about 12:30pm). Junior jobs first, senior last; ⭐ are your companies;
+   Egypt's jobs carry Claude's score and why, the best in **Top 5 today** at the top.
 2. **Tap a job** to read it on its own site.
 3. **Mark it in the tracker**: *saved*, *applied*, *interview*, *offer*, *rejected* or *ignored*.
    Ignored jobs drop out of Claude's review and the career-ops export.
@@ -165,13 +171,17 @@ In Claude Code, type:
 | `/job-radar apply <job>` | a tailored CV, a cover letter and interview notes for that job, then help with the form |
 | `/job-radar emails` | sends both emails now |
 
+Every collect, Claude already scores Egypt's jobs and drafts the 8+ ones: tailor writes cv.md, cover-letter.md and notes.md to `output/applications/<day>/<company>-<title>/` for up to 5 jobs a run scoring 8+ in ai_places, and marks them saved ('draft ready <day>'); the Ready to apply tab shows them. About $0.05 a draft. `/job-radar` is
+where you review and finish them. Claude grades only jobs that have a description; LinkedIn pages are never opened,
+so paste the description in `/job-radar` to get a grade.
+
 What to expect, step by step:
 
 1. Claude shows a table: grade, job, why, link. **A** apply now, **B** good with gaps,
    **C** a stretch, **D/F** skip.
 2. You pick the jobs you like.
 3. For each, Claude writes `cv.md`, `cover-letter.md` and `notes.md` in
-   `output/applications/<date>/<company>-<title>/`, using only what is true in your CV.
+   `E:\job-radar\output\applications\<date>\<company>-<title>\`, using only what is true in your CV.
 4. To apply, Claude shows you exactly what will be sent and waits for your **yes**, one job at a
    time. Logins, passwords and CAPTCHAs are yours. LinkedIn and Indeed applications stay manual:
    their terms ban automation.
@@ -181,7 +191,7 @@ What to expect, step by step:
 | You notice | Do |
 |---|---|
 | No email came | Airflow → the email DAG → last run → **Logs**. "no new jobs, nothing sent" is normal. |
-| A task is red | Click it → **Logs**. Network hiccups fix themselves on the next run. |
+| A task is red | Click it → **Logs**. Network hiccups fix themselves on the next run. A collect red at `check_extracts` means `schema` or an extract did not succeed. The tracker's **Last run** tab shows what every step did. |
 | Airflow or the tracker won't open | Is Docker Desktop running? Then `docker compose up -d`. |
 | Everything is slow | Another Docker stack may be using every CPU; stop it, or restart Docker Desktop. |
 | A site seems skipped | It asked job-radar to wait (a file in `output/waits/`); it comes back by itself. |

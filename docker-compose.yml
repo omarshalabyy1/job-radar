@@ -24,10 +24,12 @@ x-job-env: &job-env
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   MAILBOXES: ${MAILBOXES:-}
   PYTHONUNBUFFERED: "1"
+  JOB_RADAR_OUTPUT: /opt/job-radar/output  # the bind mount below; set here so a host path from .env (e.g. E:/) never reaches the container
 
 services:
   warehouse:
     image: postgres:17
+    command: postgres -c jit=off  # no JIT: compiling a query only pays on big tables, and these are small
     restart: unless-stopped
     environment:
       POSTGRES_USER: jobradar
@@ -91,6 +93,7 @@ services:
       - airflow-home:/opt/airflow
       - ./dags:/opt/airflow/dags
       - .:/opt/job-radar
+      - ${JOB_RADAR_OUTPUT:-./output}:/opt/job-radar/output  # the drafts and CVs: the folder JOB_RADAR_OUTPUT names in .env when set (e.g. on the E: drive), else the repo's output/
     depends_on:
       warehouse:
         condition: service_healthy
@@ -107,10 +110,12 @@ services:
       <<: *job-env
       STREAMLIT_THEME_BASE: dark  # a theme setting replaces the default theme: keep it dark
       STREAMLIT_THEME_PRIMARY_COLOR: "#3987e5"  # the charts' blue on chips, sliders and progress bars
+      STREAMLIT_SERVER_FILE_WATCHER_TYPE: none  # polling the Windows mount burned CPU; restart the tracker after code edits
     ports:
       - "8501:8501"  # all interfaces: the tracker opens on the phone over home Wi-Fi
     volumes:
       - .:/opt/job-radar
+      - ${JOB_RADAR_OUTPUT:-./output}:/opt/job-radar/output  # the drafts and CVs: the folder JOB_RADAR_OUTPUT names in .env when set (e.g. on the E: drive), else the repo's output/
     depends_on:
       airflow:
         condition: service_started

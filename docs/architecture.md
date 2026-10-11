@@ -8,8 +8,9 @@ says where to change what. How each source is read, with the tests behind each c
 
 ## Two ways to run it
 
-Docker and Airflow run on their own once a day. Claude Code runs with you, by hand, when you type
-`/job-radar`: that is where your own limit pays for what the schedule never gets, and what it
+Docker and Airflow run on their own once a day; at the end of each collect Claude grades Egypt's jobs and
+drafts the best (each step has a switch under `features` in `settings.yaml`). Claude Code runs with you, by hand,
+when you type `/job-radar`: that is where your own limit pays for what the schedule never gets, and what it
 fixes or unlocks (a saved login, a repaired reader) the daily run uses from then on.
 
 ```mermaid
@@ -88,15 +89,26 @@ mindmap
 Twelve extract tasks run one by one, each within 150 seconds (LinkedIn's Apify run within 280), so a
 busy laptop is not swamped; a task may wait up to an hour for its turn (`task_queued_timeout` 3600 in
 `docker-compose.yml`), so the last extracts are never failed unrun. A whole collect takes about 15
-minutes, and both emails go right after it. A job first seen over 4 days ago
+minutes, and both emails go right after `ranked`, which runs when grade_claude has ended, red or green. On Egypt's jobs only (`ai_places`), embed gives each job a
+local vector (CV match: closeness to your CV, $0 on the CPU), grade_claude has Claude score each one with a
+description 0-10 against your CV, and tailor drafts the 8+ ones. `features.eligibility` is off by default: the text rules misjudged about 1 phrasing in 3, and a source-level plus Claude Haiku filter is meant to replace them. With it on, a job only someone
+outside Egypt can take (US citizens only, a security clearance, GCC nationals only ...) is hidden, not deleted:
+match_skills sets its `core.job.restriction` from its text, and the email and the tracker leave it out
+(`config.hidden_reason`; the tracker's Show hidden jobs brings it back). Claude's own restriction hides a job the same way, a score of 3 or
+lower hides it with `features.auto_hide`, and a status of yours shows it again. A job whose own posting has no text takes the text of the
+same job from another posting of the last 4 days. A job first seen over 4 days ago
 is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key).
 Every posting is stored once (its source and link), every job once (`core.job`), every email
-sends a job once.
+sends a job once. Newsletters with no jobs are remembered in `core.email_seen` for 7 days, and every step
+leaves a row in `core.step_run` (the tracker's Last run tab). In Docker, `output/` is a bind mount of
+`E:\job-radar\output` into the airflow and tracker containers. What Claude Code writes goes there too (`E:\job-radar\output\...`); the repo's own `output/` is unused for it.
 
 ```mermaid
 %% flowchart: one collect, left to right
-%% clock -> schema -> 12 extract tasks one by one -> raw -> transform -> core -> describe -> match_skills -> export
-%% the two email DAGs run once match_skills is done (an Airflow Asset) and read the mart view
+%% clock -> schema -> 12 extract tasks one by one -> raw -> transform -> core -> describe -> match_skills
+%% -> embed -> grade_claude -> ranked -> tailor, and match_skills -> export
+%% the two email DAGs run once ranked is done (an Airflow Asset on a task that succeeds even when grade_claude fails) and read the mart view
+%% check_extracts, after the extracts, turns the run red when schema or an extract did not succeed
 flowchart LR
     clock(["Airflow<br>12pm Cairo,<br>or your Trigger"]):::trigger --> schema["schema<br>settings.yaml to core.company"]
     schema --> extracts
@@ -115,18 +127,61 @@ flowchart LR
         portals["extract_portals<br>28,000-company feed"]
         inbox["extract_email<br>your inboxes"]
     end
+    extracts --> check["check_extracts<br>red if schema or an extract<br>did not succeed"]:::error
     extracts --> raw[("raw.job_posting<br>each posting once:<br>source + link")]
     raw --> transform["transform<br>roles, places, level<br>one row per job"]
     transform --> core[("core.job")]
     core --> describe["describe<br>descriptions from job pages"]
     describe --> match["match_skills"]
     match --> export["export_career_ops"]
+    match --> embed["embed<br>local vectors, Egypt"]:::ai
+    embed --> grade["grade_claude<br>Claude scores Egypt's jobs"]:::ai
+    grade --> ranked["ranked<br>releases the emails,<br>even if grading failed"]
+    ranked --> tailor["tailor<br>drafts for 8+"]:::ai
     core -.-> mart[("mart.job_status")]
     mart -.-> emails(["2 emails<br>right after<br>each job once"]):::success
 
     classDef trigger fill:#fed7aa,stroke:#c2410c,color:#374151
     classDef success fill:#a7f3d0,stroke:#047857,color:#374151
+    classDef ai fill:#ddd6fe,stroke:#6d28d9,color:#374151
+    classDef error fill:#fecaca,stroke:#b91c1c,color:#374151
 ```
+
+## Every hour: your applications
+
+The `job_radar_applications` DAG reads your mailbox read-only. Plain sender and subject patterns classify most
+emails; Claude gets only the leftovers. An email moves its job's status up only. The two draft switches write files
+and send nothing.
+
+```mermaid
+%% flowchart: the hourly applications DAG, left to right
+%% hour -> track_applications (each Gmail mailbox) -> core.application_email -> core.application, and the two drafts in output/
+flowchart LR
+    hour(["every hour"]):::trigger --> track["track_applications<br>Gmail All Mail, read-only"]
+    track --> mails[("core.application_email<br>one row per email")]
+    mails --> app[("core.application<br>status moves up only")]
+    mails --> followup["follow-up draft<br>7 or 14 days, no answer<br>output/followups/day/"]:::ai
+    mails --> prep["interview notes<br>from the email's own text<br>output/interviews/"]:::ai
+
+    classDef trigger fill:#fed7aa,stroke:#c2410c,color:#374151
+    classDef ai fill:#ddd6fe,stroke:#6d28d9,color:#374151
+```
+
+## What each step writes
+
+| Step | Reads | Writes |
+|---|---|---|
+| `schema` | `settings.yaml`, `sql/schema.sql` | `core.company`, `core.skill`, the `mart` views |
+| `extract_*` (12) | the sources | `raw.job_posting`; `extract_email` also `core.email_seen` |
+| `transform` | `raw.job_posting` | `core.job`, `core.job_seen` (the keys of jobs deleted after 4 days) |
+| `describe` | the jobs' pages | `core.job.description` |
+| `match_skills` | `core.job`, `core.cv` | `core.job_skill`, `core.cv_skill`, `core.job.restriction` (a barred job is hidden, not deleted) |
+| `embed` | `core.job`, `core.cv`, a local Ollama model | `core.job_vector`, `core.cv_vector`, `core.job.cv_similarity` |
+| `grade_claude` | `core.job`, `core.cv`, your last 30 clicks | `core.claude_grade` (a grade older than your newest CV upload is overwritten) |
+| `tailor` | `core.claude_grade` scoring 8+ | `output/applications/<day>/`, `core.application` as saved |
+| `check_extracts` | the tasks' states | nothing: it fails the run when `schema` or an extract did not succeed |
+| `track_applications` | Gmail, read-only | `core.application_email`, `core.application`, `output/followups/`, `output/interviews/` |
+| every step | | one row in `core.step_run`: status, summary, Claude tokens and exact dollars |
 
 ## Every request
 
@@ -164,7 +219,7 @@ flowchart TD
 
 | You want to | Change | What happens |
 |---|---|---|
-| a role, a place, your level, the schedule | `settings.yaml` | the next run uses it; a schedule change shows in Airflow within a minute |
+| a role, a place, your level, the schedule, a smart feature on or off (`features`) | `settings.yaml` | the next run uses it; a schedule change shows in Airflow within a minute |
 | add or remove a company, or its Egypt jobs page | `settings.yaml` (companies), then `.venv\Scripts\python scripts\companies_doc.py` rewrites [companies.md](companies.md) | the schema step copies the list to `core.company`; a changed link is detected again |
 | LinkedIn's search words, places, jobs a run | `settings.yaml` (linkedin), `APIFY_TOKEN` in `.env` | the next Apify run, at most one every `every_hours` (20) |
 | an inbox, an app password, Gmail | `.env` | `docker compose up -d` (the containers read `.env` when they start) |
@@ -173,7 +228,8 @@ flowchart TD
 | how fast one site is asked | `GAP` in `job_radar/sources/base.py` | 1 second unless named there |
 | the email's look | `job_radar/digest.py` | the next email |
 | a table or a view | `sql/schema.sql` | applied at the start of every collect |
-| the tracker | `tracker/app.py` | refresh the page |
+| the tracker | `tracker/app.py` (a tab in `tracker/*_tab.py`) | refresh the page |
+| what a step did last, or what Claude cost | the tracker's Last run tab, or `core.step_run` | each step's latest run, 14 days of Claude dollars and failures, this month's total |
 
 Before a change goes in: `.venv\Scripts\python -m pytest tests` (29 tests, no network, about 10 seconds): the rate limits,
 every reader against a saved sample of its site, and `companies.md` against `settings.yaml`.

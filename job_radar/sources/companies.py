@@ -14,42 +14,69 @@ from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 
-from ..config import EXTRACT_SECONDS, HOME, ONSITE_PLACES, PHENOM_SEARCHES, PLACES, ROOT, place_of, role_of
-from .base import CHALLENGE, Challenge, ERRORS, Held, duration, get, hold, rendered, request, retry_after, row, since, time_left, waiting
+from ..config import EXTRACT_SECONDS, HOME, ONSITE_PLACES, PHENOM_SEARCHES, PLACES, OUTPUT, place_of, role_of
+from .base import (CHALLENGE, SITE, Challenge, ERRORS, Held, duration, fetch, get, hold, rendered, request, retry_after, row,
+                   since, time_left, waiting)
 
 
 PORTAL_FEED = "https://feashliaa.github.io/job-board-data/data/chunks"
 
-# the feed's last_updated when it was last read: it is downloaded again only once it changes
-FEED_READ = ROOT / "output" / "feed-last-updated.txt"
+# the feed's last_updated and the chunks of that version read so far, as JSON: a feed is downloaded again only once
+# it changes, and a version only part read (the time budget) is continued by the next run
+FEED_READ = OUTPUT / "feed-last-updated.txt"
+CHUNK_THREADS = 4  # a chunk is ~10 MB of gzip and ~25,000 jobs once read; 4 at a time peaked ~290 MiB over idle, the 8 before it ran when Postgres crashed (2026-10-11)
+SITE_SECONDS = 60  # one career site's whole read, its detection included (company_sites)
+CHUNK_SECONDS = 40  # one chunk's download; no chunk is started with less than this left of the step's time budget
 
 
 def company_portals() -> list[dict]:
     """28,000+ companies' own career pages (Greenhouse, Lever, Ashby, Workday, BambooHR, iCIMS,
     Paylocity) from job-board-aggregator's daily crawl (by Riley Dorrington, data CC BY-NC 4.0):
-    one ~75 MB download, 8 chunks at a time, instead of 28,000 calls, and only when the feed has
-    changed since it was last read (its manifest's last_updated). Kept: first seen in the window, a
-    role, a place in scope."""
-    def chunk(name: str) -> list[dict]:
-        """One chunk's jobs in scope. Filtered here, so its ~25,000 jobs are freed at once instead of
-        waiting in memory until the chunks before it are read."""
+    one ~75 MB download in 8 chunks, 4 at a time, instead of 28,000 calls, and only when the feed has
+    changed since it was last read (its manifest's last_updated). A run that runs out of time keeps the
+    chunks it read and the next run reads the rest. Kept: first seen in the window, a role, a place in scope."""
+    def chunk(name: str) -> list[dict] | None:
+        """One chunk's jobs in scope (None: too little time was left to start it). Filtered here, so its ~25,000
+        jobs are freed at once instead of waiting in memory until the chunks before it are read."""
+        if time_left(EXTRACT_SECONDS) < CHUNK_SECONDS:
+            return None
+        data = gzip.decompress(fetch("GET", f"{PORTAL_FEED}/{name}", timeout=CHUNK_SECONDS).content)
         return [row(j.get("ats", "portal").lower(), None, j["title"], j.get("company"), j["location"], j["url"],
                     j["first_seen"][:10], None, j)
-                for j in json.loads(gzip.decompress(get(f"{PORTAL_FEED}/{name}").content))
+                for j in json.loads(data)
                 if ((j.get("first_seen") or "")[:10] >= since() and j.get("title") and j.get("url")
                     and role_of(j["title"]) and place_of(j.get("location") or ""))]
 
     manifest = get(f"{PORTAL_FEED}/jobs_manifest.json").json()
-    updated = str(manifest.get("last_updated") or "")
-    if updated and FEED_READ.exists() and FEED_READ.read_text() == updated:
-        print(f"company_portals: the feed is unchanged since {updated}, nothing to download")
+    version, chunks = str(manifest.get("last_updated") or ""), manifest["chunks"]
+    read = set()
+    try:
+        saved = json.loads(FEED_READ.read_text())
+        if version and saved["version"] == version:
+            read = set(saved["chunks"])
+    except (OSError, ValueError, TypeError, KeyError):  # no file, or the old one holding a bare time: nothing read
+        pass
+    todo = [name for name in chunks if name not in read]
+    if not todo and version:
+        print(f"company_portals: the feed is unchanged since {version}, all {len(chunks)} chunks read, nothing to download")
         return []
-    with ThreadPoolExecutor(8) as pool:
-        rows = [r for found in pool.map(chunk, manifest["chunks"]) for r in found]
+    # not `with`: its exit waits for every chunk, and a chunk still downloading when the budget ends is left behind
+    pool = ThreadPoolExecutor(CHUNK_THREADS)
+    futures = {pool.submit(chunk, name): name for name in todo}
+    done, _ = wait(futures, timeout=max(0, time_left(EXTRACT_SECONDS)))
+    pool.shutdown(wait=False, cancel_futures=True)
+    found = {}
+    for future in (f for f in futures if f in done):  # the feed's order
+        if future.exception():
+            print(f"WARNING company_portals: {futures[future]}: {future.exception()!r}"[:300])
+        elif future.result() is not None:
+            found[futures[future]] = future.result()
+    read |= found.keys()
     # marked read before the rows are saved: if saving fails, these jobs come with the feed's next update
     FEED_READ.parent.mkdir(parents=True, exist_ok=True)
-    FEED_READ.write_text(updated)
-    return rows
+    FEED_READ.write_text(json.dumps({"version": version, "chunks": sorted(read)}))
+    print(f"company_portals: read {len(read)} of {len(chunks)} chunks (feed {version})")
+    return [r for rows in found.values() for r in rows]
 
 
 def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
@@ -58,6 +85,7 @@ def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
     come with each site's (platform, api, note, company), for core.company."""
     def read(site: tuple) -> tuple[list[dict], tuple]:
         company, url, platform, api = site
+        SITE.until = time.monotonic() + SITE_SECONDS  # every request and page wait of this site ends by then
         note = None
         if platform in (None, "blocked", "forbidden", "unreachable"):
             platform, api, note = detect(url)
@@ -74,11 +102,11 @@ def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
         print(f"{company} ({platform}): {len(rows)}")
         return rows, (platform, api, note, company)
 
-    # Each may start a browser: more starves the task's heartbeat. A batch ends 60 seconds before the
-    # step's time budget: a site still loading (a page can take a minute) finishes in that time,
-    # since the step waits for it before it exits. A site not done by then is left for the next run.
+    # Each may start a browser: more starves the task's heartbeat. A batch ends SITE_SECONDS before the
+    # step's time budget: a site still loading finishes in that time (read() gives every site SITE_SECONDS at
+    # most). A site not done by then is left for the next run, and __main__ leaves without waiting for it.
     pool = ThreadPoolExecutor(4)
-    done, _ = wait([pool.submit(read, site) for site in sites], timeout=max(0, time_left(EXTRACT_SECONDS) - 60))
+    done, _ = wait([pool.submit(read, site) for site in sites], timeout=max(0, time_left(EXTRACT_SECONDS) - SITE_SECONDS))
     pool.shutdown(wait=False, cancel_futures=True)
     results = [f.result() for f in done]
     return [r for rows, _ in results for r in rows], [found for _, found in results]

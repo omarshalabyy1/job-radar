@@ -5,6 +5,7 @@
 --   core.application  your status for a job, set in the tracker
 --   core.skill        your skills: Data Engineering, BI & Analytics and Generative AI, as patterns
 --   core.job_skill    which of your skills each job asks for, stored once by match_skills
+--   core.step_run     the run log: one row per step per run (runlog.py)
 --   mart.*            gold: views for the email and the tracker
 
 CREATE SCHEMA IF NOT EXISTS raw;
@@ -56,6 +57,11 @@ ALTER TABLE core.job ADD COLUMN IF NOT EXISTS posted_at timestamptz;
 -- the company's size in employees ('51-200'), from any posting of that company that gives it
 -- (Indeed, freehire); empty when no source does
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS company_size text;
+-- the phrase in its text that bars someone living in Egypt (config.restriction: "US citizens only", "right
+-- to work in the UK" ...), set by match_skills; empty when none, or no description to read
+ALTER TABLE core.job ADD COLUMN IF NOT EXISTS restriction text;
+-- how close its text is to your nearest CV (embed.py, 0-1, cosine); empty until embed has seen it
+ALTER TABLE core.job ADD COLUMN IF NOT EXISTS cv_similarity real;
 -- A job first seen over 4 days ago (config.KEEP_DAYS) is deleted by transform with its raw postings,
 -- unless you noted or applied to it; only its key stays here, so a job still posted later is never
 -- stored or emailed again.
@@ -103,10 +109,17 @@ CREATE TABLE IF NOT EXISTS core.application (
     note       text,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
--- 'new' is stored when a job still marked new has a note; warehouses made before that get the wider check here.
-ALTER TABLE core.application DROP CONSTRAINT IF EXISTS application_status_check;
-ALTER TABLE core.application ADD CONSTRAINT application_status_check
-    CHECK (status IN ('new', 'saved', 'applied', 'interview', 'offer', 'rejected', 'ignored'));
+-- 'new' is stored when a job still marked new has a note; warehouses made before that get the wider check here,
+-- once: dropping a constraint that is already right locks core.application and could deadlock with the tracker.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'core.application'::regclass
+                   AND conname = 'application_status_check' AND pg_get_constraintdef(oid) LIKE '%''new''%') THEN
+        ALTER TABLE core.application DROP CONSTRAINT IF EXISTS application_status_check;
+        ALTER TABLE core.application ADD CONSTRAINT application_status_check
+            CHECK (status IN ('new', 'saved', 'applied', 'interview', 'offer', 'rejected', 'ignored'));
+    END IF;
+END $$;
 
 -- Your skills (Data Engineering, BI & Analytics and Generative AI). Reloaded on every run, so this
 -- list is the only place to change them.
@@ -205,11 +218,40 @@ CREATE TABLE IF NOT EXISTS core.job_skill (
     PRIMARY KEY (job_id, skill)
 );
 
+-- The embedding of each job's text and of each CV (embed.py, a local Ollama model), one row per job or CV,
+-- kept as plain real[] so no extension is needed; they go with their job or CV.
+CREATE TABLE IF NOT EXISTS core.job_vector (
+    job_id bigint PRIMARY KEY REFERENCES core.job ON DELETE CASCADE,
+    vector real[] NOT NULL,
+    model  text   NOT NULL
+);
+CREATE TABLE IF NOT EXISTS core.cv_vector (
+    label       text PRIMARY KEY REFERENCES core.cv ON DELETE CASCADE,
+    vector      real[] NOT NULL,
+    model       text   NOT NULL,
+    embedded_at timestamptz  -- embed.py embeds a CV again only when it was uploaded after this (empty: embed it)
+);
+
+-- Claude's grade of a job (grade.py, run by the job_radar DAG after embed): the tracker and the
+-- emails read it through mart.job_status; goes with its job. restriction: what keeps someone living in
+-- Cairo from taking the job (a citizenship, a work permit), empty when nothing does.
+CREATE TABLE IF NOT EXISTS core.claude_grade (
+    job_id    bigint PRIMARY KEY REFERENCES core.job ON DELETE CASCADE,
+    score     smallint    NOT NULL,  -- 0-10, 10 = apply today
+    cv        text        NOT NULL,  -- the label of the CV to send (core.cv)
+    reason    text        NOT NULL,
+    model     text        NOT NULL,
+    graded_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE core.claude_grade ADD COLUMN IF NOT EXISTS restriction text;
+
 -- Views hold no data: dropped and created again on every run, so a change here always applies.
 DROP VIEW IF EXISTS mart.job_status, mart.skill_demand, mart.jobs_daily, mart.job_skill;
 
--- Every job with how many of your skills it asks for, how much of that your best CV shows, and
--- your status ('new' until you set one).
+-- Every job with how many of your skills it asks for, how much of that your best CV shows, Claude's score,
+-- and your status ('new' until you set one). restriction is the phrase that bars someone living in Egypt (the regex's,
+-- else Claude's). Whether a job is hidden is worked out at run time from the score, the restriction, the status and
+-- settings.yaml features (config.hidden_reason), in the email and the tracker, never here.
 CREATE VIEW mart.job_status AS
 SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j.source, j.job_url,
        j.target_company, j.company_size, coalesce(k.skill_matches, 0) AS skill_matches, k.skills_matched,
@@ -220,7 +262,9 @@ SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j
        CASE WHEN a.job_id IS NULL AND j.first_seen < current_date - 3 THEN 6
             WHEN now() - j.posted_at <= interval '12 hours' THEN 1 WHEN now() - j.posted_at <= interval '24 hours' THEN 2
             WHEN now() - j.posted_at <= interval '48 hours' THEN 3 WHEN now() - j.posted_at <= interval '72 hours' THEN 4
-            ELSE 5 END AS fresh_level
+            ELSE 5 END AS fresh_level,
+       g.score, g.reason AS grade_reason, g.cv AS grade_cv, coalesce(j.restriction, g.restriction) AS restriction,
+       j.cv_similarity
 FROM core.job j
 LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
            FROM core.job_skill GROUP BY job_id) k USING (job_id)
@@ -230,6 +274,7 @@ LEFT JOIN (SELECT DISTINCT ON (job_id) job_id, label AS cv_label, cv_coverage
                  LEFT JOIN core.cv_skill cs ON cs.label = c.label AND cs.skill = k.skill
                  GROUP BY k.job_id, c.label) per_cv
            ORDER BY job_id, cv_coverage DESC) v USING (job_id)
+LEFT JOIN core.claude_grade g USING (job_id)
 LEFT JOIN core.application a USING (job_id);
 
 -- How many of the last 90 days' described jobs of each role ask for each of your skills.
@@ -251,12 +296,47 @@ SELECT first_seen, place, role_rank, role, source, count(*) AS jobs
 FROM core.job
 GROUP BY first_seen, place, role_rank, role, source;
 
--- Claude's grade of a job (grade.py, a side step: nothing else reads it yet); goes with its job
-CREATE TABLE IF NOT EXISTS core.claude_grade (
-    job_id    bigint PRIMARY KEY REFERENCES core.job ON DELETE CASCADE,
-    score     smallint    NOT NULL,  -- 0-10, 10 = apply today
-    cv        text        NOT NULL,  -- the label of the CV to send (core.cv)
-    reason    text        NOT NULL,
-    model     text        NOT NULL,
-    graded_at timestamptz NOT NULL DEFAULT now()
+-- Your applications as your mailboxes tell them (applications.py, read-only): one row per email, kept
+-- after its job is deleted, so the history stays. kind 'other' is an email read and found to be no
+-- application news, kept so it is never read again. job_id: the job in core.job it is about, when found.
+CREATE TABLE IF NOT EXISTS core.application_email (
+    message_id  text PRIMARY KEY,
+    received_at timestamptz NOT NULL,
+    sender      text        NOT NULL,
+    subject     text        NOT NULL,
+    company     text,
+    title       text,
+    kind        text        NOT NULL CHECK (kind IN ('applied', 'viewed', 'rejected', 'interview', 'offer', 'other')),
+    job_id      bigint REFERENCES core.job ON DELETE SET NULL
+);
+-- the Gmail address whose All Mail the email was read from (MAILBOXES in .env): follow-ups and interview prep read its
+-- text from that mailbox again. Empty only for a row made before the column existed, until it is set once by hand.
+ALTER TABLE core.application_email ADD COLUMN IF NOT EXISTS mailbox text;
+
+-- The emails extract_email read and found no job in (newsletters, a recruiter's hello): their Message-IDs, so the next
+-- run does not download them again. An email with jobs is remembered by its raw.job_posting rows. Kept 7 days.
+CREATE TABLE IF NOT EXISTS core.email_seen (
+    message_id text        PRIMARY KEY,
+    seen_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- The run log (runlog.py): one row per step each time python -m job_radar runs it, for the tracker's Last run tab.
+-- status off: the step ran and said its switch in settings.yaml is off; warn: it printed a WARNING; running: it started
+-- and has not ended (a row that stays running was killed at its Airflow timeout; finished_at is empty until it ends).
+-- summary: what the step printed that shows trouble (WARNING, skipped, "0 of", "off in settings") and its last line,
+-- or the error of a failed step. The token and cost columns hold the step's Claude calls; model and cost_usd are
+-- empty when it made none (cost_usd also when a model has no price in runlog.PRICES).
+CREATE TABLE IF NOT EXISTS core.step_run (
+    step               text        NOT NULL,
+    started_at         timestamptz NOT NULL,
+    finished_at        timestamptz,
+    status             text        NOT NULL CHECK (status IN ('running', 'ok', 'warn', 'failed', 'off')),
+    summary            text,
+    model              text,
+    input_tokens       bigint      NOT NULL DEFAULT 0,
+    output_tokens      bigint      NOT NULL DEFAULT 0,
+    cache_write_tokens bigint      NOT NULL DEFAULT 0,
+    cache_read_tokens  bigint      NOT NULL DEFAULT 0,
+    cost_usd           numeric,  -- exact dollars at runlog.PRICES
+    PRIMARY KEY (step, started_at)
 );

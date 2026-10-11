@@ -12,9 +12,30 @@
 
 # When it runs, Cairo time, 12-hour style: 11am, 7pm, "7:30pm" ... (the times of one line share
 # their minutes). Both emails (Egypt's jobs, and the remote jobs everywhere else) go right after
-# each collect. No AI runs on this schedule: Claude only works when you call /job-radar.
+# each collect. Claude grades that collect's Egypt jobs (ai_places, claude below) and your mailbox is read every hour for
+# your applications; /job-radar is where Claude works with you.
 schedule:
   collect: [12pm]                       # find new jobs, once a day (every source looks back a day)
+
+# Each smart feature on or off (true / false). The pipeline follows on its next run; the tracker after `docker restart job-radar-tracker-1`.
+features:
+  grade: true               # Claude scores each job 0-10 against your CVs (model and daily cap: claude: below)
+  # eligibility is off by default: the text-rule filter misjudged about 1 phrasing in 3, and a source-level + Claude Haiku filter is meant to replace it
+  eligibility: false        # on: hide jobs only someone outside Egypt can take (a citizenship, a clearance ...): match_skills marks them, the tracker and the emails leave them out (Show hidden jobs shows them); off: nothing is marked or hidden for a restriction
+  auto_hide: true           # hide a job Claude scored 0-3 (needs grade on; a tracker toggle shows them); a restriction hides a job by eligibility alone
+  top5: true                # "Top 5 today" at the top of each email
+  follow_up: true           # "Follow up" reminders in the Egypt email
+  tailor: true              # draft CV, cover letter and notes for scores 8+
+  track_applications: true  # read Gmail every hour for news on your applications
+  embeddings: true          # local Ollama vectors: how close each job is to your CV (CV match); a CV is embedded again only when it changed
+  follow_up_drafts: true    # draft a follow-up email (never sent) when an application is 7 or 14 days old with no answer
+  interview_prep: true      # draft interview notes when your mailbox shows an interview invite
+# The AI features (grade, tailor, embeddings) run on jobs in these places only. Egypt = Cairo/Giza
+# onsite and hybrid and Egypt's remote jobs. Add Remote, UAE ... to widen them.
+ai_places: [Egypt]
+embeddings:
+  model: nomic-embed-text
+  url: http://host.docker.internal:11434
 
 # The jobs you want, in your order: the email lists them in this order, and a title takes the
 # first role it fits.
@@ -83,11 +104,17 @@ linkedin:
   words: [data engineer, AI engineer, BI developer, data analyst]
   places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
 
-# Claude grading, a side step after each collect (ANTHROPIC_API_KEY in .env): each new job scored 0-10
-# against your CVs, the CV to send and one line why, into core.claude_grade. enabled: false turns it off; it
-# also stops by itself when the API credit runs out. Sonnet 5.5 at ~100 jobs a day is about $14 a month.
+# Claude grading, in the job_radar DAG after embed (ANTHROPIC_API_KEY in .env): each job in ai_places with a
+# description scored 0-10 against your CVs, with the CV to send, one line why and what keeps someone living in
+# Cairo from taking it, into core.claude_grade; it also learns from your last 30 clicks in the tracker. A job
+# scored 3 or lower is hidden in the tracker and left out of the emails (features.auto_hide; Claude's own restriction
+# only with features.eligibility); an 8+ job gets a tailored CV draft. Only a job that has a description is graded (LinkedIn pages
+# are never opened: paste the description in /job-radar). A grade made before your newest CV upload counts as ungraded
+# and is overwritten on the next run. About $3.70 a month at today's volume (measured); Haiku was tested and kept only
+# 3 of Sonnet's 8 top picks, so Sonnet stays. The task turns red when it selected jobs and graded none (key, credit or
+# network), and it stops by itself when the API credit runs out. Switched back on 2026-10-10 (features.grade; off since
+# 2026-10-08). max_jobs: the most graded per run.
 claude:
-  enabled: false  # off since 2026-10-08: jobs are judged in /job-radar; Claude grades client-radar's gigs instead
   model: claude-sonnet-5-5
   max_jobs: 100
 
