@@ -18,7 +18,7 @@ APPLICATIONS = f"""
 SELECT coalesce(max(company), '') AS company, coalesce(string_agg(DISTINCT title, ', '), '') AS titles,
        count(*) FILTER (WHERE kind = 'applied') AS applications, min(received_at) FILTER (WHERE kind = 'applied') AS first_applied,
        CASE WHEN min(received_at) FILTER (WHERE kind = 'applied') < now() - interval '{GHOSTED_DAYS} days'
-                 AND NOT bool_or(kind IN ('interview', 'rejected', 'offer')) THEN 'ghosted'
+                 AND NOT bool_or(kind IN ('interview', 'rejected', 'offer', 'hired')) THEN 'ghosted'
             ELSE (array_agg(kind ORDER BY received_at DESC))[1] END AS latest_news,
        max(received_at) AS latest_date, count(*) AS emails
 FROM core.application_email WHERE kind <> 'other'
@@ -34,7 +34,7 @@ SELECT kind, count(DISTINCT who) AS n FROM mail GROUP BY kind
 UNION ALL
 SELECT 'ghosted', count(*) FROM (SELECT who FROM mail WHERE who IS NOT NULL GROUP BY who
     HAVING min(received_at) FILTER (WHERE kind = 'applied') < now() - interval '{GHOSTED_DAYS} days'
-       AND NOT bool_or(kind IN ('interview', 'rejected', 'offer'))) g"""
+       AND NOT bool_or(kind IN ('interview', 'rejected', 'offer', 'hired'))) g"""
 
 # every company with a job in core.job now (a job you ignored or were rejected for is not open), with
 # your history there; the history matches a company by its letters and digits alone
@@ -55,8 +55,8 @@ ORDER BY coalesce(h.applications, 0) DESC, bool_or(j.target_company) DESC, open_
 # the emails that tell an application's stage (core.application_email), for the funnel
 STAGE_EMAILS = """
 SELECT company, title, kind, received_at, sender FROM core.application_email
-WHERE kind IN ('applied', 'viewed', 'interview', 'offer')"""
-STAGE_LABELS = {"applied": "Applied", "viewed": "Viewed", "interview": "Interview", "offer": "Offer"}
+WHERE kind IN ('applied', 'viewed', 'interview', 'offer', 'hired')"""
+STAGE_LABELS = {"applied": "Applied", "viewed": "Viewed", "interview": "Interview", "offer": "Offer", "hired": "Hired"}
 
 
 def funnel_table(applications: list[dict], by: str | None) -> pd.DataFrame:
@@ -88,7 +88,8 @@ def drafts() -> list[tuple[str, str, Path]]:
 def render(query) -> None:
     st.caption("Your applications, read from your mailbox (Gmail, read-only) by the track_applications step: "
                "confirmations, views, interviews, rejections and offers. Counts are companies: an offer thread of 12 "
-               f"emails is one offer. Ghosted: applied {GHOSTED_DAYS}+ days ago and no interview, rejection or offer since.")
+               f"emails is one offer. Hired: an offer signed or a welcome aboard. Ghosted: applied {GHOSTED_DAYS}+ days ago and "
+               "no interview, rejection or offer since.")
     mails = query(COMPANIES_BY_KIND).set_index("kind")["n"]
     if mails.drop("other", errors="ignore").empty:
         st.info("No application emails yet: the next track_applications run reads them from your mailbox.")
@@ -96,7 +97,8 @@ def render(query) -> None:
     with st.container(horizontal=True):  # side by side on a desktop, wrapping on a phone
         for label, kind, icon in (("Applied", "applied", "send"), ("Viewed", "viewed", "visibility"),
                                   ("Interviews", "interview", "forum"), ("Rejections", "rejected", "block"),
-                                  ("Offers", "offer", "workspace_premium"), ("Ghosted", "ghosted", "visibility_off")):
+                                  ("Offers", "offer", "workspace_premium"), ("Hired", "hired", "celebration"),
+                                  ("Ghosted", "ghosted", "visibility_off")):
             st.metric(label, int(mails.get(kind, 0)), icon=f":material/{icon}:", border=True)
 
     st.subheader("Follow up", icon=":material/schedule_send:")

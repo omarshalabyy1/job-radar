@@ -319,13 +319,14 @@ def test_funnel_counts_fall_down_the_stages_and_group_by_company():
             ("Hooli", None, "viewed", at(3), li),  # a view alone: not an application
             ("Soylent", None, "applied", at(2), "hr@soylent.example"), ("Soylent", None, "rejected", at(1), "x"),  # rejected is no stage
             # a job that came through an introduction: no confirmation email, an interview then an offer
-            ("Zyntra", None, "interview", at(50), "jo@gmail.example"), ("Zyntra", None, "offer", at(40), "jo@zyntra.example")]
+            ("Zyntra", None, "interview", at(50), "jo@gmail.example"), ("Zyntra", None, "offer", at(40), "jo@zyntra.example"),
+            ("Zyntra", None, "hired", at(38), "sign@esign.example")]  # the offer signed
     apps = application_stages(rows, ME)
-    assert funnel_counts(apps) == {"applied": 5, "viewed": 4, "interview": 4, "offer": 2}  # an interview or offer implies the earlier stages
+    assert funnel_counts(apps) == {"applied": 5, "viewed": 4, "interview": 4, "offer": 2, "hired": 1}  # a later stage implies the earlier
     assert sorted((a["month"], a["channel"]) for a in apps) == [("2026-08", "Direct contact"), ("2026-09", "LinkedIn"),
                                                                ("2026-10", "Company site"), ("2026-10", "Direct email"),
                                                                ("2026-10", "Workable")]
-    assert funnel_counts([]) == {"applied": 0, "viewed": 0, "interview": 0, "offer": 0}
+    assert funnel_counts([]) == {"applied": 0, "viewed": 0, "interview": 0, "offer": 0, "hired": 0}
 
 
 @pytest.mark.parametrize("sender, expected", [
@@ -593,3 +594,15 @@ def test_a_company_that_never_answered_in_30_days_has_ghosted_you(conn):
     assert dict(conn.execute(COMPANIES_BY_KIND).fetchall())["ghosted"] - before == 1
     news = dict(conn.execute(f"SELECT company, latest_news FROM ({APPLICATIONS}) a WHERE company LIKE 'Zz %%'").fetchall())
     assert news == {"Zz Ghostly": "ghosted", "Zz Answered": "rejected", "Zz Recent": "applied"}
+
+
+def test_a_hired_email_moves_its_jobs_status_to_offer_the_top_of_the_ladder(conn):
+    job = conn.execute("INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role,"
+                       " target_company, first_seen) VALUES ('zz hired | zz quorvex', 'Data Engineer', 'Zz Quorvex', 'Cairo',"
+                       " 'Egypt', 'test', 'https://test.example/zz-hired', 1, 'Data Engineer', false, current_date - 60)"
+                       " RETURNING job_id").fetchone()[0]
+    jobs = [(job, "zz hired | zz quorvex", "Zz Quorvex", date(2026, 8, 1))]
+    with conn.cursor() as cur:
+        applications.store(cur, jobs, "zz-a@gmail.com", [mail("<zz-hired>", "hired", "Zz Quorvex")])
+    assert conn.execute("SELECT status FROM core.application WHERE job_id = %s", (job,)).fetchone() == ("offer",)
+    assert conn.execute("SELECT kind FROM core.application_email WHERE message_id = '<zz-hired>'").fetchone() == ("hired",)

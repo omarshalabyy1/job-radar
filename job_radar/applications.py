@@ -52,8 +52,8 @@ BODY_CHARS = 2000  # of an email sent to Claude
 LADDER = ["new", "saved", "applied", "interview", "rejected", "offer"]
 FOLLOW_UP_DAYS = (7, 14)  # days after the first confirmation email on which a follow-up is drafted
 FOLLOW_UP_WORDS = 120  # the most words in a follow-up's body
-ANSWERS = ("rejected", "interview", "offer")  # news that an application was answered
-FUNNEL = ["applied", "viewed", "interview", "offer"]  # the stages, in order
+ANSWERS = ("rejected", "interview", "offer", "hired")  # news that an application was answered
+FUNNEL = ["applied", "viewed", "interview", "offer", "hired"]  # the stages, in order
 # the voice lines of tailor's RULES (after "Voice, in all three:"), so these drafts sound like the CV drafts
 VOICE = next(p for p in RULES.split("\n\n") if p.startswith("Voice")).split(":", 1)[1].strip()
 SAFETY = ("Never invent an employer, job title, date, degree, certification, skill, client or number: every one must be "
@@ -109,7 +109,7 @@ class Prep(BaseModel):
 
 
 class Mail(BaseModel):
-    kind: Literal["applied", "viewed", "rejected", "interview", "offer", "other"]
+    kind: Literal["applied", "viewed", "rejected", "interview", "offer", "hired", "other"]
     company: str  # "" when the email does not say
     title: str
 
@@ -264,7 +264,9 @@ kind, judged from the whole email, not its subject alone:
 - viewed: the employer says it opened or is reviewing the application, with no decision yet.
 - interview: the employer invites them to, schedules or confirms an interview, a call with a recruiter or hiring
   manager, an assessment or a test, or writes to arrange one (a recruiter's introduction leading to a call counts).
-- offer: the employer offers the job or welcomes them as hired: an offer letter, a contract to sign, "welcome to the team".
+- offer: the employer offers the job: an offer letter or a contract sent to sign, or a reminder to sign it.
+- hired: the offer is accepted or signed (a "you signed" receipt, the candidate's acceptance), or the employer welcomes
+  them aboard: "welcome to the team", onboarding, accounts and credentials, a start date.
 - rejected: the employer says it will not move forward with them. A thank-you with no decision is applied, not rejected.
 - other: everything else - newsletters, articles and posts about interviews or offers, job alerts and "jobs similar to
   your application", marketing and deals, "complete" or "finish your application" (not sent yet), account or security
@@ -333,7 +335,7 @@ def due_now(conn, today: date | None = None) -> list[tuple[str, str | None, date
     """due_follow_ups of the mailbox (core.application_email) on `today`, a Cairo day (default today): what the email lists
     and the drafts are written for."""
     return due_follow_ups(conn.execute("SELECT company, title, kind, received_at FROM core.application_email"
-                                       " WHERE kind IN ('applied', 'rejected', 'interview', 'offer')").fetchall(),
+                                       " WHERE kind IN ('applied', 'rejected', 'interview', 'offer', 'hired')").fetchall(),
                           today or cairo_today())
 
 
@@ -353,8 +355,8 @@ def channel(sender: str | None, me: str = "") -> str:
 
 def application_stages(rows: list[tuple], me: str = "") -> list[dict]:
     """One dict per application: its month and channel and the stages reached. An application is a company (an email
-    naming none: its title), as the tracker's Applications table has it, with an 'applied', 'interview' or 'offer'
-    email: a job that came to you (an introduction, a recruiter) has no confirmation, and an interview or an offer
+    naming none: its title), as the tracker's Applications table has it, with an 'applied', 'interview', 'offer' or
+    'hired' email: a job that came to you (an introduction, a recruiter) has no confirmation, and an interview or an offer
     still counts (a view alone does not). Its month and channel are its first 'applied' email's, else, with none,
     its first email's month and "Direct contact". A stage is reached by its own email or any later stage's (an
     interview means it was viewed), so the counts only fall down the funnel. `rows`: (company, title, kind,
@@ -371,7 +373,7 @@ def application_stages(rows: list[tuple], me: str = "") -> list[dict]:
             g["month"], g["channel"] = f"{at:%Y-%m}", channel(sender, me)
     return [{"month": g["month"] or g["first"], "channel": g["channel"] or "Direct contact",
              **{stage: bool(g["kinds"] & set(FUNNEL[i:])) for i, stage in enumerate(FUNNEL)}}
-            for g in groups.values() if g["kinds"] & {"applied", "interview", "offer"}]
+            for g in groups.values() if g["kinds"] & {"applied", "interview", "offer", "hired"}]
 
 
 def funnel_counts(applications: list[dict]) -> dict[str, int]:
@@ -571,8 +573,9 @@ def store(cur, jobs: list[tuple], mailbox: str, mails: list[dict]) -> tuple[int,
         kinds[m["kind"]] = kinds.get(m["kind"], 0) + 1
         if job_id:
             matched += 1
-        if job_id and m["kind"] in LADDER:
-            moved += move_status(cur, job_id, m["kind"], f"from your mailbox {m['received_at']:%Y-%m-%d}")
+        status = "offer" if m["kind"] == "hired" else m["kind"]  # a job's status stops at offer: hired is one
+        if job_id and status in LADDER:
+            moved += move_status(cur, job_id, status, f"from your mailbox {m['received_at']:%Y-%m-%d}")
     return added, matched, moved, kinds
 
 
@@ -620,11 +623,11 @@ def track_applications(conn) -> None:
     if failed == len(boxes):
         raise RuntimeError("track_applications: no mailbox could be read")
     # after the commit, so a failing draft never undoes the mailbox read; each is off unless its switch is on. No prep for
-    # a company that already sent an offer: its interviews are behind you.
+    # a company that already sent an offer (or hired you): its interviews are behind you.
     interviews = [dict(zip(("message_id", "company", "title", "sender", "subject", "received_at", "job_id", "mailbox"), row))
                   for row in conn.execute(
                       "SELECT message_id, company, title, sender, subject, received_at, job_id, mailbox FROM core.application_email e"
-                      " WHERE kind = 'interview' AND NOT EXISTS (SELECT 1 FROM core.application_email o WHERE o.kind = 'offer'"
+                      " WHERE kind = 'interview' AND NOT EXISTS (SELECT 1 FROM core.application_email o WHERE o.kind IN ('offer', 'hired')"
                       " AND regexp_replace(lower(o.company), '[\\W_]+', '', 'g') = regexp_replace(lower(e.company), '[\\W_]+', '', 'g'))"
                       " ORDER BY received_at").fetchall()]
     prep_written, prep_asked = interview_prep(conn, interviews)

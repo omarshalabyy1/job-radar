@@ -308,12 +308,22 @@ CREATE TABLE IF NOT EXISTS core.application_email (
     subject     text        NOT NULL,
     company     text,
     title       text,
-    kind        text        NOT NULL CHECK (kind IN ('applied', 'viewed', 'rejected', 'interview', 'offer', 'other')),
+    kind        text        NOT NULL CHECK (kind IN ('applied', 'viewed', 'rejected', 'interview', 'offer', 'hired', 'other')),
     job_id      bigint REFERENCES core.job ON DELETE SET NULL
 );
 -- the Gmail address whose All Mail the email was read from (MAILBOXES in .env): follow-ups and interview prep read its
 -- text from that mailbox again. Empty only for a row made before the column existed, until it is set once by hand.
 ALTER TABLE core.application_email ADD COLUMN IF NOT EXISTS mailbox text;
+-- 'hired' (an offer signed or accepted, a welcome aboard): a warehouse made before it gets the wider check here, once
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'core.application_email'::regclass
+                   AND conname = 'application_email_kind_check' AND pg_get_constraintdef(oid) LIKE '%''hired''%') THEN
+        ALTER TABLE core.application_email DROP CONSTRAINT IF EXISTS application_email_kind_check;
+        ALTER TABLE core.application_email ADD CONSTRAINT application_email_kind_check
+            CHECK (kind IN ('applied', 'viewed', 'rejected', 'interview', 'offer', 'hired', 'other'));
+    END IF;
+END $$;
 
 -- The emails extract_email read and found no job in (newsletters, a recruiter's hello): their Message-IDs, so the next
 -- run does not download them again. An email with jobs is remembered by its raw.job_posting rows. Kept 7 days.
