@@ -13,15 +13,20 @@ from job_radar.db import connect
 GHOSTED_DAYS = 30  # applied this many days ago and no answer since (an interview, a rejection or an offer): ghosted
 
 # one row per company (an email naming no company: per title), so a rejection naming a title sits with
-# LinkedIn's "your application was sent to X", which names none; latest news is the newest email, or ghosted
+# LinkedIn's "your application was sent to X", which names none; latest news is the newest email, or ghosted, or
+# hired once any email says so (a later signature reminder does not undo it); started is your start date there
+# (core.hire, set by hand), matched by letters and digits alone; the company is shown as most of its emails spell it
 APPLICATIONS = f"""
-SELECT coalesce(max(company), '') AS company, coalesce(string_agg(DISTINCT title, ', '), '') AS titles,
+SELECT coalesce(mode() WITHIN GROUP (ORDER BY company), '') AS company, coalesce(string_agg(DISTINCT title, ', '), '') AS titles,
        count(*) FILTER (WHERE kind = 'applied') AS applications, min(received_at) FILTER (WHERE kind = 'applied') AS first_applied,
-       CASE WHEN min(received_at) FILTER (WHERE kind = 'applied') < now() - interval '{GHOSTED_DAYS} days'
+       CASE WHEN bool_or(kind = 'hired') THEN 'hired'
+            WHEN min(received_at) FILTER (WHERE kind = 'applied') < now() - interval '{GHOSTED_DAYS} days'
                  AND NOT bool_or(kind IN ('interview', 'rejected', 'offer', 'hired')) THEN 'ghosted'
             ELSE (array_agg(kind ORDER BY received_at DESC))[1] END AS latest_news,
-       max(received_at) AS latest_date, count(*) AS emails
-FROM core.application_email WHERE kind <> 'other'
+       max(received_at) AS latest_date, count(*) AS emails,
+       (SELECT h.started_on FROM core.hire h WHERE regexp_replace(lower(h.company), '[\\W_]+', '', 'g')
+                                                 = regexp_replace(lower(max(e.company)), '[\\W_]+', '', 'g')) AS started_on
+FROM core.application_email e WHERE kind <> 'other'
 GROUP BY coalesce(lower(company), lower(title))
 ORDER BY latest_date DESC"""
 
@@ -116,8 +121,10 @@ def render(query) -> None:
     st.subheader("Applications", icon=":material/list_alt:")
     latest = query(APPLICATIONS)
     latest["latest_news"] = latest["latest_news"].str.capitalize()
-    st.dataframe(latest, hide_index=True, column_order=["company", "latest_news", "latest_date", "titles", "first_applied", "applications", "emails"],
+    st.dataframe(latest, hide_index=True, column_order=["company", "latest_news", "latest_date", "started_on", "titles", "first_applied",
+                                                        "applications", "emails"],
                  column_config={
+        "started_on": st.column_config.DateColumn("Started", format="D MMM YYYY", help="Your start date there, once hired"),
         "company": "Company", "titles": "Titles", "applications": "Applications", "first_applied": st.column_config.DatetimeColumn("First applied", format="D MMM YYYY"),
         "latest_news": "Latest news", "latest_date": st.column_config.DatetimeColumn("Latest news on", format="D MMM YYYY"),
         "emails": "Emails"})

@@ -325,6 +325,13 @@ BEGIN
     END IF;
 END $$;
 
+-- The day you started at a company that hired you, set by hand (your own fact: no email states it reliably); the
+-- tracker's Applications table shows it as Started, matching the company by its letters and digits alone.
+CREATE TABLE IF NOT EXISTS core.hire (
+    company    text PRIMARY KEY,
+    started_on date NOT NULL
+);
+
 -- The emails extract_email read and found no job in (newsletters, a recruiter's hello): their Message-IDs, so the next
 -- run does not download them again. An email with jobs is remembered by its raw.job_posting rows. Kept 7 days.
 CREATE TABLE IF NOT EXISTS core.email_seen (

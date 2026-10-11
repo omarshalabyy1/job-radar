@@ -606,3 +606,16 @@ def test_a_hired_email_moves_its_jobs_status_to_offer_the_top_of_the_ladder(conn
         applications.store(cur, jobs, "zz-a@gmail.com", [mail("<zz-hired>", "hired", "Zz Quorvex")])
     assert conn.execute("SELECT status FROM core.application WHERE job_id = %s", (job,)).fetchone() == ("offer",)
     assert conn.execute("SELECT kind FROM core.application_email WHERE message_id = '<zz-hired>'").fetchone() == ("hired",)
+
+
+def test_a_company_that_hired_you_shows_hired_and_your_start_date(conn):
+    """A signature reminder after the signed offer does not undo hired; the start date (core.hire) matches the company by
+    its letters alone."""
+    from tracker.applications_tab import APPLICATIONS
+    for n, (kind, days) in enumerate([("interview", 40), ("offer", 30), ("hired", 28), ("offer", 20)]):
+        conn.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, company, kind)"
+                     " VALUES (%s, now() - make_interval(days => %s), 'hr@zz.example', 's', 'ZZ QUORVEX', %s)",
+                     (f"<zz-hire-{n}>", days, kind))
+    conn.execute("INSERT INTO core.hire (company, started_on) VALUES ('Zz Quorvex', '2026-09-01')")
+    row = conn.execute(f"SELECT latest_news, started_on FROM ({APPLICATIONS}) a WHERE company = 'ZZ QUORVEX'").fetchone()
+    assert row == ("hired", date(2026, 9, 1))
