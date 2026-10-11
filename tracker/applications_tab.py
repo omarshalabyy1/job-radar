@@ -10,15 +10,31 @@ from job_radar.applications import application_stages, due_now, funnel_counts
 from job_radar.config import OUTPUT
 from job_radar.db import connect
 
+GHOSTED_DAYS = 30  # applied this many days ago and no answer since (an interview, a rejection or an offer): ghosted
+
 # one row per company (an email naming no company: per title), so a rejection naming a title sits with
-# LinkedIn's "your application was sent to X", which names none; latest news is the newest email
-APPLICATIONS = """
+# LinkedIn's "your application was sent to X", which names none; latest news is the newest email, or ghosted
+APPLICATIONS = f"""
 SELECT coalesce(max(company), '') AS company, coalesce(string_agg(DISTINCT title, ', '), '') AS titles,
        count(*) FILTER (WHERE kind = 'applied') AS applications, min(received_at) FILTER (WHERE kind = 'applied') AS first_applied,
-       (array_agg(kind ORDER BY received_at DESC))[1] AS latest_news, max(received_at) AS latest_date, count(*) AS emails
+       CASE WHEN min(received_at) FILTER (WHERE kind = 'applied') < now() - interval '{GHOSTED_DAYS} days'
+                 AND NOT bool_or(kind IN ('interview', 'rejected', 'offer')) THEN 'ghosted'
+            ELSE (array_agg(kind ORDER BY received_at DESC))[1] END AS latest_news,
+       max(received_at) AS latest_date, count(*) AS emails
 FROM core.application_email WHERE kind <> 'other'
 GROUP BY coalesce(lower(company), lower(title))
 ORDER BY latest_date DESC"""
+
+# how many companies (an email naming none: its title) sent each kind of news, matched by letters and digits alone
+# ("ACME LABS" is "Acme Labs"), and how many ghosted you; an email naming neither is not counted
+COMPANIES_BY_KIND = f"""
+WITH mail AS (SELECT coalesce(nullif(regexp_replace(lower(company), '[\\W_]+', '', 'g'), ''), lower(title)) AS who, kind,
+                     received_at FROM core.application_email)
+SELECT kind, count(DISTINCT who) AS n FROM mail GROUP BY kind
+UNION ALL
+SELECT 'ghosted', count(*) FROM (SELECT who FROM mail WHERE who IS NOT NULL GROUP BY who
+    HAVING min(received_at) FILTER (WHERE kind = 'applied') < now() - interval '{GHOSTED_DAYS} days'
+       AND NOT bool_or(kind IN ('interview', 'rejected', 'offer'))) g"""
 
 # every company with a job in core.job now (a job you ignored or were rejected for is not open), with
 # your history there; the history matches a company by its letters and digits alone
@@ -71,17 +87,19 @@ def drafts() -> list[tuple[str, str, Path]]:
 
 def render(query) -> None:
     st.caption("Your applications, read from your mailbox (Gmail, read-only) by the track_applications step: "
-               "confirmations, views, interviews, rejections and offers. Counts are emails.")
-    mails = query("SELECT kind, count(*) AS n FROM core.application_email GROUP BY kind").set_index("kind")["n"]
+               "confirmations, views, interviews, rejections and offers. Counts are companies: an offer thread of 12 "
+               f"emails is one offer. Ghosted: applied {GHOSTED_DAYS}+ days ago and no interview, rejection or offer since.")
+    mails = query(COMPANIES_BY_KIND).set_index("kind")["n"]
     if mails.drop("other", errors="ignore").empty:
         st.info("No application emails yet: the next track_applications run reads them from your mailbox.")
         return
     with st.container(horizontal=True):  # side by side on a desktop, wrapping on a phone
-        for label, kind in {"Applied": "applied", "Viewed": "viewed", "Interviews": "interview", "Rejections": "rejected",
-                            "Offers": "offer"}.items():
-            st.metric(label, int(mails.get(kind, 0)))
+        for label, kind, icon in (("Applied", "applied", "send"), ("Viewed", "viewed", "visibility"),
+                                  ("Interviews", "interview", "forum"), ("Rejections", "rejected", "block"),
+                                  ("Offers", "offer", "workspace_premium"), ("Ghosted", "ghosted", "visibility_off")):
+            st.metric(label, int(mails.get(kind, 0)), icon=f":material/{icon}:", border=True)
 
-    st.subheader("Follow up")
+    st.subheader("Follow up", icon=":material/schedule_send:")
     st.caption("Due today: applied exactly 7 or 14 Cairo days ago and no answer yet, the same list as the email and the drafts. "
                "The Applications table below shows each company's latest news.")
     with connect() as conn:
@@ -93,7 +111,7 @@ def render(query) -> None:
             "company": "Company", "title": "Title", "applied": st.column_config.DateColumn("Applied", format="D MMM YYYY"),
             "days": "Days ago"})
 
-    st.subheader("Applications")
+    st.subheader("Applications", icon=":material/list_alt:")
     latest = query(APPLICATIONS)
     latest["latest_news"] = latest["latest_news"].str.capitalize()
     st.dataframe(latest, hide_index=True, column_order=["company", "latest_news", "latest_date", "titles", "first_applied", "applications", "emails"],
@@ -102,7 +120,7 @@ def render(query) -> None:
         "latest_news": "Latest news", "latest_date": st.column_config.DatetimeColumn("Latest news on", format="D MMM YYYY"),
         "emails": "Emails"})
 
-    st.subheader("Funnel")
+    st.subheader("Funnel", icon=":material/filter_alt:")
     st.caption("Applications (one per company) that reached each stage, by the first confirmation email's month and where it "
                "came from. A stage counts when its own email or a later stage's came, so the numbers only fall; the % is of "
                "the applied ones. Rejections are not a stage.")
@@ -114,7 +132,7 @@ def render(query) -> None:
             st.dataframe(funnel_table(applications, by), hide_index=True,
                          column_config={"month": "Month", "channel": "Channel"})
 
-    st.subheader("Company intelligence")
+    st.subheader("Company intelligence", icon=":material/apartment:")
     st.caption("Every company with a job in the tracker now, with what you have sent it: applications are the "
                "confirmation emails, last outcome is the newest email from it.")
     companies = query(INTELLIGENCE)
@@ -124,7 +142,7 @@ def render(query) -> None:
         "company": "Company", "open_jobs": "Open jobs", "roles": "Roles", "starred": st.column_config.CheckboxColumn("Starred"),
         "applications": "Applications", "last_outcome": "Last outcome"})
 
-    st.subheader("Drafts")
+    st.subheader("Drafts", icon=":material/edit_note:")
     st.caption("Follow-up emails (7 or 14 days after applying, no answer yet) and interview notes, written by Claude from your CV. "
                "Nothing is sent.")
     files = drafts()

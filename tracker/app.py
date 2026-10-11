@@ -62,10 +62,10 @@ def query(sql: str) -> pd.DataFrame:
 
 
 st.set_page_config(page_title="Job tracker", page_icon=":material/work:", layout="wide")
-st.title("Job tracker")
+st.title("Job tracker", icon=":material/radar:")
 LIGHT = st.context.theme.type == "light"
-INK = "#31333f" if LIGHT else "#e6e6e6"  # chart text: never a series color
-SURFACE = "#ffffff" if LIGHT else "#0e1117"  # the page behind the charts, for the gaps between cells
+INK = "#0e1630" if LIGHT else "#eef2fa"  # chart text (.streamlit/config.toml's textColor): never a series color
+SURFACE = "#ffffff" if LIGHT else "#0b1124"  # the page behind the charts (its backgroundColor), for the gaps between cells
 # one blue ramp: the freshest jobs brightest on a dark page (darkest on a light one), then orange for the ones
 # deleted tomorrow; the heatmap from faint to strong
 FRESH_COLORS = (["#86b6ef", "#5c9eea", "#3987e5", "#256abf", "#184f95"] if not LIGHT
@@ -152,35 +152,38 @@ def counts_line(name: str) -> None:
 
 
 with st.sidebar:
-    st.button("Reset filters", icon=":material/restart_alt:", on_click=reset, width="stretch")
+    # the filters used every day first; the rest folded under More filters (open while one of them is set)
+    text = st.text_input("Search title or company", key="q", icon=":material/search:")
     roles = st.multiselect("Role", OPTIONS["role"], key="role")
     counts_line("role")
     places = st.multiselect("Where", OPTIONS["where"], key="where")
     counts_line("where")
-    boards = {}
-    for name, (label, board_places) in BOARDS.items():
-        boards[name] = st.multiselect(label, OPTIONS[name], key=name,
-                                      help=f"Only the jobs from these boards in {', '.join(sorted(board_places))}")
-        counts_line(name)
     posted = st.multiselect("Posted", OPTIONS["posted"], key="posted",
                             help="Apply within 48 hours of the posting. When a site gives no time, the time the "
                                  "radar first found the job counts (or the posting date, when that is older).")
     counts_line("posted")
     statuses = st.multiselect("Status", STATUSES, key="status")
     counts_line("status")
-    size = st.segmented_control("Company size", list(SIZES), key="size",
-                                help="Employees. A range counts by its top: 11-50 is in 1-50. Jobs whose company "
-                                     "size no site gives are hidden while one is picked.")
-    pool = jobs.loc[passing(skip="size"), "most_employees"]
-    st.caption(" · ".join(f"{option} **{int((pool <= cap).sum())}**" for option, cap in SIZES.items()))
-    min_skills = st.slider("At least this many of your skills", 0, 10, key="skills")
-    if HIDES:
-        st.toggle("Show hidden jobs", key="hidden",
-                  help=f"Jobs {HIDDEN_JOBS}; the Why column says which")
-    text = st.text_input("Search title or company", key="q")
     sort = st.multiselect("Sort by", SORT_OPTIONS, key="sort",
                           help="First pick first: ↓ is highest, newest or Z first, ↑ lowest, oldest or A first "
                                "(Role ↑ is your order in settings.yaml). A column picked twice counts once.")
+    more = any(st.session_state[name] for name in BOARDS) or st.session_state.size or st.session_state.skills or st.session_state.hidden
+    with st.expander("More filters", icon=":material/tune:", expanded=bool(more)):
+        boards = {}
+        for name, (label, board_places) in BOARDS.items():
+            boards[name] = st.multiselect(label, OPTIONS[name], key=name,
+                                          help=f"Only the jobs from these boards in {', '.join(sorted(board_places))}")
+            counts_line(name)
+        size = st.segmented_control("Company size", list(SIZES), key="size",
+                                    help="Employees. A range counts by its top: 11-50 is in 1-50. Jobs whose company "
+                                         "size no site gives are hidden while one is picked.")
+        pool = jobs.loc[passing(skip="size"), "most_employees"]
+        st.caption(" · ".join(f"{option} **{int((pool <= cap).sum())}**" for option, cap in SIZES.items()))
+        min_skills = st.slider("At least this many of your skills", 0, 10, key="skills")
+        if HIDES:
+            st.toggle("Show hidden jobs", key="hidden",
+                      help=f"Jobs {HIDDEN_JOBS}; the Why column says which")
+    st.button("Reset filters", icon=":material/restart_alt:", on_click=reset, width="stretch")
 st.query_params.from_dict({k: v for k, v in {"role": roles, "where": places, "posted": posted, "status": statuses,
                                              "size": size, "skills": min_skills, "q": text, "sort": sort, **boards}.items() if v})
 
@@ -195,10 +198,13 @@ if by:
     shown = shown.sort_values(by, ascending=ascending, na_position="last", kind="stable",
                               key=lambda c: c.str.lower() if pd.api.types.is_string_dtype(c) else c)
 
+# the jobs waiting on you; applied, interviews and offers are counted once, from your mailbox, in the Applications tab
 counts = (jobs if st.session_state.hidden else jobs[jobs["hidden_reason"].isna()])["status"].value_counts()  # the hidden are not "new"
 with st.container(horizontal=True):  # side by side on a desktop, wrapping on a phone
-    for status in ["new", "saved", "applied", "interview", "offer"]:
-        st.metric(status.title(), int(counts.get(status, 0)))
+    st.metric("New jobs", int(counts.get("new", 0)), icon=":material/fiber_new:", border=True,
+              help="Jobs the radar found that you have not set a status for")
+    st.metric("Saved", int(counts.get("saved", 0)), icon=":material/bookmark:", border=True,
+              help="Jobs you saved, and the drafts Claude prepared (Ready tab)")
 
 
 def bars(data: pd.DataFrame, column: str, title: str, order: list | None = None, top: int = 10) -> alt.LayerChart:
@@ -214,8 +220,11 @@ def bars(data: pd.DataFrame, column: str, title: str, order: list | None = None,
             .properties(title=title, height=28 * len(n)))
 
 
-jobs_tab, ready_tab, applications_tab, dashboard_tab, contacts_tab, companies_tab, skills_tab, cv_tab, runlog_tab = st.tabs(
-    ["Jobs", "Ready to apply", "Applications", "Dashboard", "Contacts", "Companies", "Skills in demand", "CV", "Last run"])
+# short labels with icons, so all nine fit a laptop's width; the ones used every day first
+jobs_tab, ready_tab, applications_tab, dashboard_tab, skills_tab, companies_tab, contacts_tab, cv_tab, runlog_tab = st.tabs(
+    [":material/work: Jobs", ":material/task_alt: Ready", ":material/mail: Applications", ":material/monitoring: Dashboard",
+     ":material/school: Skills", ":material/apartment: Companies", ":material/contacts: Contacts", ":material/description: CV",
+     ":material/history: Last run"])
 
 with ready_tab:
     from tracker.ready_tab import render as render_ready  # noqa: E402  (the drafts for your best-graded jobs)

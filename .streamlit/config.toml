@@ -1,0 +1,39 @@
+# The tracker's look: Omar's brand (navy and one royal blue, Geist), light and dark. Streamlit reads this file from
+# the folder it runs in: the repo root (docker-compose.yml sets the tracker's working_dir to it).
+
+[theme]
+font = "Geist:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap"
+baseFontSize = 15
+headingFontSizes = ["1.75rem", "1.3rem", "1.1rem"]
+headingFontWeights = [650, 600, 600]
+metricValueFontSize = "1.9rem"
+baseRadius = "medium"
+linkUnderline = false
+showSidebarBorder = true
+
+[theme.light]
+primaryColor = "#2563eb"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6fb"
+textColor = "#0e1630"
+borderColor = "#e2e7f1"
+dataframeHeaderBackgroundColor = "#f4f6fb"
+redColor = "#c2410c"
+
+[theme.light.sidebar]
+backgroundColor = "#f4f6fb"
+secondaryBackgroundColor = "#ffffff"
+
+[theme.dark]
+primaryColor = "#2563eb"
+backgroundColor = "#0b1124"
+secondaryBackgroundColor = "#111a33"
+textColor = "#eef2fa"
+borderColor = "#22304f"
+dataframeHeaderBackgroundColor = "#111a33"
+linkColor = "#8db0ff"
+redColor = "#fb923c"
+
+[theme.dark.sidebar]
+backgroundColor = "#070b18"
+secondaryBackgroundColor = "#0f1730"

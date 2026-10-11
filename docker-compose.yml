@@ -105,6 +105,7 @@ services:
     build: .
     image: job-radar:3.3.2
     entrypoint: /opt/job-radar-venv/bin/streamlit
+    working_dir: /opt/job-radar  # where .streamlit/config.toml (the tracker's theme) is read from
     command: run /opt/job-radar/tracker/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
     restart: unless-stopped
     environment:

@@ -561,3 +561,32 @@ def test_a_stored_email_with_no_company_gets_its_senders(conn, monkeypatch):
     applications.track_applications(NoCommit(conn))
     assert conn.execute("SELECT message_id, company FROM core.application_email WHERE message_id IN ('<zz-intro>', '<zz-named>')"
                         " ORDER BY 1").fetchall() == [("<zz-intro>", "Zyntra Fold"), ("<zz-named>", "Zz Quorvex")]
+
+
+def test_the_tab_counts_companies_not_emails(conn):
+    """An offer thread of many emails is one offer; "ZZ QUORVEX" and "Zz Quorvex" are one company; an email naming no
+    company counts by its title, and one naming neither is not counted."""
+    from tracker.applications_tab import COMPANIES_BY_KIND
+    before = dict(conn.execute(COMPANIES_BY_KIND).fetchall())
+    for n, (kind, company, title) in enumerate([("offer", "Zz Quorvex", None), ("offer", "ZZ QUORVEX", None),
+                                                ("offer", "Zz Quorvex", "Data Engineer"), ("interview", "Zz Quorvex", None),
+                                                ("interview", None, "Zz Analyst"), ("interview", None, None)]):
+        conn.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, company, title, kind)"
+                     " VALUES (%s, %s, 'hr@zz.example', 's', %s, %s, %s)", (f"<zz-count-{n}>", at(1), company, title, kind))
+    after = dict(conn.execute(COMPANIES_BY_KIND).fetchall())
+    assert after["offer"] - before.get("offer", 0) == 1
+    assert after["interview"] - before.get("interview", 0) == 2
+
+
+def test_a_company_that_never_answered_in_30_days_has_ghosted_you(conn):
+    from tracker.applications_tab import APPLICATIONS, COMPANIES_BY_KIND, GHOSTED_DAYS
+    before = dict(conn.execute(COMPANIES_BY_KIND).fetchall())["ghosted"]
+    for n, (company, kind, days) in enumerate([("Zz Ghostly", "applied", GHOSTED_DAYS + 5), ("Zz Ghostly", "viewed", 3),  # a view is no answer
+                                               ("Zz Answered", "applied", GHOSTED_DAYS + 5), ("Zz Answered", "rejected", 2),
+                                               ("Zz Recent", "applied", GHOSTED_DAYS - 5)]):
+        conn.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, company, kind)"
+                     " VALUES (%s, now() - make_interval(days => %s), 'hr@zz.example', 's', %s, %s)",  # ghosted counts from now
+                     (f"<zz-ghost-{n}>", days, company, kind))
+    assert dict(conn.execute(COMPANIES_BY_KIND).fetchall())["ghosted"] - before == 1
+    news = dict(conn.execute(f"SELECT company, latest_news FROM ({APPLICATIONS}) a WHERE company LIKE 'Zz %%'").fetchall())
+    assert news == {"Zz Ghostly": "ghosted", "Zz Answered": "rejected", "Zz Recent": "applied"}
