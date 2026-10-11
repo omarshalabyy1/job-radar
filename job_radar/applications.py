@@ -352,23 +352,26 @@ def channel(sender: str | None, me: str = "") -> str:
 
 
 def application_stages(rows: list[tuple], me: str = "") -> list[dict]:
-    """One dict per application: month and channel of its first 'applied' email and the stages reached.
-    An application is a company (an email naming none: its title), as the tracker's Applications table has it, and
-    exists only with an 'applied' email. A stage is reached by its own email or any later stage's (an interview
-    means it was viewed), so the counts only fall down the funnel. `rows`: (company, title, kind, received_at, sender)."""
+    """One dict per application: its month and channel and the stages reached. An application is a company (an email
+    naming none: its title), as the tracker's Applications table has it, with an 'applied', 'interview' or 'offer'
+    email: a job that came to you (an introduction, a recruiter) has no confirmation, and an interview or an offer
+    still counts (a view alone does not). Its month and channel are its first 'applied' email's, else, with none,
+    its first email's month and "Direct contact". A stage is reached by its own email or any later stage's (an
+    interview means it was viewed), so the counts only fall down the funnel. `rows`: (company, title, kind,
+    received_at, sender)."""
     groups: dict[str, dict] = {}
     for company, title, kind, at, sender in sorted(rows, key=lambda r: r[3]):
         company, title = (x if isinstance(x, str) and x else None for x in (company, title))
         key = name_key(company) or (title or "").lower()
         if not key or kind not in FUNNEL:
             continue
-        g = groups.setdefault(key, {"month": None, "channel": None, "kinds": set()})
+        g = groups.setdefault(key, {"month": None, "channel": None, "first": f"{at:%Y-%m}", "kinds": set()})
         g["kinds"].add(kind)
         if kind == "applied" and g["month"] is None:
             g["month"], g["channel"] = f"{at:%Y-%m}", channel(sender, me)
-    return [{"month": g["month"], "channel": g["channel"],
+    return [{"month": g["month"] or g["first"], "channel": g["channel"] or "Direct contact",
              **{stage: bool(g["kinds"] & set(FUNNEL[i:])) for i, stage in enumerate(FUNNEL)}}
-            for g in groups.values() if "applied" in g["kinds"]]
+            for g in groups.values() if g["kinds"] & {"applied", "interview", "offer"}]
 
 
 def funnel_counts(applications: list[dict]) -> dict[str, int]:

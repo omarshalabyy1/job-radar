@@ -316,12 +316,15 @@ def test_funnel_counts_fall_down_the_stages_and_group_by_company():
             ("Acme", None, "applied", at(5), li),  # a second confirmation: still one application
             ("Globex", None, "interview", at(9), "x"), ("Globex", None, "applied", at(12), "Workable <a@workablemail.com>"),
             ("Initech", None, "applied", at(4), ME), ("Initech", None, "offer", at(1), "x"),
-            ("Hooli", None, "viewed", at(3), li),  # no confirmation email: not an application
-            ("Soylent", None, "applied", at(2), "hr@soylent.example"), ("Soylent", None, "rejected", at(1), "x")]  # rejected is no stage
+            ("Hooli", None, "viewed", at(3), li),  # a view alone: not an application
+            ("Soylent", None, "applied", at(2), "hr@soylent.example"), ("Soylent", None, "rejected", at(1), "x"),  # rejected is no stage
+            # a job that came through an introduction: no confirmation email, an interview then an offer
+            ("Zyntra", None, "interview", at(50), "jo@gmail.example"), ("Zyntra", None, "offer", at(40), "jo@zyntra.example")]
     apps = application_stages(rows, ME)
-    assert funnel_counts(apps) == {"applied": 4, "viewed": 3, "interview": 3, "offer": 1}  # an interview or offer implies the view
-    assert sorted((a["month"], a["channel"]) for a in apps) == [("2026-09", "LinkedIn"), ("2026-10", "Company site"),
-                                                               ("2026-10", "Direct email"), ("2026-10", "Workable")]
+    assert funnel_counts(apps) == {"applied": 5, "viewed": 4, "interview": 4, "offer": 2}  # an interview or offer implies the earlier stages
+    assert sorted((a["month"], a["channel"]) for a in apps) == [("2026-08", "Direct contact"), ("2026-09", "LinkedIn"),
+                                                               ("2026-10", "Company site"), ("2026-10", "Direct email"),
+                                                               ("2026-10", "Workable")]
     assert funnel_counts([]) == {"applied": 0, "viewed": 0, "interview": 0, "offer": 0}
 
 
