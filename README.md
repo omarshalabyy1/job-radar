@@ -19,7 +19,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Runs_on_your_laptop-1E293B?style=flat-square" alt="Runs on your laptop">
-  <img src="https://img.shields.io/badge/Costs_nothing-1E293B?style=flat-square" alt="Costs nothing">
+  <img src="https://img.shields.io/badge/Under_%245_a_month_of_Claude-1E293B?style=flat-square" alt="Under $5 a month of Claude">
   <img src="https://img.shields.io/badge/Never_logs_in-1E293B?style=flat-square" alt="Never logs in">
   <img src="https://img.shields.io/badge/Each_job_once-1E293B?style=flat-square" alt="Each job once">
   <img src="https://img.shields.io/badge/Inside_every_site's_limits-1E293B?style=flat-square" alt="Inside every site's limits">
