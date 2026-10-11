@@ -32,7 +32,7 @@ class Grade(BaseModel):
 
 def jobs_to_grade(conn, limit: int) -> list[tuple]:
     """The jobs still alive, in ai_places, with a description (a title alone is a weak signal, so those stay
-    ungraded), that no regex bars (with features.eligibility), with no grade yet or one made before your newest
+    ungraded), that the eligibility step did not bar (with features.eligibility), with no grade yet or one made before your newest
     CV was uploaded (graded again: graded_at >= uploaded_at counts as fresh) and that you did not ignore or
     reject: most skills first, then freshest."""
     return conn.execute(

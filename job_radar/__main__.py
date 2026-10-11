@@ -2,10 +2,10 @@
 
 Steps, in order: schema extract_boards extract_bayt extract_remote extract_startups extract_egypt extract_gulf
 extract_workable extract_freehire extract_linkedin extract_companies extract_portals extract_email transform describe
-match_skills embed grade_claude tailor export_career_ops
+match_skills eligibility embed grade_claude tailor export_career_ops
 email_egypt email_abroad
 track_applications (its own hourly DAG: your mailbox, read-only)
-embed, grade_claude, tailor and track_applications each have a switch in settings.yaml (features).
+eligibility, embed, grade_claude, tailor and track_applications each have a switch in settings.yaml (features).
 Each step is recorded in core.step_run (runlog.py): running when it starts, then ok, warn, failed or off.
 Settings come from the environment, or from .env in the repo root (see .env.example).
 """
@@ -25,7 +25,7 @@ from .db import connect
 
 STEPS = ["schema", "extract_boards", "extract_bayt", "extract_remote", "extract_startups", "extract_egypt",
          "extract_gulf", "extract_workable", "extract_freehire", "extract_linkedin", "extract_companies", "extract_portals", "extract_email",
-         "transform", "describe", "match_skills", "embed", "grade_claude", "tailor", "export_career_ops", "email_egypt",
+         "transform", "describe", "match_skills", "eligibility", "embed", "grade_claude", "tailor", "export_career_ops", "email_egypt",
          "email_abroad", "track_applications"]
 
 WATCHDOG_SECONDS = 210  # under the 240 s execution_timeout of the extract tasks in dags/job_radar.py
@@ -41,7 +41,7 @@ def main() -> None:
         timer = threading.Timer(WATCHDOG_SECONDS, watchdog, (names[0], datetime.now(timezone.utc)))
         timer.daemon = True
         timer.start()
-    if {"grade_claude", "tailor", "track_applications"} & set(names):
+    if {"eligibility", "grade_claude", "tailor", "track_applications"} & set(names):
         runlog.watch_claude()  # imports the Claude SDK, most of the import time: only the steps that call Claude need it
     with connect() as conn:
         for name in names:

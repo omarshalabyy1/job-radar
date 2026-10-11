@@ -180,17 +180,21 @@ def test_linkedin_runs_apify_once_then_holds_for_every_hours(monkeypatch, web):
     assert sources.base.waiting("api.apify.com") > (config.SETTINGS["linkedin"]["every_hours"] - 1) * 3600
 
 
-def test_a_site_still_reading_when_the_budget_ends_is_left_for_the_next_run(monkeypatch, web):
-    """company_sites returns at the batch's end whatever a site is doing; the site that never ends is not in what it returns
-    (so its checked_at stays, and the next run reads it), and its thread is left behind (__main__ leaves without it)."""
+def test_a_site_still_reading_when_the_budget_ends_is_stamped_and_one_never_started_is_left_first_in_line(monkeypatch, web):
+    """company_sites returns at the batch's end whatever a site is doing, and its thread is left behind (__main__ leaves
+    without it). A site still loading comes back with a note, so its checked_at moves and the next run reads the others
+    (unstamped, the same slow sites came first every run, 2026-10-11); a site the 4 threads never started does not, so
+    it stays first in line."""
     stuck = threading.Event()
     monkeypatch.setitem(sources.companies.READERS, "rss", lambda company, api: [] if company == "Quick" or not stuck.wait(30) else [])
     monkeypatch.setattr(sources.base, "STARTED", time.monotonic() + sources.companies.SITE_SECONDS + 1.5 - config.EXTRACT_SECONDS)
     began = time.monotonic()
+    names = ["Quick", "Slow 1", "Slow 2", "Slow 3", "Slow 4", "Never started"]  # 4 threads: Quick's frees one for Slow 4
     try:
-        rows, found = sources.company_sites([("Quick", "https://q.test/feed", "rss", "x"), ("Stuck", "https://s.test/feed", "rss", "x")])
-        assert time.monotonic() - began < 5  # the batch's 1.5 s, not the stuck site's 30
-        assert [f[3] for f in found] == ["Quick"] and rows == []
+        rows, found = sources.company_sites([(name, f"https://{i}.test/feed", "rss", "x") for i, name in enumerate(names)])
+        assert time.monotonic() - began < 5  # the batch's 1.5 s, not the stuck sites' 30
+        assert rows == [] and found[0] == ("rss", "x", None, "Quick")
+        assert found[1:] == [("rss", "x", "not read: the run's time ran out while it loaded", f"Slow {n}") for n in (1, 2, 3, 4)]
     finally:
         stuck.set()
 

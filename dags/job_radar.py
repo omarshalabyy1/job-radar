@@ -3,7 +3,7 @@ The collect's time is in settings.yaml (schedule), Cairo time; as shipped:
 
     job_radar               12pm: schema -> extract_boards, extract_bayt, extract_remote, extract_startups, extract_egypt,
                             extract_gulf, extract_workable, extract_freehire, extract_companies, extract_portals,
-                            extract_email (one by one) -> transform -> describe -> match_skills
+                            extract_email (one by one) -> transform -> describe -> match_skills -> eligibility
                             -> embed -> grade_claude -> ranked -> tailor; match_skills -> export_career_ops
     job_radar_email_egypt   after ranked: your home's jobs (Egypt) not emailed yet
     job_radar_email_abroad  after ranked: the jobs everywhere else (remote only) not emailed yet
@@ -19,7 +19,9 @@ finish and send them in Claude Code with /job-radar (the job-radar skill).
 Each task is one step of `python -m job_radar`, run from the job_radar virtual environment.
 Airflow runs one task at a time (docker-compose.yml: parallelism), so a collect never swamps a busy
 laptop; it takes about 15 minutes, and the emails start once grade_claude has ended, red or green: `ranked`,
-a task that always succeeds, carries the Asset (Airflow emits an Asset event only for a task that succeeds).
+a task that always succeeds, carries the Asset (Airflow emits an Asset event only for a task that succeeds). With
+features.manual_collect_emails false, only the schedule's runs email (a catch-up after the laptop slept is one):
+`ranked` skips itself on a Trigger, whose jobs then go out with the next scheduled collect's emails.
 They carry the scores of the jobs graded; when grade_claude fails (it selected jobs and graded none: key,
 credit or network) its task is red, the jobs go out ungraded and the next run grades them.
 
@@ -60,7 +62,8 @@ from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.sdk import DAG, Asset
 
-SCHEDULE = yaml.safe_load(Path("/opt/job-radar/settings.yaml").read_text(encoding="utf-8"))["schedule"]
+SETTINGS = yaml.safe_load(Path("/opt/job-radar/settings.yaml").read_text(encoding="utf-8"))
+SCHEDULE = SETTINGS["schedule"]
 COLLECTED = Asset("job_radar_collected")  # updated by `ranked`, when a collect has tried to grade its jobs; the emails run on it
 
 
@@ -98,11 +101,16 @@ with DAG(
     embedded = step("embed", trigger_rule="all_done", execution_timeout=timedelta(seconds=240))
     graded = step("grade_claude", trigger_rule="all_done", execution_timeout=timedelta(seconds=600))
     # Airflow emits an asset event only when its task succeeds: on a red grade_claude the emails would never start.
-    # So the Asset sits on this task, which ends green whatever grade_claude did (a trivial task with outlets still runs).
-    ranked = EmptyOperator(task_id="ranked", trigger_rule="all_done", outlets=[COLLECTED])
+    # So the Asset sits on this task, which ends green whatever grade_claude did. With features.manual_collect_emails
+    # false, a run that is not the schedule's (its run_id; run_type renders as "DagRunType.SCHEDULED") skips it (exit 99):
+    # no Asset event, no email; its jobs stay not emailed and go out with the next scheduled collect's emails.
+    ranked = BashOperator(task_id="ranked", trigger_rule="all_done", outlets=[COLLECTED],
+                          bash_command="true" if SETTINGS["features"]["manual_collect_emails"]
+                          else '[[ "{{ run_id }}" == scheduled__* ]] || exit 99')
     # all_success, unlike the tasks after the extracts (all_done, they run on what is there): red when schema or an extract is
     extracts >> EmptyOperator(task_id="check_extracts")
-    matched >> embedded >> graded >> ranked >> step("tailor", trigger_rule="all_done", execution_timeout=timedelta(seconds=300))
+    checked = step("eligibility", trigger_rule="all_done")
+    matched >> checked >> embedded >> graded >> ranked >> step("tailor", trigger_rule="all_done", execution_timeout=timedelta(seconds=300))
     matched >> step("export_career_ops")
 
 # your two emails, right after each collect (a manual one too: they hold only jobs not emailed yet)

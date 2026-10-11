@@ -2,7 +2,8 @@
 
     schema -> extract_boards, extract_bayt, extract_remote, extract_egypt, extract_gulf, extract_workable,
               extract_freehire, extract_linkedin, extract_companies, extract_portals, extract_email (one by one)
-              -> transform -> describe -> match_skills -> embed -> grade_claude -> ranked -> tailor; export_career_ops
+              -> transform -> describe -> match_skills -> eligibility -> embed -> grade_claude -> ranked -> tailor;
+              export_career_ops
     email_egypt, email_abroad: the two emails, right after grade_claude has ended, red or green (the DAG's `ranked`
               task carries the Asset; the HTML is in digest.py)
     track_applications: its own DAG, every hour
@@ -31,8 +32,9 @@ from psycopg.types.json import Jsonb
 from . import sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
 from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT, ROLE_LABEL, ROOT,
-                     SETTINGS, hidden_reason, in_reach, is_target, place_of, restriction, role_of, too_senior)
+                     SETTINGS, hidden_reason, in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
+from .eligibility import eligibility  # noqa: F401  (python -m job_radar eligibility)
 from .embed import embed  # noqa: F401  (python -m job_radar embed)
 from .grade import grade_claude  # noqa: F401  (python -m job_radar grade_claude)
 from .tailor import tailor  # noqa: F401  (python -m job_radar tailor)
@@ -256,8 +258,8 @@ def job_key(title: str, company: str, job_url: str) -> str:
 def transform(conn) -> None:
     """raw -> core.job: the window's postings with a role, not above senior, in a place in scope and
     in reach (remote, or onsite/hybrid in Cairo or Giza), one row per job (job_key: the same job on
-    several boards, or reposted, is one job). A posting whose text bars someone living in Egypt is stored like
-    any other: match_skills sets its restriction and the email and the tracker hide it (config.hidden_reason). A job of the
+    several boards, or reposted, is one job). A job someone living in Egypt cannot take is stored like
+    any other: the eligibility step sets its restriction and the email and the tracker hide it (config.hidden_reason). A job of the
     window not emailed yet that no longer passes the rules (they changed) is removed, and so is a job first seen over
     KEEP_DAYS ago (with the raw postings of then) unless you noted or applied to it. With no posting in the window at
     all it fails before deleting anything (every extract failed, or the raw table was emptied). Re-running it
@@ -400,33 +402,19 @@ def describe(conn) -> None:
 
 def match_skills(conn) -> None:
     """Store which of your skills each job of the window asks for (core.job_skill), so the email
-    and the tracker read a small table instead of matching every job's text each time; and, for every
-    job with a description, the phrase that bars someone living in Egypt (core.job.restriction,
-    config.restriction), NULL when there is none. A barred job is kept, not deleted: the email and the tracker
-    hide it (config.hidden_reason, features.eligibility), and Show hidden jobs in the tracker brings it back. With
-    features.eligibility false (the default: the text rules misjudged about 1 phrasing in 3) it sets no restriction
-    and keeps the ones there (they hide nothing while it is off). Re-running it gives the same rows."""
+    and the tracker read a small table instead of matching every job's text each time. Re-running it gives the
+    same rows."""
     window = "SELECT job_id FROM core.job WHERE first_seen >= current_date - %s"
     conn.execute(f"DELETE FROM core.job_skill WHERE job_id IN ({window})", (DAYS,))
     matched = conn.execute(
         "INSERT INTO core.job_skill (job_id, skill) SELECT j.job_id, s.skill FROM core.job j"
         " JOIN core.skill s ON j.title || ' ' || coalesce(j.description, '') ~* s.pattern"
         f" WHERE j.job_id IN ({window})", (DAYS,)).rowcount
-    barred = []
-    if FEATURES["eligibility"]:
-        barred = [(restriction(f"{title} {description}"), job_id) for job_id, title, description in conn.execute(
-            "SELECT job_id, title, description FROM core.job WHERE description IS NOT NULL")]
-        with conn.cursor() as cur:
-            cur.executemany("UPDATE core.job SET restriction = %s WHERE job_id = %s AND restriction IS DISTINCT FROM %s",
-                            [(phrase, job_id, phrase) for phrase, job_id in barred])
     conn.execute("DELETE FROM core.cv_skill")  # your CVs: few and small, matched again every run
     conn.execute("INSERT INTO core.cv_skill (label, skill) SELECT c.label, s.skill FROM core.cv c"
                  " JOIN core.skill s ON c.text ~* s.pattern")
     conn.commit()
-    print(f"match_skills: {matched} skill matches, " + (f"{sum(phrase is not None for phrase, _ in barred)} of"
-          f" {len(barred)} jobs with a description barred to someone in Egypt (hidden)"
-          if FEATURES["eligibility"]
-          else "restrictions off in settings.yaml (features.eligibility)"))
+    print(f"match_skills: {matched} skill matches")
 
 
 def export_career_ops(conn) -> None:

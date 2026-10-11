@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from job_radar import __main__ as main_module, steps
+from job_radar import __main__ as main_module, eligibility, steps
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -36,7 +36,7 @@ def test_importing_the_steps_does_not_load_the_claude_sdk(module):
 
 @pytest.mark.parametrize("argv, watched", [
     (["schema", "match_skills", "embed"], False), (["transform"], False), (["grade_claude"], True),
-    (["embed", "tailor"], True), (["track_applications"], True), (["all"], True)])
+    (["embed", "tailor"], True), (["track_applications"], True), (["eligibility"], True), (["all"], True)])
 def test_the_claude_sdk_is_wrapped_only_for_a_run_with_a_claude_step(monkeypatch, argv, watched):
     calls = []
     monkeypatch.setattr(sys, "argv", ["job_radar", *argv])
@@ -160,43 +160,66 @@ def add_job(conn, key: str, description: str | None = None, place: str = "Egypt"
         (f"test_steps {key}", place, f"https://test.example/{key}", description, age, restriction, emailed)).fetchone()[0]
 
 
-def test_match_skills_sets_the_restriction_of_a_barred_job_and_deletes_nothing(conn, monkeypatch):
-    """A barred job is hidden (config.hidden_reason), never deleted: no row goes, no key reaches core.job_seen, and a
-    restriction the rules no longer find is cleared, so a fixed rule brings a wrongly hidden job back."""
-    monkeypatch.setitem(steps.FEATURES, "eligibility", True)
-    jobs = {name: add_job(conn, name, text, restriction=old) for name, text, old in (
-        ("barred", "Remote data job. You must be a U.S. citizen.", None),
-        ("barred_and_applied", "Remote data job. You must be a U.S. citizen.", None),
-        ("negated", "No security clearance required. SQL and Airflow.", None),
-        ("form_field", "Remote data job. Security Clearance: None", None),
-        ("wrongly_flagged", "Based in Egypt. SQL and Airflow.", "security clearance"),
-        ("clean", "Based in Egypt. SQL and Airflow.", None), ("no_text", None, None))}
-    conn.execute("INSERT INTO core.application (job_id, status) VALUES (%s, 'applied')", (jobs["barred_and_applied"],))
+class Haiku:
+    """Claude Haiku's answers without the network: no for a posting that asks for Fictionland citizenship, else unclear."""
+
+    def __init__(self):
+        self.asked = []
+        self.messages = self
+
+    def parse(self, **kw):
+        text = kw["messages"][0]["content"]
+        self.asked.append(text.split(" at ")[0])
+        answer = "no" if "Fictionland" in text else "unclear"
+        return type("Response", (), {"parsed_output": eligibility.Verdict(answer=answer, reason="Fictionland citizens only")})()
+
+
+def add_posted(conn, key: str, source: str, location: str, place: str, description: str | None,
+               restriction: str | None = None) -> int:
+    return conn.execute(
+        "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+        " description, first_seen, restriction) VALUES (%s, %s, 'Zyntrafold', %s, %s, %s, %s, 1, 'Data Engineer', false,"
+        " %s, current_date, %s) RETURNING job_id",
+        (f"test_steps {key}", key, location, place, source, f"https://test.example/{key}", description, restriction)).fetchone()[0]
+
+
+def test_eligibility_takes_the_boards_word_then_asks_claude_once_and_deletes_nothing(conn, monkeypatch):
+    """A board's own who-can-apply field decides alone; a described job outside ai_places that no board labels is asked
+    once; only a 'no' sets a restriction; ai_places' jobs are left to grade_claude (an old regex flag is cleared); a job
+    with no field and no text waits for one. No row is deleted and nothing reaches core.job_seen."""
+    haiku = Haiku()
+    monkeypatch.setitem(eligibility.FEATURES, "eligibility", True)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    monkeypatch.setattr(eligibility.claude, "client", lambda: haiku)
+    jobs = {name: add_posted(conn, name, *rest) for name, *rest in (
+        ("us_board", "dailyremote", "United States (remote)", "USA", None),
+        ("world_board", "remotive", "Worldwide (remote)", "Remote", "Must hold Fictionland citizenship"),  # the board decides
+        ("citizens_only", "test", "Remote", "Remote", "Must hold Fictionland citizenship"),
+        ("silent", "test", "Remote", "Remote", "SQL and Airflow"),
+        ("cairo", "test", "Cairo", "Egypt", "Must hold Fictionland citizenship", "an old regex flag"),
+        ("no_text", "test", "Remote", "Remote", None))}
 
     def state():
-        rows = dict(conn.execute("SELECT job_id, restriction FROM core.job WHERE job_id = ANY(%s)", (list(jobs.values()),)).fetchall())
-        seen = conn.execute("SELECT count(*) FROM core.job_seen WHERE job_key LIKE 'test_steps %'").fetchone()[0]
-        return {name: rows.get(job_id, "deleted") for name, job_id in jobs.items()}, seen
+        rows = {job_id: (restriction, judged) for job_id, restriction, judged in conn.execute(
+            "SELECT job_id, restriction, eligibility_at IS NOT NULL FROM core.job WHERE job_id = ANY(%s)", (list(jobs.values()),))}
+        return {name: rows.get(job_id, "deleted") for name, job_id in jobs.items()}
 
-    steps.match_skills(RolledBack(conn))
-    restrictions, seen = state()
-    assert restrictions == {"barred": "US citizen", "barred_and_applied": "US citizen", "negated": None, "form_field": None,
-                            "wrongly_flagged": None, "clean": None, "no_text": None}  # every job is still there
-    assert seen == 0  # and none of their keys was kept, so a job still posted is stored again
-    assert {s for (s,) in conn.execute("SELECT skill FROM core.job_skill WHERE job_id = %s", (jobs["clean"],))} >= {"SQL"}
-    steps.match_skills(RolledBack(conn))  # a rerun gives the same rows
-    assert state() == (restrictions, seen)
-
-
-def test_match_skills_with_eligibility_off_sets_no_restriction_and_keeps_the_ones_there(conn, monkeypatch, capsys):
-    monkeypatch.setitem(steps.FEATURES, "eligibility", False)
-    barred = add_job(conn, "barred", "Remote data job. You must be a U.S. citizen.")
-    marked = add_job(conn, "marked", "Based in Egypt. SQL.", restriction="old phrase")
-    steps.match_skills(RolledBack(conn))
-    assert dict(conn.execute("SELECT job_id, restriction FROM core.job WHERE job_id = ANY(%s)", ([barred, marked],)).fetchall()) == {
-        barred: None, marked: "old phrase"}  # nothing set, the ones there kept
+    eligibility.eligibility(RolledBack(conn))
+    assert state() == {"us_board": ("open to United States only", True), "world_board": (None, True),
+                       "citizens_only": ("Fictionland citizens only", True), "silent": (None, True),
+                       "cairo": (None, True), "no_text": (None, False)}
+    assert sorted(a for a in haiku.asked if a in jobs) == ["citizens_only", "silent"]  # the warehouse's own jobs aside
     assert conn.execute("SELECT count(*) FROM core.job_seen WHERE job_key LIKE 'test_steps %'").fetchone() == (0,)
-    assert "restrictions off in settings.yaml (features.eligibility)" in capsys.readouterr().out
+    eligibility.eligibility(RolledBack(conn))  # each job is judged once
+    assert sorted(a for a in haiku.asked if a in jobs) == ["citizens_only", "silent"]  # the warehouse's own jobs aside
+
+
+def test_eligibility_off_judges_nothing(conn, monkeypatch, capsys):
+    monkeypatch.setitem(eligibility.FEATURES, "eligibility", False)
+    job = add_posted(conn, "us_board", "dailyremote", "United States (remote)", "USA", None)
+    eligibility.eligibility(RolledBack(conn))
+    assert conn.execute("SELECT restriction, eligibility_at FROM core.job WHERE job_id = %s", (job,)).fetchone() == (None, None)
+    assert "off in settings.yaml (features.eligibility)" in capsys.readouterr().out
 
 
 def test_the_email_leaves_out_ignored_rejected_and_hidden_jobs(conn, monkeypatch):

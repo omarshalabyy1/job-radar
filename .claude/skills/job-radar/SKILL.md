@@ -14,9 +14,9 @@ output/applications/<day>/<company>-<title>/ for up to 5 jobs a run scoring 8+ i
 ('draft ready <day>'); the Ready to apply tab shows them. About $0.05 a draft. Each step has a switch under
 `features` in settings.yaml.
 
-features.eligibility is off by default: the text rules misjudged about 1 phrasing in 3, and a source-level plus Claude Haiku filter is meant to replace them. With it on, a job only someone outside Egypt can take (US citizens only, a security clearance, GCC
-nationals only ...) is hidden: match_skills reads its restriction from its text, and the tracker and the emails leave
-it out; switch on Show hidden jobs in the tracker to see it. Claude's own restriction hides a job the same way, and
+With features.eligibility on, a job someone living in Cairo cannot legally take is hidden, never deleted:
+the eligibility step (after match_skills) reads the board's own "who can apply" field where it has one (Daily Remote, Remotive, Jobicy, Remote.co, Himalayas, We Work Remotely, Relomote, Wellfound: a list without worldwide, EMEA, MENA, Africa, the Middle East, Egypt or Cairo's time zone bars it), else asks Claude Haiku once per described job outside ai_places (yes, no or unclear; only no hides; about $0.70 a month). It sets core.job.restriction, and the tracker and the emails leave the job
+out; switch on Show hidden jobs in the tracker to see it. Claude's own restriction hides a job the same way, and
 a score of 3 or lower hides it with features.auto_hide (`config.hidden_reason`); a status you set shows it again. A grade made
 before his newest CV upload counts as ungraded and is overwritten on the next run. grade_claude turns its task red
 when it selected jobs and graded none (key, credit or network); the emails still go out, ungraded. Every step `python -m job_radar` runs leaves a row
@@ -144,7 +144,8 @@ SELECT task_id, state, round(extract(epoch FROM end_date - start_date))
 
 Do not poll with the `airflow` command: each call loads all of Airflow, and a loop of them once
 starved a run until every task failed. A run takes about 15 minutes: the tasks run one by one,
-and both emails follow grade_claude on their own, red or green (the `ranked` task carries the Airflow Asset), a manual run's too. A run red at its last
+and both emails follow grade_claude on their own, red or green (the `ranked` task carries the Airflow Asset); a manual
+run's only with features.manual_collect_emails true (false, as shipped: its jobs go out with the next 12pm emails). A run red at its last
 task, `check_extracts`, means `schema` or an extract did not succeed (`schema` retries twice).
 
 Report each task with its result lines, from its log

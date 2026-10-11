@@ -57,9 +57,11 @@ ALTER TABLE core.job ADD COLUMN IF NOT EXISTS posted_at timestamptz;
 -- the company's size in employees ('51-200'), from any posting of that company that gives it
 -- (Indeed, freehire); empty when no source does
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS company_size text;
--- the phrase in its text that bars someone living in Egypt (config.restriction: "US citizens only", "right
--- to work in the UK" ...), set by match_skills; empty when none, or no description to read
+-- what bars someone living in Egypt, set by the eligibility step: its board's "who can apply" field ("open to United
+-- States only") or Claude Haiku's reason ("US citizens only"); empty when nothing does, or not judged yet
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS restriction text;
+-- when the eligibility step judged it (once per job); empty until then
+ALTER TABLE core.job ADD COLUMN IF NOT EXISTS eligibility_at timestamptz;
 -- how close its text is to your nearest CV (embed.py, 0-1, cosine); empty until embed has seen it
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS cv_similarity real;
 -- A job first seen over 4 days ago (config.KEEP_DAYS) is deleted by transform with its raw postings,

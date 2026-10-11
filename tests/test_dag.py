@@ -26,10 +26,19 @@ def test_the_emails_start_from_a_task_that_succeeds_even_when_grading_fails():
     no email at all, so the outlet sits on `ranked`: an all_done task right after grade_claude, before tailor."""
     source = DAG.read_text(encoding="utf-8")
     assert source.count("outlets=") == 1  # one carrier of the Asset, and it is not grade_claude
-    assert 'ranked = EmptyOperator(task_id="ranked", trigger_rule="all_done", outlets=[COLLECTED])' in source
+    assert 'ranked = BashOperator(task_id="ranked", trigger_rule="all_done", outlets=[COLLECTED],' in source
     assert 'graded = step("grade_claude", trigger_rule="all_done", execution_timeout=timedelta(seconds=600))' in source
     assert 'graded >> ranked >> step("tailor", trigger_rule="all_done"' in source  # emails do not wait for tailor
     assert source.count("schedule=[COLLECTED]") == 1  # both email DAGs hang off the one Asset
+
+
+def test_a_trigger_sends_no_email_when_manual_collect_emails_is_off():
+    """With features.manual_collect_emails false, `ranked` exits 99 (BashOperator's skip code) on a run that is not the
+    schedule's: a skipped task emits no Asset event, so no email DAG starts, and tailor (all_done) still runs."""
+    source = DAG.read_text(encoding="utf-8")
+    assert """bash_command="true" if SETTINGS["features"]["manual_collect_emails"]""" in source
+    assert """else '[[ "{{ run_id }}" == scheduled__* ]] || exit 99')""" in source
+    assert 'matched >> checked >> embedded >> graded >> ranked >> step("tailor", trigger_rule="all_done"' in source
 
 
 def test_the_dag_retries_schema_and_puts_every_extract_behind_it():

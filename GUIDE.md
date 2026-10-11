@@ -143,8 +143,8 @@ Open [`settings.yaml`](settings.yaml). Everything is plain words; save, and the 
 - **Your companies** under `companies`: a name, and a careers link if you have one. Jobs at
   companies in `your_companies` get a ⭐ and come first.
 - **The times** under `schedule`, like `11am` or `"7:30pm"`.
-- **The smart features** under `features`: Claude's score, the eligibility check (off by default, as the text rules misjudged about 1 phrasing in 3; on, a job only someone
-  outside Egypt can take is hidden), hiding a low score (`auto_hide`), Top 5, follow-ups, drafts, the mailbox tracker, follow-up drafts, interview notes,
+- **The smart features** under `features`: Claude's score, the eligibility check (a job someone in Cairo cannot legally take is hidden: the board's
+  own "who can apply" field, else Claude Haiku), whether a manual Trigger sends the emails (`manual_collect_emails`), hiding a low score (`auto_hide`), Top 5, follow-ups, drafts, the mailbox tracker, follow-up drafts, interview notes,
   embeddings; `false` turns one off from the next run. Claude's score, the CV drafts and the embeddings work on
   Egypt's jobs only (`ai_places`); the eligibility check applies to every job, wherever it is.
 

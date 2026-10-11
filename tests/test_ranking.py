@@ -1,4 +1,4 @@
-r"""Who can take a job (the eligibility regex) and what the emails show of Claude's grade, without the network
+r"""Who can take a job (a board's who-can-apply field) and what the emails show of Claude's grade, without the network
 or the warehouse. Run on the laptop:
 
     .venv\Scripts\python -m pytest tests
@@ -8,63 +8,34 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from job_radar import config, digest, runlog, steps
+from job_radar import config, digest, eligibility, runlog, steps
 
 
-@pytest.mark.parametrize("text", [
-    "US citizenship required", "Must be a U.S. citizen", "UK citizens only", "Active TS/SCI clearance",
-    "A secret clearance is required", "Public Trust position", "Authorized to work in the US without sponsorship",
-    "legally able to work in the United States", "You must have the right to work in the UK",
-    "eligible to work in Canada", "must be located in the USA", "Candidates must reside in Europe", "US only",
-    "KSA only", "USA-based only", "Saudi nationals only", "GCC nationals only", "Saudization applies",
-    "authorised to work in the EU", "Canadian citizenship is required", "MUST HAVE: SC Clearance",
-    # the dots of U.S., U.S.A. and U.K. are no sentence end
-    "Must be a U.S.A. citizen", "Authorized to work in the U.S. without sponsorship", "right to work in the U.K.",
-    "Security Clearance: Secret", "US. citizenship required", "Must be a U.S citizen", "must be a U.S.A citizen"])
-def test_a_job_only_people_elsewhere_can_take_is_flagged(text):
-    assert config.restriction(f"We are hiring a data engineer. {text}. Apply now.") is not None
+@pytest.mark.parametrize("where", [
+    "Worldwide", "Anywhere in the World", "Worldwide (remote)", "Remote: EMEA", "MENA", "Africa", "Middle East",
+    "Egypt (Remote)", "Egypt, Nigeria, Pakistan (Remote)", "Global", "UTC+2", "GMT+3", "UTC-1 to UTC+4", "EET",
+    "Algeria, Angola, Egypt, Ghana"])
+def test_a_board_that_lets_someone_in_cairo_apply_passes(where):
+    assert eligibility.board_restriction(where) is None
 
 
-@pytest.mark.parametrize("text", [
-    "Egyptian nationals are welcome", "Based in Egypt", "We cannot offer visa sponsorship", "We have offices in the US",
-    "Our clients are mostly US clients", "Open to candidates living in Cairo, Egypt", "This is for us only if you like SQL",
-    "Authorized to work in Egypt", "Active or previously held security clearance is advantageous",
-    "DHS public trust is strongly preferred", "Remote, MENA", "",
-    # said as something that is not asked for
-    "US citizenship is not required", "No security clearance required", "You do not need to be authorized to work in the US",
-    "US citizenship not necessary", "A security clearance is not needed", "We don’t need you to be a U.S. citizen",
-    "UK citizenship isn't required", "No visa or secret clearance required",
-    "A security clearance isn't needed", "Security clearance is not needed", "The employer does not require a security clearance",
-    "We doesn't require U.S. citizenship", "We don't require a clearance", "They do not require US citizenship", "No U.S. citizenship needed",
-    "Nor will Acme Ltd require, in a posting or otherwise, U.S. citizenship or residency in the U.S. as a condition of employment",
-    # a form field with nothing in it
-    "Security Clearance: None", "Public Trust: None", "Security Clearance: N/A", "**Security Clearance Requirement:** NoneThis position",
-    "##### **Public Trust:****None**", "Secret clearance - n/a",
-    # clearances as one of the things a pay range depends on, not a requirement
-    "pay depends on skill sets, experience and training, security clearances, licensure and certifications"])
-def test_a_job_someone_in_egypt_can_take_is_not_flagged(text):
-    assert config.restriction(text) is None
+@pytest.mark.parametrize("where, found", [
+    ("United States (remote)", "open to United States only"), ("Remote: Canada, United Kingdom", "open to Canada, United Kingdom only"),
+    ("USA", "open to USA only"), ("Europe", "open to Europe only"), ("LATAM,  Canada,  USA (remote)", "open to LATAM,  Canada,  USA only"),
+    ("South Africa", "open to South Africa only"), ("UTC-8 to UTC-5", "open to UTC-8 to UTC-5 only"), ("US National (remote)", "open to US National only")])
+def test_a_board_limited_to_other_countries_restricts_the_job(where, found):
+    assert eligibility.board_restriction(where) == found
 
 
-@pytest.mark.parametrize("text, found", [
-    ("No clearance required for the first round. Must be a US citizen.", "US citizen"),     # the negation is another sentence
-    ("US citizenship required. Relocation is not required.", "US citizenship"),
-    ("A security clearance is required; travel is not required.", "security clearance"),      # a semicolon ends the sentence
-    ("Must be authorized to work in the US. Security clearance not needed.", "authorized to work in the US"),
-    ("US citizenship is not required for interns. Cleared staff need a secret clearance.", "secret clearance"),
-    # sentence-level on purpose: a wrong flag hides a job, a missed one only leaves it visible, so a negation
-    # anywhere in the sentence cancels the flag (accepted misses, not bugs)
-    ("US citizenship is required, clearance is not required.", None),
-    ("Security clearance is not required but you must be a US citizen.", None),
-    ("Must be authorized to work in the U.S. Security clearance not needed.", None),  # U.S. is not a sentence end
-    ("No clearance, visa or US citizenship required", None)])
-def test_a_negation_clears_only_its_own_sentence(text, found):
-    assert config.restriction(text) == found
-
-
-def test_the_flag_is_the_phrase_that_matched():
-    assert config.restriction("Role.\nMust  be   a U.S. citizen to apply") == "US citizen"  # U.S. is read as US
-    assert config.restriction(None) is None
+@pytest.mark.parametrize("source, location, payload, expected", [
+    ("dailyremote", "United States (remote)", {}, "United States (remote)"),  # the boards whose location is the field
+    ("remotive", "USA (remote)", {}, "USA (remote)"),
+    ("wellfound", "Remote: Berlin", {"acceptedRemoteLocationNames": ["Germany", "Brazil"]}, "Germany, Brazil"),
+    ("wellfound", "Remote: Berlin", {"locationNames": ["Berlin"]}, None),  # its offices only: no field
+    ("welcometothejungle", "Remote: France", {}, None),  # office countries, not who can apply
+    ("indeed", "Remote", {}, None)])
+def test_only_a_boards_own_who_can_apply_field_is_read(source, location, payload, expected):
+    assert eligibility.who_can_apply(source, location, payload) == expected
 
 
 def job(n, score, reason="A deciding match"):
@@ -102,7 +73,7 @@ def test_a_switched_off_block_is_gone(monkeypatch, switch, shown):
 
 def test_every_smart_feature_has_a_switch_in_settings():
     assert {"grade", "eligibility", "auto_hide", "top5", "follow_up", "follow_up_drafts", "tailor", "track_applications",
-            "interview_prep", "embeddings"} <= set(config.FEATURES)
+            "interview_prep", "embeddings", "manual_collect_emails"} <= set(config.FEATURES)
     assert all(isinstance(on, bool) for on in config.FEATURES.values())
 
 

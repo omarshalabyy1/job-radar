@@ -91,9 +91,8 @@ busy laptop is not swamped; a task may wait up to an hour for its turn (`task_qu
 `docker-compose.yml`), so the last extracts are never failed unrun. A whole collect takes about 15
 minutes, and both emails go right after `ranked`, which runs when grade_claude has ended, red or green. On Egypt's jobs only (`ai_places`), embed gives each job a
 local vector (CV match: closeness to your CV, $0 on the CPU), grade_claude has Claude score each one with a
-description 0-10 against your CV, and tailor drafts the 8+ ones. `features.eligibility` is off by default: the text rules misjudged about 1 phrasing in 3, and a source-level plus Claude Haiku filter is meant to replace them. With it on, a job only someone
-outside Egypt can take (US citizens only, a security clearance, GCC nationals only ...) is hidden, not deleted:
-match_skills sets its `core.job.restriction` from its text, and the email and the tracker leave it out
+description 0-10 against your CV, and tailor drafts the 8+ ones. With `features.eligibility` on, a job someone living in Cairo cannot legally take is hidden, not deleted:
+the eligibility step (after match_skills) reads the board's own "who can apply" field where it has one (Daily Remote, Remotive, Jobicy, Remote.co, Himalayas, We Work Remotely, Relomote, Wellfound: a list without worldwide, EMEA, MENA, Africa, the Middle East, Egypt or Cairo's time zone bars it), else asks Claude Haiku once per described job outside ai_places (yes, no or unclear; only no hides; about $0.70 a month); it sets `core.job.restriction`, and the email and the tracker leave it out
 (`config.hidden_reason`; the tracker's Show hidden jobs brings it back). Claude's own restriction hides a job the same way, a score of 3 or
 lower hides it with `features.auto_hide`, and a status of yours shows it again. A job whose own posting has no text takes the text of the
 same job from another posting of the last 4 days. A job first seen over 4 days ago
@@ -106,7 +105,7 @@ leaves a row in `core.step_run` (the tracker's Last run tab). In Docker, `output
 ```mermaid
 %% flowchart: one collect, left to right
 %% clock -> schema -> 12 extract tasks one by one -> raw -> transform -> core -> describe -> match_skills
-%% -> embed -> grade_claude -> ranked -> tailor, and match_skills -> export
+%% -> eligibility -> embed -> grade_claude -> ranked -> tailor, and match_skills -> export
 %% the two email DAGs run once ranked is done (an Airflow Asset on a task that succeeds even when grade_claude fails) and read the mart view
 %% check_extracts, after the extracts, turns the run red when schema or an extract did not succeed
 flowchart LR
@@ -134,7 +133,8 @@ flowchart LR
     core --> describe["describe<br>descriptions from job pages"]
     describe --> match["match_skills"]
     match --> export["export_career_ops"]
-    match --> embed["embed<br>local vectors, Egypt"]:::ai
+    match --> eligible["eligibility<br>board field, else Haiku"]:::ai
+    eligible --> embed["embed<br>local vectors, Egypt"]:::ai
     embed --> grade["grade_claude<br>Claude scores Egypt's jobs"]:::ai
     grade --> ranked["ranked<br>releases the emails,<br>even if grading failed"]
     ranked --> tailor["tailor<br>drafts for 8+"]:::ai
@@ -175,7 +175,8 @@ flowchart LR
 | `extract_*` (12) | the sources | `raw.job_posting`; `extract_email` also `core.email_seen` |
 | `transform` | `raw.job_posting` | `core.job`, `core.job_seen` (the keys of jobs deleted after 4 days) |
 | `describe` | the jobs' pages | `core.job.description` |
-| `match_skills` | `core.job`, `core.cv` | `core.job_skill`, `core.cv_skill`, `core.job.restriction` (a barred job is hidden, not deleted) |
+| `match_skills` | `core.job`, `core.cv` | `core.job_skill`, `core.cv_skill` |
+| `eligibility` | `core.job`, its raw posting, Claude Haiku | `core.job.restriction`, `core.job.eligibility_at` (a barred job is hidden, not deleted) |
 | `embed` | `core.job`, `core.cv`, a local Ollama model | `core.job_vector`, `core.cv_vector`, `core.job.cv_similarity` |
 | `grade_claude` | `core.job`, `core.cv`, your last 30 clicks | `core.claude_grade` (a grade older than your newest CV upload is overwritten) |
 | `tailor` | `core.claude_grade` scoring 8+ | `output/applications/<day>/`, `core.application` as saved |

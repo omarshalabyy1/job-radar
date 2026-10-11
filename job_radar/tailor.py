@@ -75,7 +75,7 @@ def draft_folder(day: str, company: str, title: str, job_id: int) -> Path:
 
 def jobs_to_tailor(conn, limit: int) -> list[tuple]:
     """The jobs to draft, best score first: graded MIN_SCORE or more, in ai_places, with no application row yet and (with
-    features.eligibility) no restriction of the regex's or of Claude's."""
+    features.eligibility) no restriction of the eligibility step's or of Claude's."""
     return conn.execute(
         "SELECT j.job_id, j.title, j.company, j.location, j.description, g.score, g.cv, g.reason"
         " FROM core.claude_grade g JOIN core.job j USING (job_id)"

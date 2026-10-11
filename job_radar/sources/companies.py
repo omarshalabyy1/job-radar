@@ -104,12 +104,17 @@ def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
 
     # Each may start a browser: more starves the task's heartbeat. A batch ends SITE_SECONDS before the
     # step's time budget: a site still loading finishes in that time (read() gives every site SITE_SECONDS at
-    # most). A site not done by then is left for the next run, and __main__ leaves without waiting for it.
+    # most). __main__ leaves without waiting for a site not done by then. One still loading is stamped with a note,
+    # so the next run moves on to the others: unstamped, the same slow sites came first every run and the batch
+    # gave up on them every time (40 sites never read, 2026-10-11). One never started is left first in line.
     pool = ThreadPoolExecutor(4)
-    done, _ = wait([pool.submit(read, site) for site in sites], timeout=max(0, time_left(EXTRACT_SECONDS) - SITE_SECONDS))
+    futures = {pool.submit(read, site): site for site in sites}
+    done, _ = wait(futures, timeout=max(0, time_left(EXTRACT_SECONDS) - SITE_SECONDS))
     pool.shutdown(wait=False, cancel_futures=True)
     results = [f.result() for f in done]
-    return [r for rows, _ in results for r in rows], [found for _, found in results]
+    late = [(platform, api, "not read: the run's time ran out while it loaded", company)
+            for f, (company, _, platform, api) in futures.items() if not f.done()]
+    return [r for rows, _ in results for r in rows], [found for _, found in results] + late
 
 
 # boards another source already reads in bulk, so no browser is spent on them every run
