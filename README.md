@@ -78,7 +78,7 @@ request ladder) and where to change what: [docs/architecture.md](docs/architectu
 - **No duplicates:** a posting is stored once (source + link); a job is one row (its normalized
   title + company), so the same job on three boards, or reposted, is one job; each job is emailed once.
 - **Light on the laptop:** the scrapers run one by one (a collect takes about 15 minutes); each step
-  stops at its time budget and leaves the rest for the next run. A job first seen over 4 days ago is
+  stops at its time budget and leaves the rest for the next run. A job first seen over 5 days ago is
   deleted, unless you noted or applied to it (its key stays, so it is never emailed again). A collect missed while the laptop slept runs once it wakes.
 - **Every public page is read**, whatever a site's robots.txt says; a site that turns scripts away
   is asked again with a real Chrome's handshake. The code never logs in and never gets past a bot
@@ -201,7 +201,7 @@ How each source is read, and the reasoning behind each choice: [docs/scraping-pl
 | [freehire.me](https://freehire.me) | public job API, no key: each keyword, remote anywhere and any job in Egypt, only jobs it rates fresh (not reposted old ones) | 26 searches a run, 1 second apart, in its own task |
 | Your companies | `settings.yaml` (companies): the 119 that hire in Egypt, each through its Egypt jobs page ([docs/companies.md](docs/companies.md)), only their Egypt jobs kept; each career page detected once (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, RSS, or rendered with Playwright), then read; one behind a bot check is marked *blocked* until you open it with `scripts/open_blocked.py` | each once a day |
 | 28,000+ career pages | the crawl of [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) | the ~75 MB download only when the feed has changed |
-| Job pages (descriptions) | the schema.org JobPosting on each new job's page; LinkedIn and dailyremote.com pages are not fetched (dailyremote hides its description). A job whose own posting has no text takes the text of the same job from another posting of the last 4 days | 1 second apart per site, at most 300 a run |
+| Job pages (descriptions) | the schema.org JobPosting on each new job's page; LinkedIn and dailyremote.com pages are not fetched (dailyremote hides its description). A job whose own posting has no text takes the text of the same job from another posting of the last 5 days | 1 second apart per site, at most 300 a run |
 | LinkedIn search | the Apify Actor `curious_coder/linkedin-jobs-scraper`, logged out (`linkedin` in `settings.yaml`, `APIFY_TOKEN` in `.env`) | 50 jobs a run, at most one run every 20 hours (`every_hours`): about $3 a month (one run on 8 October 2026: 30 postings, $0.098) |
 | Your Gmail | read-only IMAP, inbox and spam of each inbox: every email; one from a job site (LinkedIn, Indeed, Wuzzuf, Wellfound, Bayt ...) gives all its job links, any other only links to a job page | one connection at a time, emails over 5 MB skipped: a few MB a run of Google's 2,500 MB a day; it sends 2 emails a day of 500 |
 

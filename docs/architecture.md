@@ -95,7 +95,7 @@ description 0-10 against your CV, and tailor drafts the 8+ ones. With `features.
 the eligibility step (after match_skills) reads the board's own "who can apply" field where it has one (Daily Remote, Remotive, Jobicy, Remote.co, Himalayas, We Work Remotely, Relomote, Wellfound: a list without worldwide, EMEA, MENA, Africa, the Middle East, Egypt or Cairo's time zone bars it), else asks Claude Haiku once per described job outside ai_places (yes, no or unclear; only no hides; about $0.70 a month); it sets `core.job.restriction`, and the email and the tracker leave it out
 (`config.hidden_reason`; the tracker's Show hidden jobs brings it back). Claude's own restriction hides a job the same way, a score of 3 or
 lower hides it with `features.auto_hide`, and a status of yours shows it again. A job whose own posting has no text takes the text of the
-same job from another posting of the last 4 days. A job first seen over 4 days ago
+same job from another posting of the last 5 days. A job first seen over 5 days ago
 is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key).
 Every posting is stored once (its source and link), every job once (`core.job`), every email
 sends a job once. Newsletters with no jobs are remembered in `core.email_seen` for 7 days, and every step
@@ -173,7 +173,7 @@ flowchart LR
 |---|---|---|
 | `schema` | `settings.yaml`, `sql/schema.sql` | `core.company`, `core.skill`, the `mart` views |
 | `extract_*` (12) | the sources | `raw.job_posting`; `extract_email` also `core.email_seen` |
-| `transform` | `raw.job_posting` | `core.job`, `core.job_seen` (the keys of jobs deleted after 4 days) |
+| `transform` | `raw.job_posting` | `core.job`, `core.job_seen` (the keys of jobs deleted after 5 days) |
 | `describe` | the jobs' pages | `core.job.description` |
 | `match_skills` | `core.job`, `core.cv` | `core.job_skill`, `core.cv_skill` |
 | `eligibility` | `core.job`, its raw posting, Claude Haiku | `core.job.restriction`, `core.job.eligibility_at` (a barred job is hidden, not deleted) |
