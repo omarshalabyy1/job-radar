@@ -21,7 +21,7 @@ schedule:
 features:
   grade: true               # Claude scores each job 0-10 against your CVs (model and daily cap: claude: below)
   eligibility: true         # on: hide jobs someone living in Cairo cannot legally take: the eligibility step reads the board's own
-                            # "who can apply" field (Daily Remote, Remotive, Jobicy ...), else asks Claude Haiku (claude-haiku-5-5, jobs
+                            # "who can apply" field (Daily Remote, Remotive, Jobicy ...; the extracts never store a job that field bars), else asks Claude Haiku (claude-haiku-5-5, jobs
                             # outside ai_places with a description); the tracker and the emails leave them out (Show hidden jobs shows them)
   auto_hide: true           # hide a job Claude scored 0-3 (needs grade on; a tracker toggle shows them); a restriction hides a job by eligibility alone
   top5: true                # "Top 5 today" at the top of each email

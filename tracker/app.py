@@ -19,6 +19,8 @@ sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 from job_radar.config import AI_PLACES, BAYT_PLACES, FEATURES, HOME, hidden_reason  # noqa: E402
 from job_radar.db import connect  # noqa: E402
+from tracker.applications_tab import follow_ups  # noqa: E402
+from tracker.runlog_tab import dollars  # noqa: E402
 
 STATUSES = ["new", "saved", "applied", "interview", "offer", "rejected", "ignored"]
 OPEN = ["new", "saved", "applied", "interview", "offer"]
@@ -30,7 +32,7 @@ SORTS = {"Score": "score", "Title": "title", "Company": "company", "Where": "pla
          "Skills": "skill_matches", "Status": "status", "Role": "role_rank", "Target": "target_company", "CV covers": "cv_coverage",
          "Company size": "most_employees", "First seen": "first_seen", "Source": "source"}
 SORT_OPTIONS = [f"{name} {arrow}" for name in SORTS for arrow in ("↓", "↑")]
-DEFAULT_SORT = ["Score ↓", "Posted ↓"]  # graded jobs first, best first, then the newest
+DEFAULT_SORT = ["Role ↑", "Score ↓", "Posted ↓"]  # your roles in settings.yaml order (data engineering and AI first), best graded, then the newest
 # the sidebar's list filters: widget key -> column
 FILTERS = {"role": "role", "where": "place", "posted": "posted", "status": "status"}
 # the boards dropdowns: widget key -> (label, places); picking boards keeps only their jobs in those places
@@ -41,6 +43,7 @@ SIZES = {"1-10": 10, "1-20": 20, "1-50": 50, "1-100": 100, "1-200": 200}
 # chart colors (the dataviz skill's palette, dark-surface steps): one blue for a single series; blue and
 # orange for "on your CV" and "not on your CV yet"
 BLUE, ORANGE = "#3987e5", "#d95926"
+GRAY = "#6f7d99"  # everything that is not the point of the chart: DE and AI are blue, the rest gray
 
 
 def plural(n: int, word: str) -> str:
@@ -68,8 +71,6 @@ INK = "#0e1630" if LIGHT else "#eef2fa"  # chart text (.streamlit/config.toml's 
 SURFACE = "#ffffff" if LIGHT else "#0b1124"  # the page behind the charts (its backgroundColor), for the gaps between cells
 # one blue ramp: the freshest jobs brightest on a dark page (darkest on a light one), then orange for the ones
 # deleted tomorrow; the heatmap from faint to strong
-FRESH_COLORS = (["#86b6ef", "#5c9eea", "#3987e5", "#256abf", "#184f95"] if not LIGHT
-                else ["#0d366b", "#1c5cab", "#3987e5", "#5c9eea", "#86b6ef"]) + [ORANGE]
 HEAT = ["#eef4fc", "#1c5cab"] if LIGHT else ["#1a2738", "#86b6ef"]
 HEAT_INK = "#ffffff" if LIGHT else "#0d1b2a"  # the count on the strongest cells
 
@@ -96,8 +97,8 @@ jobs["most_employees"] = pd.to_numeric(jobs["company_size"].map(most_employees))
 OPTIONS = {"role": sorted(jobs["role"].unique()), "where": sorted(jobs["place"].unique()),
            "posted": list(FRESH.values()), "status": STATUSES,
            **{name: sorted(jobs.loc[jobs["place"].isin(places), "source"].unique()) for name, (_, places) in BOARDS.items()}}
-DEFAULTS = {"role": [], "where": [], "posted": [], "status": OPEN, "egypt_board": [], "gulf_board": [], "size": None, "skills": 0, "q": "",
-            "sort": DEFAULT_SORT, "hidden": False}
+DEFAULTS = {"role": [], "where": [], "posted": [], "status": [s for s in OPEN if s != "applied"], "egypt_board": [], "gulf_board": [], "size": None, "skills": 0, "q": "",
+            "sort": DEFAULT_SORT, "hidden": False, "hide_applied": True}
 # The filters live in the address, so a reload or a bookmark keeps them. Each one is set when missing, so a
 # session from before a filter existed (or one whose widget a failed run dropped) gets it too.
 url = st.query_params
@@ -108,7 +109,7 @@ for name, value in {
         "size": url.get("size") if url.get("size") in SIZES else None,
         "q": url.get("q", ""),
         "sort": [o for o in url.get_all("sort") if o in SORT_OPTIONS] or list(DEFAULT_SORT),
-        "hidden": False}.items():
+        "hidden": False, "hide_applied": True}.items():
     if name not in st.session_state:
         st.session_state[name] = value
 
@@ -123,6 +124,8 @@ def passing(skip: str = "") -> pd.Series:
     keep = jobs["skill_matches"] >= f.skills
     if not f.hidden:  # hidden_reason is empty for every job while no switch hides
         keep &= jobs["hidden_reason"].isna()
+    if f.hide_applied:
+        keep &= jobs["status"] != "applied"
     for name, column in FILTERS.items():
         if f[name] and name != skip:
             keep &= jobs[column].isin(f[name])
@@ -145,8 +148,8 @@ def option_counts(name: str) -> pd.Series:
 
 
 def counts_line(name: str) -> None:
-    # Counts sit under a filter, not in its option labels: a label that changes makes Streamlit treat the
-    # filter as a new widget and clear what you picked.
+    """The count of each option under its filter, the other filters as they are. Never in the option labels: a label
+    that changes makes Streamlit treat the filter as a new widget and clear what you picked."""
     n = option_counts(name)
     st.caption(" · ".join(f"{option} **{count}**" for option, count in n[n > 0].items()) or "no jobs")
 
@@ -164,11 +167,12 @@ with st.sidebar:
     counts_line("posted")
     statuses = st.multiselect("Status", STATUSES, key="status")
     counts_line("status")
-    sort = st.multiselect("Sort by", SORT_OPTIONS, key="sort",
-                          help="First pick first: ↓ is highest, newest or Z first, ↑ lowest, oldest or A first "
-                               "(Role ↑ is your order in settings.yaml). A column picked twice counts once.")
-    more = any(st.session_state[name] for name in BOARDS) or st.session_state.size or st.session_state.skills or st.session_state.hidden
+    st.toggle("Hide applied jobs", key="hide_applied", help="Keep the jobs you set to applied out of the Jobs table")
+    more = any(st.session_state[name] for name in BOARDS) or st.session_state.size or st.session_state.skills or st.session_state.hidden or st.session_state.sort != DEFAULT_SORT
     with st.expander("More filters", icon=":material/tune:", expanded=bool(more)):
+        sort = st.multiselect("Sort by", SORT_OPTIONS, key="sort",
+                              help="First pick first: ↓ is highest, newest or Z first, ↑ lowest, oldest or A first "
+                                   "(Role ↑ is your order in settings.yaml). A column picked twice counts once.")
         boards = {}
         for name, (label, board_places) in BOARDS.items():
             boards[name] = st.multiselect(label, OPTIONS[name], key=name,
@@ -177,8 +181,6 @@ with st.sidebar:
         size = st.segmented_control("Company size", list(SIZES), key="size",
                                     help="Employees. A range counts by its top: 11-50 is in 1-50. Jobs whose company "
                                          "size no site gives are hidden while one is picked.")
-        pool = jobs.loc[passing(skip="size"), "most_employees"]
-        st.caption(" · ".join(f"{option} **{int((pool <= cap).sum())}**" for option, cap in SIZES.items()))
         min_skills = st.slider("At least this many of your skills", 0, 10, key="skills")
         if HIDES:
             st.toggle("Show hidden jobs", key="hidden",
@@ -197,14 +199,17 @@ for choice in sort:
 if by:
     shown = shown.sort_values(by, ascending=ascending, na_position="last", kind="stable",
                               key=lambda c: c.str.lower() if pd.api.types.is_string_dtype(c) else c)
+shown = shown.iloc[(shown["company"] == "").to_numpy().argsort(kind="stable")]  # jobs with no company name go last, the order kept
 
 # the jobs waiting on you; applied, interviews and offers are counted once, from your mailbox, in the Applications tab
-counts = (jobs if st.session_state.hidden else jobs[jobs["hidden_reason"].isna()])["status"].value_counts()  # the hidden are not "new"
-with st.container(horizontal=True):  # side by side on a desktop, wrapping on a phone
-    st.metric("New jobs", int(counts.get("new", 0)), icon=":material/fiber_new:", border=True,
-              help="Jobs the radar found that you have not set a status for")
-    st.metric("Saved", int(counts.get("saved", 0)), icon=":material/bookmark:", border=True,
-              help="Jobs you saved, and the drafts Claude prepared (Ready tab)")
+counts = shown["status"].value_counts()  # the same jobs as Showing, so the four numbers add up
+fresh_now = int((shown["fresh_level"] <= 3).sum())
+with st.container(horizontal=True):  # four numbers: one row on a desktop, two by two on a phone
+    st.metric("Showing", len(shown), border=True, width=170, help=f"Jobs your filters keep, of {len(jobs)} the radar holds")
+    st.metric("Apply now", fresh_now, border=True, width=170, help="Within 48 hours of the posting: the ones to apply to first")
+    st.metric("New", int(counts.get("new", 0)), border=True, width=170, help="Of those, the ones you have not set a status for")
+    st.metric("Saved", int(counts.get("saved", 0)), border=True, width=170,
+              help="Of those, the ones you saved, including the drafts Claude prepared (Ready tab)")
 
 
 def bars(data: pd.DataFrame, column: str, title: str, order: list | None = None, top: int = 10) -> alt.LayerChart:
@@ -220,11 +225,15 @@ def bars(data: pd.DataFrame, column: str, title: str, order: list | None = None,
             .properties(title=title, height=28 * len(n)))
 
 
-# short labels with icons, so all nine fit a laptop's width; the ones used every day first
-jobs_tab, ready_tab, applications_tab, dashboard_tab, skills_tab, companies_tab, contacts_tab, cv_tab, runlog_tab = st.tabs(
+# the four used every day, then More: Skills, Companies, Contacts, CV and Last run behind one picker
+jobs_tab, ready_tab, applications_tab, dashboard_tab, more_tab = st.tabs(
     [":material/work: Jobs", ":material/task_alt: Ready", ":material/mail: Applications", ":material/monitoring: Dashboard",
-     ":material/school: Skills", ":material/apartment: Companies", ":material/contacts: Contacts", ":material/description: CV",
-     ":material/history: Last run"])
+     ":material/more_horiz: More"])
+PRIORITY_ROLES = 3  # roles 1-3 in settings.yaml (AI & Data Engineer, Data Engineer, AI Engineer) lead the lists
+ESSENTIALS = {"score", "title", "company", "place", "posted", "skill_matches", "status", "job_url"}
+MORE = ["Skills", "Companies", "Contacts", "CV", "Last run"]
+with more_tab:
+    section = st.segmented_control("More", MORE, default="Skills", label_visibility="collapsed")
 
 with ready_tab:
     from tracker.ready_tab import render as render_ready  # noqa: E402  (the drafts for your best-graded jobs)
@@ -235,34 +244,40 @@ with applications_tab:
     render(query)
 
 with jobs_tab:
-    st.caption(f"{plural(len(shown), 'job')} of {len(jobs)} match these filters"
-               + (f" · jobs {HIDDEN_JOBS} are hidden; switch on Show hidden jobs in the sidebar to see them" if HIDES else ""))
+    if HIDES and not st.session_state.hidden:
+        st.caption(f"{int(jobs['hidden_reason'].notna().sum())} more jobs are hidden: ones {HIDDEN_JOBS}. "
+                   "Turn on Show hidden jobs under More filters to see them.")
     if shown.empty:
         empty = [o for name in [*FILTERS, *BOARDS] for o in st.session_state[name] if option_counts(name)[o] == 0]
         st.info("No jobs match these filters"
                 + (f": {', '.join(empty)} {'has' if len(empty) == 1 else 'have'} no jobs with the other filters"
                    if empty else "")
+                + (" (Hide applied jobs is on in the sidebar)" if st.session_state.hide_applied and "applied" in st.session_state.status else "")
                 + ". Remove one, or press Reset filters in the sidebar.")
     else:
+        columns = st.segmented_control("Columns", ["Essentials", "All"], default="Essentials", label_visibility="collapsed",
+                                       help="Essentials: the columns you decide on. All: the scores, the reasons and the rest.")
+        table = shown.assign(score=shown["score"].map(lambda v: "n/a" if v != v else str(int(v))),
+                             company=[c or f"{s} (company hidden)" for c, s in zip(shown["company"], shown["source"])])
         edited = st.data_editor(
-            shown, key="jobs", hide_index=True,
+            table, key="jobs", hide_index=True, height=620,
             # what you decide on first, then the rest
-            column_order=[c for c in ["score", "title", "company", "place", "posted", "why", "cv_match", "skill_matches", "status",
-                                      "note", "job_url", "role", "target_company", "cv_coverage", "skills_matched", "company_size",
+            column_order=[c for c in ["score", "title", "company", "role", "place", "posted", "skill_matches", "why", "cv_match", "status",
+                                      "note", "job_url", "target_company", "cv_coverage", "skills_matched", "company_size",
                                       "posted_at", "first_seen", "source"]
                           # Claude's columns only with features.grade, the CV match only with features.embeddings
-                          if (FEATURES["grade"] or c not in ("score", "why")) and (FEATURES["embeddings"] or c != "cv_match")],
+                          if (FEATURES["grade"] or c not in ("score", "why")) and (FEATURES["embeddings"] or c != "cv_match")
+                          and (columns == "All" or c in ESSENTIALS)],
             disabled=[c for c in shown.columns if c not in ("status", "note")],
             column_config={
-                "score": st.column_config.NumberColumn("Score", format="%d", width="small",
-                                                       help="Claude's grade of the job against your CVs, 0-10"),
+                "score": st.column_config.TextColumn("Score", width="small", help="Claude's grade of the job against your CVs, 0-10; n/a when not graded"),
                 "title": st.column_config.TextColumn("Title", width=300),
-                "company": st.column_config.TextColumn("Company", width=150),
+                "company": st.column_config.TextColumn("Company", width=130),
                 "place": st.column_config.TextColumn("Where", width="small"),
-                "posted": st.column_config.TextColumn("Posted", help="Apply within 48 hours of the posting"),
+                "posted": st.column_config.TextColumn("Posted", width=110, help="Apply within 48 hours of the posting"),
                 "posted_at": st.column_config.DatetimeColumn("Posted at", format="D MMM, h:mma"),
                 "why": st.column_config.TextColumn("Why", width="medium", help="Why the job is hidden, else Claude's reason for its score"),
-                "skill_matches": st.column_config.NumberColumn("Skills", help="How many of your skills the job asks for"),
+                "skill_matches": st.column_config.NumberColumn("Skills", width="small", help="How many of your skills the job asks for"),
                 "cv_coverage": st.column_config.ProgressColumn("CV covers", min_value=0, max_value=100, format="%d%%",
                                                                help="How much of what the job asks for your best CV shows"),
                 "cv_match": st.column_config.ProgressColumn("CV match", min_value=0, max_value=100, format="%d%%",
@@ -272,8 +287,8 @@ with jobs_tab:
                     "Company size", help="Employees, when a job board gives it (Indeed, freehire)"),
                 "status": st.column_config.SelectboxColumn("Status", options=STATUSES, required=True),
                 "note": st.column_config.TextColumn("Note", width="medium"),
-                "role": "Role", "source": "Source",
-                "job_url": st.column_config.LinkColumn("Link", display_text="View job"),
+                "role": st.column_config.TextColumn("Role", width=130), "source": "Source",
+                "job_url": st.column_config.LinkColumn("Link", display_text="Open", width="small"),
                 "first_seen": "First seen",
                 "skills_matched": "Your skills it asks for",
             })
@@ -294,166 +309,262 @@ with jobs_tab:
             st.rerun()
 
 with dashboard_tab:
-    st.caption(f"The {plural(len(shown), 'job')} your sidebar filters keep.")
     if shown.empty:
         st.info("No jobs match these filters. Remove one, or press Reset filters in the sidebar.")
     else:
-        fresh = int((shown["fresh_level"] <= 3).sum())
-        coverage = shown["cv_coverage"].median()
-        with st.container(horizontal=True):  # side by side on a desktop, wrapping on a phone
-            st.metric("Jobs", len(shown), border=True)
-            st.metric("Within 48 hours", fresh, f"{fresh / len(shown):.0%} of them", delta_color="off", border=True,
-                      help="The ones to apply to first")
-            st.metric("At your companies", int(shown["target_company"].sum()), border=True)
-            st.metric("Remote", int((shown["place"] == "Remote").sum()), border=True, help="Open to anywhere, or to Egypt")
-            st.metric("Median CV coverage", "n/a" if pd.isna(coverage) else f"{coverage:.0f}%", border=True,
-                      help="Of the skills a job asks for, how many your best CV shows (jobs with a description)")
-        left, right = st.columns(2, gap="large")
-        # Claude's score of the jobs it grades (ai_places), with the ones not graded (no description, or not yet): the 8s and above are the ones to apply to
-        graded = shown[shown["place"].isin(AI_PLACES)]
-        if FEATURES["grade"] and not graded.empty:
-            labels = graded.assign(label=graded["score"].map(lambda v: "Not graded" if v != v else str(int(v))))
-            score_chart = bars(labels, "label", f"{' and '.join(sorted(AI_PLACES))} jobs by Claude's score",
-                               order=[str(i) for i in range(10, -1, -1)] + ["Not graded"])
-            left.altair_chart(score_chart, width="stretch", height=score_chart.height + 40)
-        # how fresh: a donut, freshest brightest (one blue, in order)
-        n = shown["posted"].value_counts().reindex(FRESH.values(), fill_value=0).rename_axis("posted").reset_index(name="jobs")
-        n["label"] = n["posted"] + " · " + n["jobs"].astype(str)
-        left.altair_chart(alt.Chart(n, title="How fresh: apply within 48 hours").mark_arc(
-            innerRadius=70, padAngle=0.02, cornerRadius=3).encode(
-            theta=alt.Theta("jobs:Q", stack=True),
-            color=alt.Color("label:N", title=None, sort=list(n["label"]), legend=alt.Legend(orient="right"),
-                            scale=alt.Scale(domain=list(n["label"]), range=FRESH_COLORS)),
-            order=alt.Order("order:Q"),
-            tooltip=[alt.Tooltip("posted:N", title="Posted"), alt.Tooltip("jobs:Q", title="Jobs")])
-            .transform_calculate(order="indexof(" + str(list(n["label"])) + ", datum.label)")
-            .properties(height=260), width="stretch")
-        # new jobs a day: a line over the days the radar ran
-        daily = shown.groupby("first_seen").size().reset_index(name="jobs")
-        daily["day"] = pd.to_datetime(daily["first_seen"])
-        line = alt.Chart(daily, title="New jobs a day").encode(
-            x=alt.X("day:T", title=None, axis=alt.Axis(format="%a %d %b", tickCount="day", grid=False)),
-            y=alt.Y("jobs:Q", title=None, axis=alt.Axis(gridOpacity=0.15, domain=False, ticks=False)),
-            tooltip=[alt.Tooltip("day:T", title="Day", format="%A %d %B"), alt.Tooltip("jobs:Q", title="Jobs")])
-        right.altair_chart((line.mark_area(color=BLUE, opacity=0.15) + line.mark_line(color=BLUE, strokeWidth=2)
-                            + line.mark_point(color=BLUE, filled=True, size=70)).properties(height=260), width="stretch")
-        # roles by place: a heatmap, the count in each cell
-        grid = shown.groupby(["role", "place"]).size().reset_index(name="jobs")
-        heat = alt.Chart(grid, title="Roles by place").encode(
-            x=alt.X("place:N", title=None, sort=alt.EncodingSortField("jobs", op="sum", order="descending"),
-                    axis=alt.Axis(labelAngle=-40, labelOverlap=False, ticks=False, domain=False)),
-            y=alt.Y("role:N", title=None, axis=alt.Axis(labelLimit=260, ticks=False, domain=False)),
-            tooltip=[alt.Tooltip("role:N", title="Role"), alt.Tooltip("place:N", title="Where"),
-                     alt.Tooltip("jobs:Q", title="Jobs")])
-        left.altair_chart((heat.mark_rect(cornerRadius=3, stroke=SURFACE, strokeWidth=2).encode(
-            color=alt.Color("jobs:Q", title="Jobs", scale=alt.Scale(range=HEAT), legend=None))
-            + heat.mark_text(fontSize=12).encode(
-                text="jobs:Q", color=alt.condition(alt.datum.jobs > grid["jobs"].max() / 2,
-                                                   alt.value(HEAT_INK), alt.value(INK))))
-            .properties(height=36 * grid["role"].nunique() + 40), width="stretch")
-        where = bars(shown, "place", "Where")
-        right.altair_chart(where, width="stretch", height=where.height + 40)
-        # the most active companies and the sources: tables, with a bar inside each row
-        for column, title, side in (("company", "Companies with the most jobs", left),
-                                    ("source", "Where the radar found them", right)):
-            top = shown[column][shown[column] != ""].value_counts().head(10).rename_axis(title).reset_index(name="Jobs")  # not the unnamed
-            side.dataframe(top, hide_index=True, width="stretch", column_config={"Jobs": st.column_config.ProgressColumn(
-                "Jobs", format="%d", min_value=0, max_value=int(top["Jobs"].max()) if len(top) else 1)})
+        # 1. what to do now: data engineering and AI jobs first (roles 1-3 in settings.yaml), the freshest and best graded on top
+        st.subheader("Apply next")
+        st.caption("Posted in the last 48 hours: data engineering and AI roles first, then the best graded.")
+        best = (shown[shown["fresh_level"] <= 3]
+                .assign(priority=lambda d: d["role_rank"] > PRIORITY_ROLES, unnamed=lambda d: d["company"] == "")
+                .sort_values(["priority", "unnamed", "score", "skill_matches"], ascending=[True, True, False, False],
+                             na_position="last").head(8))
+        if best.empty:
+            st.info("Nothing posted in the last 48 hours matches these filters.")
+        else:
+            st.dataframe(best[[c for c in ["score", "title", "company", "role", "place", "posted", "why", "job_url"]
+                               if FEATURES["grade"] or c not in ("score", "why")]], hide_index=True, column_config={
+                "score": st.column_config.ProgressColumn("Score", min_value=0, max_value=10, format="%d", width="small"),
+                "title": st.column_config.TextColumn("Title", width=320), "company": "Company", "role": "Role", "place": "Where",
+                "posted": "Posted", "why": st.column_config.TextColumn("Why", width="large"),
+                "job_url": st.column_config.LinkColumn("Link", display_text="Open", width="small")})
 
-with skills_tab:
-    pool = shown[shown["described"]]
-    demand = query("SELECT k.job_id, k.skill, s.track, cs.skill IS NOT NULL AS on_cv FROM core.job_skill k"
-                   " JOIN core.skill s USING (skill) LEFT JOIN (SELECT DISTINCT skill FROM core.cv_skill) cs USING (skill)")
-    track = st.segmented_control("Skills", ["All", "Data Engineering", "BI & Analytics", "Generative AI"], default="All", key="track")
-    asked = demand[demand["job_id"].isin(pool["job_id"])
-                   & ((demand["track"] == track) if track and track != "All" else True)]
-    if asked.empty:
-        st.info("No job with a description matches these filters yet: the skills come from the descriptions the "
-                "describe step reads.")
-    else:
-        top = (asked.groupby(["skill", "on_cv"]).size().reset_index(name="jobs")
-               .sort_values("jobs", ascending=False).head(15))
-        top["share"] = top["jobs"] / len(pool)
-        top["Your CV"] = top["on_cv"].map({True: "On your CV", False: "Not on your CV yet"})
-        gaps = top[~top["on_cv"]]
+        # 2. your applications: the stages from your mailbox, and what is due
+        st.subheader("Your applications")
+        stage = query("SELECT kind, count(DISTINCT lower(coalesce(company, title))) AS companies FROM core.application_email"
+                      " WHERE kind IN ('applied', 'viewed', 'interview', 'offer', 'hired') GROUP BY kind")
+        funnel = (stage.set_index("kind")["companies"].reindex(["applied", "viewed", "interview", "offer", "hired"], fill_value=0)
+                  .rename(lambda k: k.capitalize()).rename_axis("Stage").reset_index(name="Companies"))
+        with connect() as conn:
+            due = len(follow_ups(conn))
+        left, right = st.columns([2, 1], gap="large")
+        stages = alt.Chart(funnel).encode(
+            y=alt.Y("Stage:N", sort=list(funnel["Stage"]), title=None, axis=alt.Axis(ticks=False, domain=False)),
+            x=alt.X("Companies:Q", title=None, axis=None, scale=alt.Scale(domain=[0, max(funnel["Companies"].max(), 1) * 1.15])),
+            tooltip=[alt.Tooltip("Stage:N"), alt.Tooltip("Companies:Q")])
+        left.altair_chart((stages.mark_bar(color=BLUE, cornerRadiusEnd=4, height=22)
+                           + stages.mark_text(align="left", dx=4, color=INK).encode(text="Companies:Q"))
+                          .properties(title="Companies by stage, from your mailbox", height=36 * len(funnel)), width="stretch")
+        applied = int(funnel.loc[funnel["Stage"] == "Applied", "Companies"].iloc[0])
+        if applied:
+            left.caption(" · ".join(f"{r.Stage} {r.Companies / applied:.0%}" for r in funnel.itertuples() if r.Stage != "Applied")
+                         + " of the companies you applied to")
+        right.metric("Applied in the tracker", int((jobs["status"] == "applied").sum()), border=True,
+                     help="Jobs you set to applied, with or without a confirmation email")
+        right.metric("Follow-ups due today", due, border=True, help="Applied 7 or 14 days ago with no answer yet (Applications tab)")
+
+        # 3. the market, read for data engineering and AI first: blue is DE and AI, gray is everything else
+        st.subheader("The market")
+        prio = shown["role_rank"] <= PRIORITY_ROLES
+        de_ai = shown[prio]
+        today = pd.Timestamp.now(tz="Africa/Cairo").date()
+        per_day = de_ai.groupby("first_seen").size()
+        earlier = per_day[per_day.index < today]
+        new_today = int(per_day.get(today, 0))
+        coverage_now = de_ai["cv_coverage"].dropna()
         with st.container(horizontal=True):
-            st.metric("Jobs read", len(pool), border=True, help="Jobs with a description that your sidebar filters keep")
-            st.metric("Top skills on your CV", f"{int(top['on_cv'].sum())} of {len(top)}", border=True)
-            st.metric("Most asked skill you lack", gaps.iloc[0]["skill"] if len(gaps) else "None", border=True,
-                      delta=f"{gaps.iloc[0]['share']:.0%} of jobs ask for it" if len(gaps) else None, delta_color="off")
-        if len(gaps):
-            st.markdown("**Learn next:** " + " · ".join(f"{g.skill} ({g.share:.0%})" for g in gaps.head(3).itertuples()))
-        base = alt.Chart(top).encode(
-            y=alt.Y("skill:N", sort=list(top["skill"]), title=None, axis=alt.Axis(labelLimit=240, ticks=False, domain=False)),
-            x=alt.X("share:Q", title="Share of the jobs read that ask for it", axis=alt.Axis(format="%", grid=False),
-                    scale=alt.Scale(domain=[0, top["share"].max() * 1.15])),
-            tooltip=[alt.Tooltip("skill:N", title="Skill"), alt.Tooltip("jobs:Q", title="Jobs asking"),
-                     alt.Tooltip("share:Q", title="Share", format=".0%"), alt.Tooltip("Your CV:N")])
-        st.altair_chart(
-            (base.mark_bar(cornerRadiusEnd=4, height=18).encode(color=alt.Color(
-                "Your CV:N", title=None, legend=alt.Legend(orient="top"),
-                scale=alt.Scale(domain=["On your CV", "Not on your CV yet"], range=[BLUE, ORANGE])))
-            + base.mark_text(align="left", dx=4, color=INK).encode(text=alt.Text("share:Q", format=".0%")))
-            .properties(title="The skills these jobs ask for most", height=28 * len(top)),
-            width="stretch", height=28 * len(top) + 110)  # Streamlit fits a chart to its element: give it the room
-        st.caption("Each bar: of the jobs read, the share whose title or description names the skill. Blue skills "
-                   "are on your CV, orange ones are not yet.")
+            st.metric("DE and AI jobs", len(de_ai), border=True, width=170,
+                      delta=f"{len(de_ai) / len(shown):.0%} of {len(shown)}", delta_color="off",
+                      help="Jobs in your first three roles in settings.yaml, of the jobs your filters keep")
+            st.metric("New today", new_today, border=True, width=170,
+                      delta=f"{new_today - earlier.mean():+.0f} vs a usual day" if len(earlier) else None,
+                      help="DE and AI jobs first found today, against the average of the earlier days the radar kept")
+            st.metric("Remote", f"{(de_ai['place'] == 'Remote').mean():.0%}" if len(de_ai) else "n/a", border=True, width=170,
+                      help="Share of the DE and AI jobs open to anywhere, or to Egypt")
+            st.metric("Median CV coverage", f"{coverage_now.median():.0f}%" if len(coverage_now) else "n/a", border=True, width=200,
+                      help="Of the skills a DE or AI job asks for, how many your best CV shows; the middle job (jobs with a description)")
+        left, right = st.columns(2, gap="large")
+        # the days the radar ran: DE and AI in blue on top of the rest in gray
+        days = (shown.assign(group=prio.map({True: "DE and AI", False: "Other roles"})).groupby(["first_seen", "group"]).size()
+                .reset_index(name="jobs"))
+        days["day"] = pd.to_datetime(days["first_seen"])
+        left.altair_chart(alt.Chart(days, title="New jobs a day, DE and AI in blue").mark_bar(cornerRadiusEnd=3, size=26).encode(
+            x=alt.X("day:T", title=None, axis=alt.Axis(format="%a %d", tickCount="day", grid=False)),
+            y=alt.Y("jobs:Q", title=None, axis=alt.Axis(gridOpacity=0.15, domain=False, ticks=False)),
+            color=alt.Color("group:N", title=None, sort=["DE and AI", "Other roles"], legend=alt.Legend(orient="top"),
+                            scale=alt.Scale(domain=["DE and AI", "Other roles"], range=[BLUE, GRAY])),
+            order=alt.Order("group:N", sort="descending"),
+            tooltip=[alt.Tooltip("day:T", title="Day", format="%A %d %B"), alt.Tooltip("group:N", title="Roles"),
+                     alt.Tooltip("jobs:Q", title="Jobs")]).properties(height=240), width="stretch")
+        # where the jobs are: the DE and AI ones first, the rest beside them
+        where = (shown.assign(group=prio.map({True: "DE and AI", False: "Other roles"})).groupby(["place", "group"]).size()
+                 .reset_index(name="jobs"))
+        order = list(where[where["group"] == "DE and AI"].sort_values("jobs", ascending=False)["place"])
+        order += [p for p in where["place"].unique() if p not in order]
+        right.altair_chart(alt.Chart(where, title="Where the jobs are, DE and AI in blue").mark_bar(cornerRadiusEnd=3, height=18).encode(
+            y=alt.Y("place:N", sort=order, title=None, axis=alt.Axis(labelLimit=200, ticks=False, domain=False)),
+            x=alt.X("jobs:Q", title=None, axis=alt.Axis(gridOpacity=0.15, domain=False, ticks=False)),
+            color=alt.Color("group:N", title=None, sort=["DE and AI", "Other roles"], legend=alt.Legend(orient="top"),
+                            scale=alt.Scale(domain=["DE and AI", "Other roles"], range=[BLUE, GRAY])),
+            order=alt.Order("group:N", sort="descending"),
+            tooltip=[alt.Tooltip("place:N", title="Where"), alt.Tooltip("group:N", title="Roles"),
+                     alt.Tooltip("jobs:Q", title="Jobs")]).properties(height=28 * len(order) + 40), width="stretch")
+        if len(de_ai):
+            # who is hiring for DE and AI: a star marks your target companies
+            hiring = (de_ai[de_ai["company"] != ""].groupby("company").agg(jobs=("job_id", "size"), target=("target_company", "max"))
+                      .sort_values("jobs", ascending=False).head(10).reset_index())
+            hiring["label"] = hiring["company"] + hiring["target"].map({True: " ★", False: ""})
+            hire = alt.Chart(hiring).encode(
+                y=alt.Y("label:N", sort=list(hiring["label"]), title=None, axis=alt.Axis(labelLimit=240, ticks=False, domain=False)),
+                x=alt.X("jobs:Q", title=None, axis=None, scale=alt.Scale(domain=[0, hiring["jobs"].max() * 1.15])),
+                tooltip=[alt.Tooltip("company:N", title="Company"), alt.Tooltip("jobs:Q", title="DE and AI jobs")])
+            left.altair_chart((hire.mark_bar(color=BLUE, cornerRadiusEnd=4, height=18)
+                               + hire.mark_text(align="left", dx=4, color=INK).encode(text="jobs:Q"))
+                              .properties(title="Who is hiring for DE and AI (★ your target companies)", height=28 * len(hiring)),
+                              width="stretch")
+            # the boards that deliver them: their share of DE and AI jobs and the middle score
+            boards_tbl = (shown[shown["source"] != ""].assign(de_ai=prio).groupby("source")
+                          .agg(jobs=("job_id", "size"), de_ai=("de_ai", "sum"), score=("score", "median")).reset_index())
+            boards_tbl["share"] = 100 * boards_tbl["de_ai"] / boards_tbl["jobs"]
+            boards_tbl = boards_tbl.sort_values(["de_ai", "jobs"], ascending=False).head(8)
+            right.markdown("**Which boards deliver DE and AI jobs**")
+            right.dataframe(boards_tbl, hide_index=True, width="stretch", column_config={
+                "source": "Board", "jobs": st.column_config.NumberColumn("Jobs", format="%d"),
+                "de_ai": st.column_config.NumberColumn("DE and AI", format="%d"),
+                "share": st.column_config.ProgressColumn("DE and AI share", min_value=0, max_value=100, format="%d%%"),
+                "score": st.column_config.NumberColumn("Median score", format="%.0f",
+                                                       help="Claude's middle score of the graded jobs; empty when none is graded")})
+        if len(coverage_now):
+            # how well your CV covers them: the spread, not only the middle
+            q1, q3 = coverage_now.quantile([0.25, 0.75])
+            spread = alt.Chart(pd.DataFrame({"coverage": coverage_now}), title=(
+                f"Your CV covers a median {coverage_now.median():.0f}% of what DE and AI jobs ask "
+                f"(middle half: {q1:.0f}-{q3:.0f}%)")).encode(
+                x=alt.X("coverage:Q", bin=alt.Bin(step=10, extent=[0, 100]), title="Share of the skills a job asks for that your CV shows",
+                        axis=alt.Axis(grid=False)),
+                y=alt.Y("count():Q", title=None, axis=alt.Axis(gridOpacity=0.15, domain=False, ticks=False)))
+            left.altair_chart((spread.mark_bar(color=BLUE, cornerRadiusEnd=3)
+                               + alt.Chart(pd.DataFrame({"m": [coverage_now.median()]})).mark_rule(
+                                   color=INK, strokeDash=[4, 3], strokeWidth=2).encode(x="m:Q"))
+                              .properties(height=220), width="stretch")
+        # the skills these DE and AI jobs ask for that your CV lacks: what to learn next
+        read = de_ai[de_ai["described"]]
+        demand = query("SELECT k.job_id, k.skill, cs.skill IS NOT NULL AS on_cv FROM core.job_skill k"
+                       " LEFT JOIN (SELECT DISTINCT skill FROM core.cv_skill) cs USING (skill)")
+        gap = (demand[demand["job_id"].isin(read["job_id"]) & ~demand["on_cv"]].groupby("skill").size()
+               .sort_values(ascending=False).head(6).rename("jobs").reset_index())
+        if len(read) and len(gap):
+            gap["share"] = gap["jobs"] / len(read)
+            skills = alt.Chart(gap).encode(
+                y=alt.Y("skill:N", sort=list(gap["skill"]), title=None, axis=alt.Axis(labelLimit=220, ticks=False, domain=False)),
+                x=alt.X("share:Q", title=None, axis=None, scale=alt.Scale(domain=[0, gap["share"].max() * 1.2])),
+                tooltip=[alt.Tooltip("skill:N", title="Skill"), alt.Tooltip("share:Q", title="Of the DE and AI jobs read", format=".0%")])
+            right.altair_chart((skills.mark_bar(color=ORANGE, cornerRadiusEnd=4, height=18)
+                                + skills.mark_text(align="left", dx=4, color=INK).encode(text=alt.Text("share:Q", format=".0%")))
+                               .properties(title=f"Learn next: asked by DE and AI jobs, not on your CV ({len(read)} read)",
+                                           height=28 * len(gap)), width="stretch")
 
-with companies_tab:
-    st.caption("Your companies, from settings.yaml (companies): add, change or remove them there and the next run "
-               "updates this list. A starred company's jobs are starred in the email and the tracker. With a careers "
-               "page, the next run detects its platform (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, "
-               "RSS, or any other page, read with Playwright) and reads its jobs every run. Sites that turn scripts "
-               "away are shown as such and skipped until you open them once with scripts/open_blocked.py.")
-    companies = query("SELECT company, starred, careers_url, platform, note, checked_at FROM core.company"
-                      " ORDER BY starred DESC, company")
-    st.dataframe(companies, hide_index=True, column_config={
-        "company": "Company", "starred": st.column_config.CheckboxColumn("Starred"),
-        "careers_url": st.column_config.LinkColumn("Careers page"), "platform": "Read as",
-        "note": "Why not read", "checked_at": st.column_config.DatetimeColumn("Checked", format="D MMM, HH:mm")})
+        # 4. the pipeline: did the last run work, and what it cost
+        st.subheader("The pipeline")
+        runs = query("SELECT DISTINCT ON (step) step, status, started_at FROM core.step_run ORDER BY step, started_at DESC")
+        if runs.empty:
+            st.caption("No run logged yet: the next run fills this.")
+        else:
+            month = query("SELECT sum(cost_usd) AS cost_usd FROM core.step_run"
+                          " WHERE started_at >= date_trunc('month', now() AT TIME ZONE 'Africa/Cairo')")
+            ran = runs["started_at"].max().tz_convert("Africa/Cairo")
+            with st.container(horizontal=True):
+                st.metric("Last run", ran.strftime("%a %d %b, %I:%M%p").replace(" 0", " "), border=True, width=210)
+                st.metric("Steps ok", f"{int((runs['status'] == 'ok').sum())} of {len(runs)}", border=True, width=170,
+                          help="The latest run of each step. Warnings and failures are on the Last run page under More.")
+                st.metric("Warnings and failures", int(runs["status"].isin(["warn", "failed"]).sum()), border=True, width=210)
+                st.metric("Claude this month", dollars(month["cost_usd"].iloc[0]), border=True, width=190)
 
-with contacts_tab:
-    from tracker.contacts_tab import render as render_contacts  # noqa: E402  (data/contacts.csv, gitignored)
-    render_contacts()
+with more_tab:
+    if section == "Skills":
+        pool = shown[shown["described"]]
+        demand = query("SELECT k.job_id, k.skill, s.track, cs.skill IS NOT NULL AS on_cv FROM core.job_skill k"
+                       " JOIN core.skill s USING (skill) LEFT JOIN (SELECT DISTINCT skill FROM core.cv_skill) cs USING (skill)")
+        track = st.segmented_control("Skills", ["All", "Data Engineering", "BI & Analytics", "Generative AI"], default="All", key="track")
+        asked = demand[demand["job_id"].isin(pool["job_id"])
+                       & ((demand["track"] == track) if track and track != "All" else True)]
+        if asked.empty:
+            st.info("No job with a description matches these filters yet: the skills come from the descriptions the "
+                    "describe step reads.")
+        else:
+            top = (asked.groupby(["skill", "on_cv"]).size().reset_index(name="jobs")
+                   .sort_values("jobs", ascending=False).head(15))
+            top["share"] = top["jobs"] / len(pool)
+            top["Your CV"] = top["on_cv"].map({True: "On your CV", False: "Not on your CV yet"})
+            gaps = top[~top["on_cv"]]
+            with st.container(horizontal=True):
+                st.metric("Jobs read", len(pool), border=True, help="Jobs with a description that your sidebar filters keep")
+                st.metric("Top skills on your CV", f"{int(top['on_cv'].sum())} of {len(top)}", border=True)
+                st.metric("Most asked skill you lack", gaps.iloc[0]["skill"] if len(gaps) else "None", border=True,
+                          delta=f"{gaps.iloc[0]['share']:.0%} of jobs ask for it" if len(gaps) else None, delta_color="off")
+            if len(gaps):
+                st.markdown("**Learn next:** " + " · ".join(f"{g.skill} ({g.share:.0%})" for g in gaps.head(3).itertuples()))
+            base = alt.Chart(top).encode(
+                y=alt.Y("skill:N", sort=list(top["skill"]), title=None, axis=alt.Axis(labelLimit=240, ticks=False, domain=False)),
+                x=alt.X("share:Q", title="Share of the jobs read that ask for it", axis=alt.Axis(format="%", grid=False),
+                        scale=alt.Scale(domain=[0, top["share"].max() * 1.15])),
+                tooltip=[alt.Tooltip("skill:N", title="Skill"), alt.Tooltip("jobs:Q", title="Jobs asking"),
+                         alt.Tooltip("share:Q", title="Share", format=".0%"), alt.Tooltip("Your CV:N")])
+            st.altair_chart(
+                (base.mark_bar(cornerRadiusEnd=4, height=18).encode(color=alt.Color(
+                    "Your CV:N", title=None, legend=alt.Legend(orient="top"),
+                    scale=alt.Scale(domain=["On your CV", "Not on your CV yet"], range=[BLUE, ORANGE])))
+                + base.mark_text(align="left", dx=4, color=INK).encode(text=alt.Text("share:Q", format=".0%")))
+                .properties(title="The skills these jobs ask for most", height=28 * len(top)),
+                width="stretch", height=28 * len(top) + 110)  # Streamlit fits a chart to its element: give it the room
+            st.caption("Each bar: of the jobs read, the share whose title or description names the skill. Blue skills "
+                       "are on your CV, orange ones are not yet.")
 
-with cv_tab:
-    st.caption("Upload your CV as a PDF. The next run shows, for every job, how much of what it asks for "
-               "your CV covers, and hands your newest CV to the career-ops export. It stays in your warehouse.")
-    with st.form("add_cv", clear_on_submit=True):
-        label = st.text_input("Label", value="Data Engineer & BI Developer")
-        pdf = st.file_uploader("CV (PDF)", type=["pdf"])
-        if st.form_submit_button("Upload", type="primary"):
-            if not pdf or not label.strip():
-                st.error("Choose a PDF and give it a label, then upload.")
-            else:
-                with st.spinner("Reading your CV…"):
-                    text = "\n".join(page.extract_text() or "" for page in PdfReader(pdf).pages)
-                    text = " ".join(text.split())  # some PDFs come out one word per line: "power\nbi" never matches
-                if not text.strip():
-                    st.error("No text found in this PDF (a scanned image?): export it from Word or Google Docs as PDF.")
+    if section == "Companies":
+        st.caption("Your companies, from settings.yaml (companies): add, change or remove them there and the next run "
+                   "updates this list. A starred company's jobs are starred in the email and the tracker. With a careers "
+                   "page, the next run detects its platform (Workable, Greenhouse, Lever, Ashby, Phenom, SuccessFactors, "
+                   "RSS, or any other page, read with Playwright) and reads its jobs every run. Sites that turn scripts "
+                   "away are shown as such and skipped until you open them once with scripts/open_blocked.py.")
+        companies = query("SELECT company, starred, careers_url, platform, note, checked_at FROM core.company"
+                          " ORDER BY starred DESC, company")
+        st.dataframe(companies, hide_index=True, column_config={
+            "company": "Company", "starred": st.column_config.CheckboxColumn("Starred"),
+            "careers_url": st.column_config.LinkColumn("Careers page"), "platform": "Read as",
+            "note": "Why not read", "checked_at": st.column_config.DatetimeColumn("Checked", format="D MMM, HH:mm")})
+
+    if section == "Contacts":
+        from tracker.contacts_tab import render as render_contacts  # noqa: E402  (data/contacts.csv, gitignored)
+        render_contacts()
+
+    if section == "CV":
+        st.caption("Upload your CV as a PDF. The next run shows, for every job, how much of what it asks for "
+                   "your CV covers, and hands your newest CV to the career-ops export. It stays in your warehouse.")
+        with st.form("add_cv", clear_on_submit=True):
+            label = st.text_input("Label", value="Data Engineer & BI Developer")
+            pdf = st.file_uploader("CV (PDF)", type=["pdf"])
+            if st.form_submit_button("Upload", type="primary"):
+                if not pdf or not label.strip():
+                    st.error("Choose a PDF and give it a label, then upload.")
                 else:
-                    with connect() as conn:
-                        conn.execute("INSERT INTO core.cv (label, filename, text) VALUES (%s, %s, %s) ON CONFLICT (label)"
-                                     " DO UPDATE SET filename = EXCLUDED.filename, text = EXCLUDED.text, uploaded_at = now()",
-                                     (label.strip(), pdf.name, text))
-                    query.clear()
-                    st.rerun()
-    cvs = query("SELECT c.label, c.filename, length(c.text) AS characters, c.uploaded_at,"
-                " string_agg(cs.skill, ', ' ORDER BY cs.skill) AS skills FROM core.cv c"
-                " LEFT JOIN core.cv_skill cs USING (label) GROUP BY c.label ORDER BY c.uploaded_at DESC")
-    st.dataframe(cvs, hide_index=True, column_order=["label", "uploaded_at", "skills", "filename", "characters"], column_config={
-        "label": "CV", "filename": "File", "characters": "Characters",
-        "uploaded_at": st.column_config.DatetimeColumn("Uploaded", format="D MMM, HH:mm"),
-        "skills": st.column_config.TextColumn("Skills found on it", help="Matched by the next run (match_skills)")})
-    drop = st.multiselect("CVs to remove", cvs["label"])
-    with st.popover("Remove CVs", disabled=not drop):
-        st.write(f"Remove {plural(len(drop), 'CV')} for good? This cannot be undone.")
-        if st.button("Remove for good", type="primary"):
-            with connect() as conn:
-                conn.execute("DELETE FROM core.cv WHERE label = ANY(%s)", (drop,))
-            query.clear()
-            st.rerun()
+                    with st.spinner("Reading your CV…"):
+                        text = "\n".join(page.extract_text() or "" for page in PdfReader(pdf).pages)
+                        text = " ".join(text.split())  # some PDFs come out one word per line: "power\nbi" never matches
+                    if not text.strip():
+                        st.error("No text found in this PDF (a scanned image?): export it from Word or Google Docs as PDF.")
+                    else:
+                        with connect() as conn:
+                            conn.execute("INSERT INTO core.cv (label, filename, text) VALUES (%s, %s, %s) ON CONFLICT (label)"
+                                         " DO UPDATE SET filename = EXCLUDED.filename, text = EXCLUDED.text, uploaded_at = now()",
+                                         (label.strip(), pdf.name, text))
+                        query.clear()
+                        st.rerun()
+        cvs = query("SELECT c.label, c.filename, length(c.text) AS characters, c.uploaded_at,"
+                    " string_agg(cs.skill, ', ' ORDER BY cs.skill) AS skills FROM core.cv c"
+                    " LEFT JOIN core.cv_skill cs USING (label) GROUP BY c.label ORDER BY c.uploaded_at DESC")
+        st.dataframe(cvs, hide_index=True, column_order=["label", "uploaded_at", "skills", "filename", "characters"], column_config={
+            "label": "CV", "filename": "File", "characters": "Characters",
+            "uploaded_at": st.column_config.DatetimeColumn("Uploaded", format="D MMM, HH:mm"),
+            "skills": st.column_config.TextColumn("Skills found on it", help="Matched by the next run (match_skills)")})
+        drop = st.multiselect("CVs to remove", cvs["label"])
+        with st.popover("Remove CVs", disabled=not drop):
+            st.write(f"Remove {plural(len(drop), 'CV')} for good? This cannot be undone.")
+            if st.button("Remove for good", type="primary"):
+                with connect() as conn:
+                    conn.execute("DELETE FROM core.cv WHERE label = ANY(%s)", (drop,))
+                query.clear()
+                st.rerun()
 
-with runlog_tab:
-    from tracker.runlog_tab import render as render_runlog  # noqa: E402  (core.step_run, written by runlog.py)
-    render_runlog(query)
+    if section == "Last run":
+        from tracker.runlog_tab import render as render_runlog  # noqa: E402  (core.step_run, written by runlog.py)
+        render_runlog(query)

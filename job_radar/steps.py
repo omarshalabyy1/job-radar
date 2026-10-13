@@ -34,7 +34,7 @@ from .applications import cairo_today, due_now, track_applications  # noqa: F401
 from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT, ROLE_LABEL, ROOT,
                      SETTINGS, hidden_reason, in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
-from .eligibility import eligibility  # noqa: F401  (python -m job_radar eligibility)
+from .eligibility import eligibility, not_for_egypt  # noqa: F401  (python -m job_radar eligibility)
 from .embed import embed  # noqa: F401  (python -m job_radar embed)
 from .grade import grade_claude  # noqa: F401  (python -m job_radar grade_claude)
 from .tailor import tailor  # noqa: F401  (python -m job_radar tailor)
@@ -66,8 +66,17 @@ def schema(conn) -> None:
 
 def load(conn, name: str, rows: list[dict]) -> None:
     """Add one source's new postings to raw.job_posting: a posting already there (same source and
-    link) is skipped, so re-running a step adds nothing twice. NUL characters, which Postgres
-    refuses, are dropped."""
+    link) is skipped, so re-running a step adds nothing twice. With features.eligibility, a posting someone living
+    in Egypt cannot take (eligibility.not_for_egypt) is never stored. NUL characters, which Postgres refuses, are dropped."""
+    barred = 0
+    if FEATURES["eligibility"]:
+        kept = [r for r in rows if not not_for_egypt(
+            r["source"], r["location"] or "",
+            r["searched_for"] or place_of(r["location"] or "") or place_of(r["title"] or "") or "Unknown location", r["payload"])]
+        barred, rows_in = len(rows) - len(kept), len(rows)
+        rows = kept
+    else:
+        rows_in = len(rows)
     clean = [{**{k: v.replace("\x00", "") if isinstance(v, str) else v for k, v in r.items()},
               "payload": Jsonb(json.loads(json.dumps(r["payload"], default=str).replace("\\u0000", "")))}
              for r in rows]
@@ -82,7 +91,7 @@ def load(conn, name: str, rows: list[dict]) -> None:
             " ON CONFLICT (source, job_url) DO NOTHING", clean)
     conn.commit()
     new = conn.execute(count, (names,)).fetchone()[0] - before
-    print(f"{name}: {len(rows)} postings, {new} new")
+    print(f"{name}: {rows_in} postings, {new} new" + (f", {barred} not for Egypt dropped" if barred else ""))
 
 
 def online() -> bool:
@@ -258,8 +267,9 @@ def job_key(title: str, company: str, job_url: str) -> str:
 def transform(conn) -> None:
     """raw -> core.job: the window's postings with a role, not above senior, in a place in scope and
     in reach (remote, or onsite/hybrid in Cairo or Giza), one row per job (job_key: the same job on
-    several boards, or reposted, is one job). A job someone living in Egypt cannot take is stored like
-    any other: the eligibility step sets its restriction and the email and the tracker hide it (config.hidden_reason). A job of the
+    several boards, or reposted, is one job). A posting someone in Egypt cannot take never reaches raw.job_posting
+    (load drops it); one only its description bars is stored, and the eligibility step sets its restriction and the
+    email and the tracker hide it (config.hidden_reason). A job of the
     window not emailed yet that no longer passes the rules (they changed) is removed, and so is a job first seen over
     KEEP_DAYS ago (with the raw postings of then) unless you noted or applied to it. With no posting in the window at
     all it fails before deleting anything (every extract failed, or the raw table was emptied). Re-running it
@@ -360,16 +370,32 @@ def transform(conn) -> None:
           + ", ".join(f"{skipped[reason]} {reason}" for reason in ("no role", "too senior", "not in reach")))
 
 
+# a job page that says the job is gone: Greenhouse sends a closed job to its board with ?error=true; others say it in words
+CLOSED_PAGE = re.compile(r"no longer (open|available|accepting)|(job|position|role|vacancy|posting) (has (expired|been filled)|is closed)"
+                         r"|this job (has expired|is not available)|we can.t find this page|page (can.t|cannot) be found", re.I)
+
+
+def closed_reason(url: str, text: str) -> str | None:
+    """Why a job page shows the job is closed (the address it ended at, or its own words), else None. Only the
+    top of the page is read: a job board's footer or menu can mention expired jobs on any page."""
+    if "greenhouse.io" in url and "error=true" in url:
+        return "no longer open"
+    found = CLOSED_PAGE.search(re.sub(r"<[^>]+>", " ", text[:60000]))
+    return found.group(0).lower() if found else None
+
+
 def describe(conn) -> None:
     """Read the page of each new job that came without a description, for its schema.org
     JobPosting (Greenhouse, Lever, Workday, Workable ...); never a NO_FETCH page. Sites side by
     side, each site's pages 1 second apart; a site that answers 429 is left alone for as long as it
-    asks (sources.fetch), and every page left when the step's 60 seconds are up waits for the next run."""
+    asks (sources.fetch), and every page left when the step's 60 seconds are up waits for the next run. A page that
+    says the job is closed (closed_reason), or is gone (404, 410), hides the job like a restriction does."""
     todo = conn.execute(
         "SELECT job_id, job_url FROM core.job WHERE description IS NULL AND described_at IS NULL"
         " AND job_url LIKE 'http%%' AND job_url !~ %s AND first_seen >= current_date - %s"
         " ORDER BY role_rank, job_id LIMIT 300", (NO_FETCH, DAYS)).fetchall()
     by_site: dict[str, list] = defaultdict(list)
+    closed: list[tuple] = []  # (why, job_id)
     for job_id, url in todo:
         by_site[urlsplit(url).netloc].append((job_id, url))
 
@@ -384,8 +410,13 @@ def describe(conn) -> None:
                                   timeout=max(5, min(30, sources.time_left(DESCRIBE_SECONDS) - 5)))
             except sources.Held:  # the site asked us to wait, or refused: none of its pages this run
                 break
-            except sources.ERRORS:  # not read: tried again next run
-                continue
+            except sources.ERRORS as e:
+                if getattr(getattr(e, "response", None), "status_code", None) in (404, 410):
+                    closed.append(("page gone", job_id))
+                    read.append((None, job_id))  # looked at: not asked again
+                continue  # any other error: not read, tried again next run
+            if why := closed_reason(r.url, r.text):
+                closed.append((why, job_id))
             read.append((page_description(r.content), job_id))  # bytes: the page's own charset decides
         return read
 
@@ -393,11 +424,12 @@ def describe(conn) -> None:
         read = [x for site in pool.map(read_site, by_site.values()) for x in site]
     with conn.cursor() as cur:
         cur.executemany("UPDATE core.job SET description = %s, described_at = now() WHERE job_id = %s", read)
+        cur.executemany("UPDATE core.job SET restriction = 'no longer open: ' || %s WHERE job_id = %s AND restriction IS NULL", closed)
     conn.commit()
     found = sum(text is not None for text, _ in read)
     if len(todo) >= 10 and found * 10 < len(todo):  # a site that hides its text wastes the step every run
         print(f"WARNING describe: only {found} of {len(todo)} pages gave a description - a site may hide it (config.NO_FETCH)")
-    print(f"describe: {found} of {len(todo)} descriptions found")
+    print(f"describe: {found} of {len(todo)} descriptions found" + (f", {len(closed)} jobs closed (hidden)" if closed else ""))
 
 
 def match_skills(conn) -> None:

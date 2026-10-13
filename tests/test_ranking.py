@@ -14,7 +14,7 @@ from job_radar import config, digest, eligibility, runlog, steps
 @pytest.mark.parametrize("where", [
     "Worldwide", "Anywhere in the World", "Worldwide (remote)", "Remote: EMEA", "MENA", "Africa", "Middle East",
     "Egypt (Remote)", "Egypt, Nigeria, Pakistan (Remote)", "Global", "UTC+2", "GMT+3", "UTC-1 to UTC+4", "EET",
-    "Algeria, Angola, Egypt, Ghana"])
+    "Algeria, Angola, Egypt, Ghana", "Remote", "Hybrid"])
 def test_a_board_that_lets_someone_in_cairo_apply_passes(where):
     assert eligibility.board_restriction(where) is None
 
@@ -197,3 +197,87 @@ def test_transform_counts_the_postings_it_leaves_out_by_rule(monkeypatch, capsys
     out = capsys.readouterr().out
     assert "2 jobs in scope" in out and "postings left out: 1 no role, 1 too senior, 1 not in reach" in out and "restricted" not in out
     assert len(out.strip()) + 3 * 7 <= runlog.LINE_CHARS  # the run log keeps this line whole, even with four-digit counts (7 of them)
+
+
+def test_freehire_job_from_himalayas_with_no_region_is_not_taken_as_open():
+    assert eligibility.board_restriction(eligibility.who_can_apply("freehire", "Remote", {"source": "himalayas"}))
+    assert eligibility.who_can_apply("freehire", "Remote", {"source": "adzuna"}) is None
+
+
+@pytest.mark.parametrize("url, text, closed", [
+    ("https://job-boards.greenhouse.io/acme?error=true", "", True),
+    ("https://example.com/job/1", "<p>Sorry, this job is no longer available.</p>", True),
+    ("https://example.com/job/1", "<h1>We can't find this page</h1>", True),
+    ("https://himalayas.app/x", "<a>Job expired? Report it</a>", False),  # a board's own menu is not the job saying so
+    ("https://example.com/job/1", "<p>Senior Data Engineer. Apply now.</p>", False)])
+def test_closed_reason_reads_the_page_not_the_menu(url, text, closed):
+    assert (steps.closed_reason(url, text) is not None) == closed
+
+
+class Bronze:
+    """Just enough of a connection for steps.load: it keeps the rows the INSERT is given."""
+
+    def __init__(self):
+        self.stored = []
+
+    def execute(self, sql, params=None):
+        return self
+
+    def fetchone(self):
+        return (len(self.stored),)
+
+    def cursor(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def executemany(self, sql, rows):
+        self.stored += rows
+
+    def commit(self):
+        pass
+
+
+def test_load_never_stores_a_posting_someone_in_egypt_cannot_take(monkeypatch, capsys):
+    monkeypatch.setitem(config.FEATURES, "eligibility", True)
+
+    def row(source, location, searched_for, payload=None):
+        return {"source": source, "location": location, "searched_for": searched_for, "title": "Data Engineer", "company": "Acme",
+                "job_url": f"https://example.com/{source}/{location}", "date_posted": None, "description": "", "payload": payload or {}}
+
+    rows = [row("himalayas", "United States", "Remote"),          # the board says US only
+            row("himalayas", "Worldwide", "Remote"),              # open
+            row("greenhouse", "USA Remote", "Remote"),            # tied to the USA by its location
+            row("indeed", "Remote, US", "USA"),                   # the place searched
+            row("greenhouse", "Cairo, Egypt", "Egypt"),           # home
+            row("email", "United States", None)]                  # a LinkedIn alert: every job is kept
+    conn = Bronze()
+    steps.load(conn, "mixed", rows)
+    assert [r["job_url"].split("/")[3] for r in conn.stored] == ["himalayas", "greenhouse", "email"]
+    assert "6 postings" in capsys.readouterr().out
+
+
+
+@pytest.mark.parametrize("source, location, place, payload, barred", [
+    ("remotive", "United States", "Remote", {}, True),                                              # the board says US only
+    ("remotive", "Worldwide", "Remote", {}, False),
+    ("remotive", "Remote", "Remote", {}, False),                                                    # no region named
+    ("wellfound", "Remote: Cheyenne", "Remote", {"acceptedRemoteLocationNames": ["United States"]}, True),
+    ("wellfound", "Remote: Cheyenne", "Remote", {"acceptedRemoteLocationNames": ["Egypt", "United States"]}, False),
+    ("freehire", "United States (remote)", "Remote", {"countries": ["us"], "regions": ["north_america"]}, True),
+    ("freehire", "United States (remote)", "Remote", {"countries": ["ae"], "regions": ["mena"]}, True),  # UAE is not Egypt
+    ("freehire", "United States (remote)", "Remote", {"countries": ["eg"], "regions": ["mena"]}, False),  # its countries win
+    ("freehire", "Remote", "Remote", {"countries": [], "regions": ["mena"]}, False),
+    ("freehire", "Remote", "Remote", {"source": "himalayas"}, True),                                # Himalayas gives no region
+    ("greenhouse", "USA Remote", "Remote", {}, True),                                               # its location ties it to the USA
+    ("indeed", "Remote, US", "USA", {}, True),                                                      # the place searched
+    ("greenhouse", "Remote - EMEA", "Remote", {}, False),
+    ("greenhouse", "Cairo, Egypt", "Egypt", {}, False),
+    ("bayt", "Dubai, UAE", "UAE", {}, False),                                                       # the Gulf: the description decides
+    ("email", "United States", "USA", {}, False)])                                                  # a LinkedIn alert: always kept
+def test_not_for_egypt(source, location, place, payload, barred):
+    assert bool(eligibility.not_for_egypt(source, location, place, payload)) == barred

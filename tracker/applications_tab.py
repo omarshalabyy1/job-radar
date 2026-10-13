@@ -30,6 +30,11 @@ FROM core.application_email e WHERE kind <> 'other'
 GROUP BY coalesce(lower(company), lower(title))
 ORDER BY latest_date DESC"""
 
+# the jobs you set to applied, interview or offer in the tracker or with Claude (core.application), whatever the mailbox says
+SENT = """
+SELECT company, title, status, note, updated_at AS updated, job_url FROM mart.job_status
+WHERE status IN ('applied', 'interview', 'offer') ORDER BY updated_at DESC"""
+
 # how many companies (an email naming none: its title) sent each kind of news, matched by letters and digits alone
 # ("ACME LABS" is "Acme Labs"), and how many ghosted you; an email naming neither is not counted
 COMPANIES_BY_KIND = f"""
@@ -95,6 +100,12 @@ def render(query) -> None:
                "confirmations, views, interviews, rejections and offers. Counts are companies: an offer thread of 12 "
                f"emails is one offer. Hired: an offer signed or a welcome aboard. Ghosted: applied {GHOSTED_DAYS}+ days ago and "
                "no interview, rejection or offer since.")
+    st.subheader("Applied by you", icon=":material/outbox:")
+    st.caption("Every job you applied for (status applied, interview or offer), last updated first, even before a confirmation email arrives.")
+    st.dataframe(query(SENT), hide_index=True, column_config={
+        "company": "Company", "title": "Title", "status": "Status", "note": "How",
+        "updated": st.column_config.DatetimeColumn("Updated", format="D MMM YYYY", help="When you last changed the status or note"),
+        "job_url": st.column_config.LinkColumn("Job", display_text="Open")})
     mails = query(COMPANIES_BY_KIND).set_index("kind")["n"]
     if mails.drop("other", errors="ignore").empty:
         st.info("No application emails yet: the next track_applications run reads them from your mailbox.")

@@ -91,15 +91,15 @@ busy laptop is not swamped; a task may wait up to an hour for its turn (`task_qu
 `docker-compose.yml`), so the last extracts are never failed unrun. A whole collect takes about 15
 minutes, and both emails go right after `ranked`, which runs when grade_claude has ended, red or green. On Egypt's jobs only (`ai_places`), embed gives each job a
 local vector (CV match: closeness to your CV, $0 on the CPU), grade_claude has Claude score each one with a
-description 0-10 against your CV, and tailor drafts the 8+ ones. With `features.eligibility` on, a job someone living in Cairo cannot legally take is hidden, not deleted:
+description 0-10 against your CV, and tailor drafts the 8+ ones. With `features.eligibility` on, a job someone living in Cairo cannot legally take is never stored (every extract drops it before it reaches raw.job_posting) when its board's own "who can apply" field bars Egypt or its location ties it to the USA, Canada or Europe, else hidden, not deleted:
 the eligibility step (after match_skills) reads the board's own "who can apply" field where it has one (Daily Remote, Remotive, Jobicy, Remote.co, Himalayas, We Work Remotely, Relomote, Wellfound: a list without worldwide, EMEA, MENA, Africa, the Middle East, Egypt or Cairo's time zone bars it), else asks Claude Haiku once per described job outside ai_places (yes, no or unclear; only no hides; about $0.70 a month); it sets `core.job.restriction`, and the email and the tracker leave it out
 (`config.hidden_reason`; the tracker's Show hidden jobs brings it back). Claude's own restriction hides a job the same way, a score of 3 or
-lower hides it with `features.auto_hide`, and a status of yours shows it again. A job whose own posting has no text takes the text of the
+lower hides it with `features.auto_hide`, and a status of yours shows it again. The describe step also hides a job whose page says it is closed (404, 410, Greenhouse's ?error=true, or "no longer available"). A job whose own posting has no text takes the text of the
 same job from another posting of the last 5 days. A job first seen over 5 days ago
 is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key).
 Every posting is stored once (its source and link), every job once (`core.job`), every email
 sends a job once. Newsletters with no jobs are remembered in `core.email_seen` for 7 days, and every step
-leaves a row in `core.step_run` (the tracker's Last run tab). In Docker, `output/` is a bind mount of
+leaves a row in `core.step_run` (the tracker's Last run page (More tab)). In Docker, `output/` is a bind mount of
 `E:\job-radar\output` into the airflow and tracker containers. What Claude Code writes goes there too (`E:\job-radar\output\...`); the repo's own `output/` is unused for it.
 
 ```mermaid
@@ -230,7 +230,7 @@ flowchart TD
 | the email's look | `job_radar/digest.py` | the next email |
 | a table or a view | `sql/schema.sql` | applied at the start of every collect |
 | the tracker | `tracker/app.py` (a tab in `tracker/*_tab.py`) | refresh the page |
-| what a step did last, or what Claude cost | the tracker's Last run tab, or `core.step_run` | each step's latest run, 14 days of Claude dollars and failures, this month's total |
+| what a step did last, or what Claude cost | the tracker's Last run page (More tab), or `core.step_run` | each step's latest run, 14 days of Claude dollars and failures, this month's total |
 
 Before a change goes in: `.venv\Scripts\python -m pytest tests` (29 tests, no network, about 10 seconds): the rate limits,
 every reader against a saved sample of its site, and `companies.md` against `settings.yaml`.
