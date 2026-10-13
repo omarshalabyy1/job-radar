@@ -196,7 +196,72 @@ remote_words: [remote*, work from home, wfh, عن بعد*]
 # Your companies: a job at any of these is starred (⭐) and listed first
 your_companies: [vodafone*, vois, _vois, orange, pwc*, pricewaterhouse*, deloitte*, dhl, nestle*, nestlé*, adib,
                  abu dhabi islamic*, eg bank, egbank, egyptian gulf bank*, etisalat*, e&*, advansys*, nawy,
-                 alignerr*, labelbox*, crossover*, sumerge*, finaira*]
+                 alignerr*, labelbox*, crossover*, sumerge*, finaira*,
+                 # AI memory and context startups of 50 people or fewer (2026-10-13), like Admyrix
+                 admyrix, sentra*, cognee, letta, mem0, zep, uvi, gutt, corunner, memora,
+                 # Egypt startups without a careers page found (2026-10-13): 30
+                 "nanovate", "olimi ai", "kuadra", "werpx", "engomisr", "aion erp", "velents", "sinai.ai", "invia",
+                 "dxwand", "analyticabi", "roboost", "flapkap", "qme solutions", "talents arena",
+                 "teradix", "wuilt", "bluworks", "sehatech", "swypex", "munify", "flend", "mnzl", "elgameya",
+                 "sabika", "optomatica", "devisionx", "wittify", "darwinz ai",
+                 # Egypt startups of 1-50 people on LinkedIn without a careers page found: 58
+                 "cairomotive", "watan first digital", "botit", "manex systems", "techjump", "strategizeit egypt",
+                 "thinktech", "iono-tech", "quantum mea", "vlens", "limitless labs egypt",
+                 "geopro for information systems", "igentech", "kemet artificial intelligence", "the devhouse",
+                 "keyformance", "notchnco", "identity solutions", "momentum solutions co", "twentytoo.ai",
+                 "digitize flow", "pro businessware", "tayel ai labs", "machine learning archive", "hoopoe digital",
+                 "momentasoft", "bayanatz", "inflaixus", "sotechs", "botme", "qme", "tripz", "ensanai",
+                 "appy innovate", "kites software", "nami", "rawmart", "genesis creations s.a.e",
+                 "bexel inspection software", "fabrica dev", "data value solutions", "tabex", "dealtio",
+                 "utd software company", "bonbell", "benefits hero", "chain nest", "dawaa news mena", "startup gate",
+                 "sphinx soft", "olife", "z novation", "markroid", "bydotpy", "dryve", "asaasi middle east",
+                 "ewsaly", "qa-paas",
+                 # Egypt startups found in directories and YC (2026-10-13), no careers page found
+                 "dayra", "obelion.ai", "goai247", "omoto", "odlica", "business vision for data solutions", "disco app", "femto fp&a", "zat systems", "vionex digital solutions", "think for advanced technologies", "botter.ai", "botbat", "onebench", "finalyze", "mindlytx", "dots solutions", "ansmee", "trendster.io", "settle payments", "carofi", "healthflow", "bringy", "tegarti", "xpay", "edu cash", "welend", "peacepay", "masroofi",
+                 # Gulf startups of 1-50 people, AI and data (LinkedIn via Apify, YC, Wellfound, F6S; 2026-10-13): 50
+                 "level up", "steerai", "sarj", "solvefy", "gravityone", "reidin", "digital future middle east",
+                 "serri", "zoth", "kamarrr group", "seqoon", "ces", "magnitt", "makear", "aktham", "hloov",
+                 "jungle gaming", "taxlab.ai", "saasinator ai", "revosuite", "theoceann.ai", "agentix code",
+                 "lakeora", "analog", "hyde", "utopia studio", "atom technologies", "cercli", "engagesoft", "sirdab",
+                 "drahim", "levers", "erad", "iroute technology", "baraka", "mantys", "kaso", "finflx", "mailwarm",
+                 "eyego", "hyve ai labs", "amal invest", "aiflowos", "wady ai", "syntropialabs", "qatron ai",
+                 "siadi ai", "anaa.io", "zabonex", "algo ai",
+                 # Gulf startups of 1-50 people, products (fintech, SaaS, platforms): 17
+                 "infigonia group", "sideup", "manhom", "quicksync", "dubai healthcare jobs", "mining saudi arabia",
+                 "qtalent", "jawlah", "whr solution", "hospitality news middle east", "fintech news uae",
+                 "selfologi.com", "sustainability middle east news", "openreal", "pe forum",
+                 "fintech news saudi arabia", "kompass uae",
+                 # US startups of 11-50 people, AI and data: 93
+                 "mavenmagnet ai", "product.ai", "vast.ai", "core mobile ai", "datagrid ai", "nextdimension ai",
+                 "arcee ai", "firebird ai", "lucio ai", "jina ai", "fibr ai", "limy ai", "nostra ai", "kaya ai",
+                 "iris ai", "nexxa.ai", "galaxy.ai", "vals ai", "matrice ai", "modern.ai", "wyzard ai", "kasisto ai",
+                 "wokelo ai", "flowace.ai", "merlin ai by foyer", "peaku ai", "venture ai", "manifest ai", "salt ai",
+                 "codeant ai", "comma.ai", "insightfinder ai", "theysaid", "ai collaborator, inc", "purecode ai",
+                 "cimba.ai", "adsgency ai", "collinear ai", "ai overlords", "customgpt.ai", "omnibound ai",
+                 "besty ai", "ai one", "aigo.ai", "litellm ai gateway", "mile ai", "taiyo.ai", "tarteel ai",
+                 "bloom ai", "curative ai, inc", "oneorb.ai", "unsloth ai", "ai time journal", "sigmamind ai",
+                 "tune ai", "pokee ai", "guise ai", "pepsales ai", "astoria ai", "verax ai", "klamp ai", "qubrid ai",
+                 "mokkup.ai", "debales ai", "nofire ai", "xuman.ai", "digitals ai", "resonate ai", "aicelerate ai",
+                 "dodge ai", "air ai", "nomisma ai", "braging ai", "aircover.ai", "dante ai", "usage ai",
+                 "expertshub.ai", "vavetek ai", "eloquent ai", "auralis ai", "ai guru", "wodio.ai", "reasoncore ai",
+                 "clearspot.ai", "global turks ai lab", "palcode.ai", "samya.ai", "decktopus ai", "smarter with ai",
+                 "dhisana ai", "melissa ai", "guidelite ai", "jetty ai",
+                 # US startups of 11-50 people, products: 1
+                 "flex ai",
+                 # US startups with remote roles open to Egypt or EMEA (researched one by one, 2026-10-13)
+                 "mastra", "stackblitz", "revenuebase", "livekit", "datrics", "featherless ai", "spotter labs", "glass health",
+                 # Europe startups of 11-50 people, AI and data: 64
+                 "turintech ai", "genie ai", "british noble ai", "engine ai", "cron ai", "shen ai", "mostly ai",
+                 "dnl.ai", "dsg.ai", "mindset ai", "perciv ai", "virtual science ai", "recourse ai", "capsa ai",
+                 "summ ai", "orq.ai", "stallions solutions", "brighter ai", "valueworks.ai", "alp", "zeus®",
+                 "viso.ai", "bridge ai", "windsor.ai", "marvelx ai", "bluedot ai", "alana ai", "brainpool ai",
+                 "the ai colony", "runnr.ai", "peregrine.ai", "ainigma", "newsroom ai", "implement ai", "gentek.ai",
+                 "search ai", "ai chamber cee", "zeit ai", "kavida ai", "ai assistant", "alphalake ai",
+                 "tailorflow ai", "flypix.ai", "ai village", "axonjay.ai", "dtec ai network", "quantumics.ai",
+                 "revolte.ai", "lucida ai", "monkinet ai", "ai collega's", "flowbit ai", "913.ai",
+                 "ai precision agency", "ai.dopt", "circular ai hub",
+                 "besuperhuman- ai that can run your computer for you", "oxford generative ai summit",
+                 "resumaker.ai", "clarity", "getdot", "companion group", "imnoo", "tensorops"]
 
 # Your companies in Egypt (2026-10-05: only companies that hire in Egypt): each link is its jobs page
 # filtered to Egypt where the site has a filter, and only its jobs in Egypt are kept. This is the one
@@ -322,3 +387,45 @@ companies:
   - {name: "Vodafone", link: "https://jobs.vodafone.com/careers?location=Egypt"}
   - {name: "WE", link: "https://www.te.eg/web/guest/about-te/careers-and-training/jobs"}
   - {name: "Yodawy", link: "https://www.yodawy.com/"}
+  # Startups of 1-50 people hiring in Egypt (or with a Cairo team), from LinkedIn via Apify and startup directories,
+  # careers pages checked 2026-10-13
+  - {name: "34ML", link: "https://34ml.com/careers/"}
+  - {name: "ABS.AI", link: "https://absai.dev/en/careers"}
+  - {name: "AIM Technologies", link: "https://www.aimtechnologies.co/careers"}
+  - {name: "Brite", link: "https://gobrite.net/careers/"}
+  - {name: "Convertedin", link: "https://careers.convertedin.com/jobs"}
+  - {name: "Coral Technology", link: "https://www.thecoralplatform.com/careers"}
+  - {name: "div Systems", link: "https://teams.div-systems.com"}
+  - {name: "dKilo", link: "https://dkilo.com/careers"}
+  - {name: "Eksab Gaming", link: "https://yallaeksab.freshteam.com/jobs"}
+  - {name: "Fincart", link: "https://fincart.io/careers"}
+  - {name: "GetPayIn", link: "https://getpayin.com/careers/"}
+  - {name: "ilpApps", link: "https://www.ilpapps.com/careers/"}
+  - {name: "IMPARGO", link: "https://apply.workable.com/impargo/"}
+  - {name: "Intixel", link: "https://www.intixel.com/career/"}
+  - {name: "iVoiceUp", link: "https://ivoiceup.com/careers"}
+  - {name: "Kemitt", link: "https://www.kemitt.com/careers"}
+  - {name: "ko-br", link: "https://www.ko-br.com/careers"}
+  - {name: "mivors", link: "https://mivors.com/careers/"}
+  - {name: "Payrails", link: "https://jobs.ashbyhq.com/payrails"}
+  - {name: "Prinkipia", link: "https://prinkipia.de/careers/"}
+  - {name: "Rabbit Technology", link: "https://rabbittec.com/careers/"}
+  - {name: "Raspire", link: "https://raspire.com/careers"}
+  - {name: "Sonic Smart Solutions", link: "https://sonic-tec.com/career/"}
+  - {name: "Spider Bees", link: "https://spiderbees.com/ar/company/jobs"}
+  - {name: "Stunning.so", link: "https://stunning.so/ar/careers"}
+  - {name: "Suplyd", link: "https://www.suplyd.com/careers"}
+  - {name: "The Flex", link: "https://jobs.ashbyhq.com/the-flex"}
+  - {name: "TransformUs", link: "https://transformus.co/join-us/"}
+  - {name: "Vondera", link: "https://www.vondera.app/careers"}
+  - {name: "WideBot", link: "https://widebot.ai/company/careers"}
+  - {name: "Wind Integrated Solutions", link: "https://wind-is.com/careers/"}
+  - {name: "Zettasoft", link: "https://www.zettasoft.com/careers"}
+  - {name: "Emergence Software", link: "https://jobs.ashbyhq.com/emergence"}
+  - {name: "Specright", link: "https://jobs.ashbyhq.com/specright"}
+  - {name: "Digified", link: "https://apply.workable.com/digified/"}
+  - {name: "Prepit", link: "https://apply.workable.com/prepit/"}
+  - {name: "Flextock", link: "https://apply.workable.com/flextock/"}
+  - {name: "Tafweela", link: "https://apply.workable.com/tafweela/"}
+  - {name: "Sakneen", link: "https://www.sakneen.com/company/careers/"}
+  - {name: "MAKKN", link: "https://www.makkn.com/careers"}

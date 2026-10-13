@@ -1,6 +1,6 @@
 # Your companies
 
-The 119 companies whose own career sites job-radar reads every day: only companies that hire in
+The 159 companies whose own career sites job-radar reads every day: only companies that hire in
 Egypt, each through its jobs page filtered to Egypt where the site has a filter, and only their jobs
 in Egypt are kept. Jobs at these companies are starred in your email, from any source.
 
@@ -128,3 +128,43 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Vodafone | [jobs.vodafone.com](https://jobs.vodafone.com/careers?location=Egypt) | careers page (platform found on the first read) |
 | WE | [www.te.eg](https://www.te.eg/web/guest/about-te/careers-and-training/jobs) | careers page (platform found on the first read) |
 | Yodawy | [www.yodawy.com](https://www.yodawy.com/) | careers page (platform found on the first read) |
+| 34ML | [34ml.com](https://34ml.com/careers/) | careers page (platform found on the first read) |
+| ABS.AI | [absai.dev](https://absai.dev/en/careers) | careers page (platform found on the first read) |
+| AIM Technologies | [www.aimtechnologies.co](https://www.aimtechnologies.co/careers) | careers page (platform found on the first read) |
+| Brite | [gobrite.net](https://gobrite.net/careers/) | careers page (platform found on the first read) |
+| Convertedin | [careers.convertedin.com](https://careers.convertedin.com/jobs) | careers page (platform found on the first read) |
+| Coral Technology | [www.thecoralplatform.com](https://www.thecoralplatform.com/careers) | careers page (platform found on the first read) |
+| div Systems | [teams.div-systems.com](https://teams.div-systems.com) | careers page (platform found on the first read) |
+| dKilo | [dkilo.com](https://dkilo.com/careers) | careers page (platform found on the first read) |
+| Eksab Gaming | [yallaeksab.freshteam.com](https://yallaeksab.freshteam.com/jobs) | careers page (platform found on the first read) |
+| Fincart | [fincart.io](https://fincart.io/careers) | careers page (platform found on the first read) |
+| GetPayIn | [getpayin.com](https://getpayin.com/careers/) | careers page (platform found on the first read) |
+| ilpApps | [www.ilpapps.com](https://www.ilpapps.com/careers/) | careers page (platform found on the first read) |
+| IMPARGO | [apply.workable.com](https://apply.workable.com/impargo/) | Workable, public API |
+| Intixel | [www.intixel.com](https://www.intixel.com/career/) | careers page (platform found on the first read) |
+| iVoiceUp | [ivoiceup.com](https://ivoiceup.com/careers) | careers page (platform found on the first read) |
+| Kemitt | [www.kemitt.com](https://www.kemitt.com/careers) | careers page (platform found on the first read) |
+| ko-br | [www.ko-br.com](https://www.ko-br.com/careers) | careers page (platform found on the first read) |
+| mivors | [mivors.com](https://mivors.com/careers/) | careers page (platform found on the first read) |
+| Payrails | [jobs.ashbyhq.com](https://jobs.ashbyhq.com/payrails) | Ashby, public API |
+| Prinkipia | [prinkipia.de](https://prinkipia.de/careers/) | careers page (platform found on the first read) |
+| Rabbit Technology | [rabbittec.com](https://rabbittec.com/careers/) | careers page (platform found on the first read) |
+| Raspire | [raspire.com](https://raspire.com/careers) | careers page (platform found on the first read) |
+| Sonic Smart Solutions | [sonic-tec.com](https://sonic-tec.com/career/) | careers page (platform found on the first read) |
+| Spider Bees | [spiderbees.com](https://spiderbees.com/ar/company/jobs) | careers page (platform found on the first read) |
+| Stunning.so | [stunning.so](https://stunning.so/ar/careers) | careers page (platform found on the first read) |
+| Suplyd | [www.suplyd.com](https://www.suplyd.com/careers) | careers page (platform found on the first read) |
+| The Flex | [jobs.ashbyhq.com](https://jobs.ashbyhq.com/the-flex) | Ashby, public API |
+| TransformUs | [transformus.co](https://transformus.co/join-us/) | careers page (platform found on the first read) |
+| Vondera | [www.vondera.app](https://www.vondera.app/careers) | careers page (platform found on the first read) |
+| WideBot | [widebot.ai](https://widebot.ai/company/careers) | careers page (platform found on the first read) |
+| Wind Integrated Solutions | [wind-is.com](https://wind-is.com/careers/) | careers page (platform found on the first read) |
+| Zettasoft | [www.zettasoft.com](https://www.zettasoft.com/careers) | careers page (platform found on the first read) |
+| Emergence Software | [jobs.ashbyhq.com](https://jobs.ashbyhq.com/emergence) | Ashby, public API |
+| Specright | [jobs.ashbyhq.com](https://jobs.ashbyhq.com/specright) | Ashby, public API |
+| Digified | [apply.workable.com](https://apply.workable.com/digified/) | Workable, public API |
+| Prepit | [apply.workable.com](https://apply.workable.com/prepit/) | Workable, public API |
+| Flextock | [apply.workable.com](https://apply.workable.com/flextock/) | Workable, public API |
+| Tafweela | [apply.workable.com](https://apply.workable.com/tafweela/) | Workable, public API |
+| Sakneen | [www.sakneen.com](https://www.sakneen.com/company/careers/) | careers page (platform found on the first read) |
+| MAKKN | [www.makkn.com](https://www.makkn.com/careers) | careers page (platform found on the first read) |
