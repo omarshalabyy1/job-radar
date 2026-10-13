@@ -5,7 +5,7 @@ Egypt, each through its jobs page filtered to Egypt where the site has a filter,
 in Egypt are kept. Jobs at these companies are starred in your email, from any source.
 
 This page is written from `settings.yaml` (companies) by `scripts/companies_doc.py`; change a company
-there, then run the script. The tracker's Companies page (More tab) shows how each site was last read.
+there, then run the script. The tracker's Companies page shows how each site was last read.
 
 | Company | Egypt jobs page | Read as |
 |---|---|---|

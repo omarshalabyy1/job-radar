@@ -99,7 +99,7 @@ same job from another posting of the last 5 days. A job first seen over 5 days a
 is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key).
 Every posting is stored once (its source and link), every job once (`core.job`), every email
 sends a job once. Newsletters with no jobs are remembered in `core.email_seen` for 7 days, and every step
-leaves a row in `core.step_run` (the tracker's Last run page (More tab)). In Docker, `output/` is a bind mount of
+leaves a row in `core.step_run` (the tracker's Last run page). In Docker, `output/` is a bind mount of
 `E:\job-radar\output` into the airflow and tracker containers. What Claude Code writes goes there too (`E:\job-radar\output\...`); the repo's own `output/` is unused for it.
 
 ```mermaid
@@ -229,8 +229,8 @@ flowchart TD
 | how fast one site is asked | `GAP` in `job_radar/sources/base.py` | 1 second unless named there |
 | the email's look | `job_radar/digest.py` | the next email |
 | a table or a view | `sql/schema.sql` | applied at the start of every collect |
-| the tracker | `tracker/app.py` (a tab in `tracker/*_tab.py`) | refresh the page |
-| what a step did last, or what Claude cost | the tracker's Last run page (More tab), or `core.step_run` | each step's latest run, 14 days of Claude dollars and failures, this month's total |
+| the tracker | `tracker/app.py` (the pages in `tracker/app_pages/`, shared data and filters in `tracker/common.py`) | refresh the page |
+| what a step did last, or what Claude cost | the tracker's Last run page, or `core.step_run` | each step's latest run, 14 days of Claude dollars and failures, this month's total |
 
 Before a change goes in: `.venv\Scripts\python -m pytest tests` (29 tests, no network, about 10 seconds): the rate limits,
 every reader against a saved sample of its site, and `companies.md` against `settings.yaml`.

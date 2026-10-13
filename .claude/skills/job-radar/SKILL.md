@@ -11,7 +11,7 @@ gives each job a local vector (its closeness to his CV), grade_claude has Claude
 has a description 0-10 against his CV (`core.claude_grade`, shown as Score and Why in the tracker and the emails;
 about $3.70 a month at today's volume), and tailor writes cv.md, cover-letter.md and notes.md to
 output/applications/<day>/<company>-<title>/ for up to 5 jobs a run scoring 8+ in ai_places, and marks them saved
-('draft ready <day>'); the Ready tab shows them. About $0.05 a draft. Each step has a switch under
+('draft ready <day>'); the Ready to apply page shows them. About $0.05 a draft. Each step has a switch under
 `features` in settings.yaml.
 
 With features.eligibility on, a job someone living in Cairo cannot legally take is never stored (every extract drops it before it reaches raw.job_posting) when its board's own "who can apply" field bars Egypt or its location ties it to the USA, Canada or Europe, else hidden, never deleted:
@@ -20,7 +20,7 @@ out; switch on Show hidden jobs in the tracker to see it. Claude's own restricti
 a score of 3 or lower hides it with features.auto_hide (`config.hidden_reason`); a status you set shows it again. The describe step also hides a job whose page says it is closed (404, 410, Greenhouse's ?error=true, or "no longer available"). A grade made
 before his newest CV upload counts as ungraded and is overwritten on the next run. grade_claude turns its task red
 when it selected jobs and graded none (key, credit or network); the emails still go out, ungraded. Every step `python -m job_radar` runs leaves a row
-in core.step_run (status, summary, Claude tokens and exact dollars); the tracker's Last run page (More tab) shows it.
+in core.step_run (status, summary, Claude tokens and exact dollars); the tracker's Last run page shows it.
 
 Every hour the job_radar_applications DAG reads his mailboxes (every Gmail account in MAILBOXES, read-only, plus every email from
 APPLICATION_SENDERS in .env: people and domains who hire him directly, kept out of the public repo) for news on his applications
@@ -160,7 +160,7 @@ failing together is the network, not the code; the next run catches up (each loo
 ## 3. Review the matches - the part only Claude does
 
 His CV: `SELECT label, text FROM core.cv ORDER BY uploaded_at DESC LIMIT 1;`. If there is none,
-ask him to upload it in the tracker (More tab, CV page), or for the file's path - then read it (a PDF with
+ask him to upload it in the tracker (CV page), or for the file's path - then read it (a PDF with
 pypdf) and store it the way the tracker does:
 `INSERT INTO core.cv (label, filename, text) VALUES (...) ON CONFLICT (label) DO UPDATE SET
 filename = EXCLUDED.filename, text = EXCLUDED.text, uploaded_at = now();`

@@ -116,7 +116,7 @@ You should see `job-radar-warehouse-1`, `job-radar-airflow-db-1`, `job-radar-air
 
 ### Step 7 · Open your tracker and add your CV
 
-1. Open the tracker on port 8501. The **Jobs** tab lists everything the collect kept, with how fresh
+1. Open the tracker on port 8501. The **Jobs** page lists everything the collect kept, with how fresh
    each job is (apply within 48 hours of the posting); sort by several columns and filter in the
    sidebar, where each filter shows how many jobs each choice gives. **Dashboard** charts the jobs
    your filters keep, and **Skills in demand** shows the skills they ask for most, on your CV or not.
@@ -172,7 +172,7 @@ In Claude Code, type:
 | `/job-radar apply <job>` | a tailored CV, a cover letter and interview notes for that job, then help with the form |
 | `/job-radar emails` | sends both emails now |
 
-Every collect, Claude already scores Egypt's jobs and drafts the 8+ ones: tailor writes cv.md, cover-letter.md and notes.md to `output/applications/<day>/<company>-<title>/` for up to 5 jobs a run scoring 8+ in ai_places, and marks them saved ('draft ready <day>'); the Ready tab shows them. About $0.05 a draft. `/job-radar` is
+Every collect, Claude already scores Egypt's jobs and drafts the 8+ ones: tailor writes cv.md, cover-letter.md and notes.md to `output/applications/<day>/<company>-<title>/` for up to 5 jobs a run scoring 8+ in ai_places, and marks them saved ('draft ready <day>'); the Ready to apply page shows them. About $0.05 a draft. `/job-radar` is
 where you review and finish them. Claude grades only jobs that have a description; LinkedIn pages are never opened,
 so paste the description in `/job-radar` to get a grade.
 

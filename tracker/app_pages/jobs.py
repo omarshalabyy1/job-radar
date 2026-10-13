@@ -1,0 +1,73 @@
+"""Jobs: every job your filters keep, with your status and note for each."""
+
+import streamlit as st
+
+from job_radar.config import FEATURES
+from job_radar.db import connect
+from tracker.common import HIDDEN_JOBS, HIDES, STATUSES, filtered, load_jobs, nothing_matches, numbers, plural, query
+
+ESSENTIALS = {"score", "title", "company", "place", "posted", "skill_matches", "status", "job_url"}
+
+st.title("Jobs", icon=":material/work:")
+jobs = load_jobs()
+shown = filtered(jobs)
+numbers(jobs, shown)
+if HIDES and not st.session_state.hidden:
+    st.caption(f"{int(jobs['hidden_reason'].notna().sum())} more jobs are hidden: ones {HIDDEN_JOBS}. "
+               "Turn on Show hidden jobs under More filters to see them.")
+if shown.empty:
+    nothing_matches()
+    st.stop()
+
+columns = st.segmented_control("Columns", ["Essentials", "All"], default="Essentials", label_visibility="collapsed",
+                               help="Essentials: the columns you decide on. All: the scores, the reasons and the rest.")
+table = shown.assign(score=shown["score"].map(lambda v: "n/a" if v != v else str(int(v))),
+                     company=[c or f"{s} (company hidden)" for c, s in zip(shown["company"], shown["source"])])
+edited = st.data_editor(
+    table, key="jobs", hide_index=True, height=620,
+    # what you decide on first, then the rest
+    column_order=[c for c in ["score", "title", "company", "role", "place", "posted", "skill_matches", "why", "cv_match", "status",
+                              "note", "job_url", "target_company", "cv_coverage", "skills_matched", "company_size",
+                              "posted_at", "first_seen", "source"]
+                  # Claude's columns only with features.grade, the CV match only with features.embeddings
+                  if (FEATURES["grade"] or c not in ("score", "why")) and (FEATURES["embeddings"] or c != "cv_match")
+                  and (columns == "All" or c in ESSENTIALS)],
+    disabled=[c for c in shown.columns if c not in ("status", "note")],
+    column_config={
+        "score": st.column_config.TextColumn("Score", width="small", help="Claude's grade of the job against your CVs, 0-10; n/a when not graded"),
+        "title": st.column_config.TextColumn("Title", width=300),
+        "company": st.column_config.TextColumn("Company", width=130),
+        "place": st.column_config.TextColumn("Where", width="small"),
+        "posted": st.column_config.TextColumn("Posted", width=110, help="Apply within 48 hours of the posting"),
+        "posted_at": st.column_config.DatetimeColumn("Posted at", format="D MMM, h:mma"),
+        "why": st.column_config.TextColumn("Why", width="medium", help="Why the job is hidden, else Claude's reason for its score"),
+        "skill_matches": st.column_config.NumberColumn("Skills", width="small", help="How many of your skills the job asks for"),
+        "cv_coverage": st.column_config.ProgressColumn("CV covers", min_value=0, max_value=100, format="%d%%",
+                                                       help="How much of what the job asks for your best CV shows"),
+        "cv_match": st.column_config.ProgressColumn("CV match", min_value=0, max_value=100, format="%d%%",
+                                                    help="How close the job's text is to your nearest CV (embeddings)"),
+        "target_company": st.column_config.CheckboxColumn("Target"),
+        "company_size": st.column_config.TextColumn("Company size", help="Employees, when a job board gives it (Indeed, freehire)"),
+        "status": st.column_config.SelectboxColumn("Status", options=STATUSES, required=True),
+        "note": st.column_config.TextColumn("Note", width="medium"),
+        "role": st.column_config.TextColumn("Role", width=130), "source": "Source",
+        "job_url": st.column_config.LinkColumn("Link", display_text="Open", width="small"),
+        "first_seen": "First seen",
+        "skills_matched": "Your skills it asks for",
+    })
+changed = edited[(edited["status"] != shown["status"]) | (edited["note"].fillna("") != shown["note"].fillna(""))]
+if st.button(f"Save {plural(len(changed), 'change')}", type="primary", disabled=changed.empty, icon=":material/save:"):
+    with connect() as conn:
+        for job in changed.itertuples():
+            note = job.note.strip() if isinstance(job.note, str) and job.note.strip() else None
+            # A job back at "new" with no note needs no row; one with a note keeps it under "new".
+            if job.status == "new" and note is None:
+                conn.execute("DELETE FROM core.application WHERE job_id = %s", (job.job_id,))
+            else:
+                conn.execute(
+                    "INSERT INTO core.application (job_id, status, note) VALUES (%s, %s, %s)"
+                    " ON CONFLICT (job_id) DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note,"
+                    " updated_at = now()", (job.job_id, job.status, note))
+    query.clear()
+    st.toast(f"Saved {plural(len(changed), 'change')}", icon=":material/check_circle:")
+    st.rerun()
