@@ -26,7 +26,8 @@ description) for the Market page's trends. Each extract records postings and dro
 board suddenly dropping all (it kept some the last 7 days), or none where it used to drop half, is a WARNING;
 Remote.co drops all every day (its data jobs are US and Canada only), which is no warning. The Today page lists his next three deadlines (core.deadline, edited
 there) above the follow-ups. With the warehouse down every step exits 99 (skipped, not red). The job_radar_backup DAG
-dumps core and raw at 3am to output/backups/nightly-<day>.dump and keeps the newest 14.
+dumps core and raw at 3am to output/backups/nightly-<day>.dump and keeps the newest 14. LinkedIn's search (Apify) reads APIFY_TOKENS in .env, several
+accounts comma-separated, and moves to the next when one answers 402 or 403 (its usage limit); else APIFY_TOKEN.
 
 With features.eligibility on, a job someone living in Cairo cannot legally take is never stored (every extract drops it before it reaches raw.job_posting) when its board's own "who can apply" field bars Egypt or its location ties it to the USA, Canada or Europe, else hidden, never deleted:
 the eligibility step (after match_skills) reads the board's own "who can apply" field where it has one (Daily Remote, Remotive, Jobicy, Remote.co, Himalayas, We Work Remotely, Relomote, Wellfound: a list without worldwide, EMEA, MENA, Africa, the Middle East, Egypt or Cairo's time zone bars it), else asks Claude Haiku once per described job outside ai_places (yes, no or unclear; only no hides; about $0.70 a month). It sets core.job.restriction, and the tracker and the emails leave the job

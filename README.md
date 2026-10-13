@@ -270,6 +270,7 @@ docker compose up -d --build  # Airflow, the warehouse and the tracker
 | `APPLICATION_SENDERS` | optional: people and domains who hire you directly, whose every email is application news; `=Company` names the company: `acme-labs.example,jane@gmail.com=Acme Labs` |
 | `JOOBLE_API_KEY` | optional, a free key from [Jooble](https://jooble.org/api/about) |
 | `APIFY_TOKEN` | optional, your Apify API token (Apify Console > Settings > API & Integrations): adds LinkedIn's search, paid per result |
+| `APIFY_TOKENS` | optional, several Apify tokens, comma-separated, in the order to use them: an account at its usage limit (HTTP 402 or 403) hands the run to the next; takes over from `APIFY_TOKEN` |
 | `NTFY_TOPIC` | optional, a long random [ntfy.sh](https://ntfy.sh) topic to subscribe to in the ntfy app: a job graded 8+ in its first 12 hours is pushed to your phone |
 
 Then turn on LinkedIn and Wuzzuf job alerts for your roles, sent to those inboxes, upload your CV

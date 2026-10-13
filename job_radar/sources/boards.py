@@ -143,9 +143,11 @@ def linkedin() -> list[dict]:
     (logged out, so no account at risk; LinkedIn itself is never opened from this laptop): each of
     linkedin.words in each of linkedin.places, posted in the last day, remote outside Egypt, all in
     one Actor run a collect. Pay per result: linkedin.max_jobs caps a run, and a run that worked holds the
-    next for linkedin.every_hours, so a manual collect in between costs nothing. Skipped without APIFY_TOKEN."""
-    token = os.environ.get("APIFY_TOKEN")
-    if not token:
+    next for linkedin.every_hours, so a manual collect in between costs nothing. Skipped without APIFY_TOKEN.
+    APIFY_TOKENS in .env (comma-separated, your accounts in order) takes over from APIFY_TOKEN: an account whose
+    usage limit is reached (HTTP 402 or 403) hands the run to the next one."""
+    tokens = [t.strip() for t in (os.environ.get("APIFY_TOKENS") or os.environ.get("APIFY_TOKEN") or "").split(",") if t.strip()]
+    if not tokens:
         print("linkedin: no APIFY_TOKEN in .env, skipped")
         return []
     if left := waiting("api.apify.com"):
@@ -158,10 +160,14 @@ def linkedin() -> list[dict]:
          **({} if place in ONSITE_PLACES else {"f_WT": "2"})}) for place, location, keyword in searches]
     place_of_url = {url: place for url, (place, _, _) in zip(urls, searches)}
     # straight to Apify's API, not through fetch(): its retry would start a second paid run on a slow one
-    r = requests.post("https://api.apify.com/v2/acts/curious_coder~linkedin-jobs-scraper/run-sync-get-dataset-items",
-                      params={"maxItems": cfg["max_jobs"]}, headers={"Authorization": f"Bearer {token}"},
-                      timeout=280, json={"urls": urls, "scrapeCompany": False,
-                                         "limitPerSource": math.ceil(cfg["max_jobs"] / len(urls))})
+    for n, token in enumerate(tokens, 1):
+        r = requests.post("https://api.apify.com/v2/acts/curious_coder~linkedin-jobs-scraper/run-sync-get-dataset-items",
+                          params={"maxItems": cfg["max_jobs"]}, headers={"Authorization": f"Bearer {token}"},
+                          timeout=280, json={"urls": urls, "scrapeCompany": False,
+                                             "limitPerSource": math.ceil(cfg["max_jobs"] / len(urls))})
+        if r.status_code not in (402, 403) or n == len(tokens):
+            break
+        print(f"linkedin: Apify account {n} of {len(tokens)} refused (HTTP {r.status_code}, usage limit), trying the next")
     r.raise_for_status()
     hold("api.apify.com", cfg["every_hours"] * 3600)
     return [row("linkedin", place_of_url.get(j.get("inputUrl")), j["title"], j.get("companyName"), j.get("location"),

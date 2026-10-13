@@ -290,3 +290,16 @@ def test_a_chunk_that_fails_is_not_marked_read_and_the_others_are_kept(portals, 
     assert json.loads(sources.companies.FEED_READ.read_text())["chunks"] == ["c0.gz", "c2.gz", "c3.gz"]
     portals.failing, portals.read = set(), []
     assert [r["job_url"][-5:] for r in sources.company_portals()] == ["c1.gz"] and portals.read == ["c1.gz"]
+
+
+def test_linkedin_moves_to_the_next_apify_account_when_one_is_at_its_limit(monkeypatch, web):
+    tried = []
+
+    class Done(Answer):
+        def json(self):
+            return []
+    monkeypatch.setenv("APIFY_TOKENS", "first, second ,third")
+    monkeypatch.setattr(sources.boards.requests, "post", lambda *a, **kw: tried.append(kw["headers"]["Authorization"])
+                        or Done(402 if len(tried) == 1 else 200))
+    sources.boards.linkedin()
+    assert tried == ["Bearer first", "Bearer second"]  # the first is at its limit; the second ran; the third was not needed
