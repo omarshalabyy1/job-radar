@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from job_radar.sources import egypt, gulf, remote, startups
+from job_radar.sources import companies, egypt, gulf, remote, startups
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -158,3 +158,18 @@ def test_companies_doc_matches_settings():
     doc = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(doc)
     assert doc.DOC.read_text(encoding="utf-8") == doc.render(), "run: .venv\\Scripts\\python scripts\\companies_doc.py"
+
+
+def test_a_classic_successfactors_portal_is_read_after_its_search(monkeypatch):
+    url = "https://career2.successfactors.eu/career?company=egyptiangu"
+    assert companies.detect(url) == ("successfactors_classic", url, None)  # from its address alone
+    pressed = []
+    monkeypatch.setattr(companies, "rendered", lambda u, click=None: pressed.append(click) or Saved("successfactors_classic.html").text)
+    monkeypatch.setattr(companies, "since", lambda: "2026-10-01")  # the two September jobs are old
+    monkeypatch.setattr(companies, "role_of", lambda title: 1 if "Analyst" in title else None)
+    rows = companies.successfactors_classic("EG Bank", url)
+    assert pressed and "Search" in pressed[0]
+    assert titles(rows) == ["Assistant Analyst - Credit School Program"]
+    assert rows[0]["date_posted"] == "2026-10-13" and rows[0]["location"] == "Egypt"
+    assert rows[0]["job_url"] == ("https://career2.successfactors.eu/career?career_ns=job_listing&company=egyptiangu"
+                                  "&career_job_req_id=4250")

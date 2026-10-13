@@ -23,7 +23,8 @@ company's careers page, else job_url) and a Mark applied button. About $0.07 a d
 A job's key (steps.job_key) ignores the company's spacing, case, "and" and legal suffix, so "Care Access" and
 "careaccess" are one job. Before transform deletes a job (KEEP_DAYS) it writes a slim line to core.job_history (no
 description) for the Market page's trends. Each extract records postings and drops per board (core.extract_count): a
-board dropping all, or none where it used to drop half, is a WARNING. The Today page lists his next three deadlines (core.deadline, edited
+board suddenly dropping all (it kept some the last 7 days), or none where it used to drop half, is a WARNING;
+Remote.co drops all every day (its data jobs are US and Canada only), which is no warning. The Today page lists his next three deadlines (core.deadline, edited
 there) above the follow-ups. With the warehouse down every step exits 99 (skipped, not red). The job_radar_backup DAG
 dumps core and raw at 3am to output/backups/nightly-<day>.dump and keeps the newest 14.
 

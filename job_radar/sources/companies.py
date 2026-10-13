@@ -128,6 +128,7 @@ ATS_PATTERNS = [
     ("greenhouse", r"(?:boards|job-boards)\.greenhouse\.io/(?:embed/job_board\?for=)?([\w-]+)"),
     ("lever", r"jobs\.lever\.co/([\w-]+)"),
     ("ashby", r"jobs\.ashbyhq\.com/([\w.-]+)"),
+    ("successfactors_classic", r"(https://career\d*\.successfactors\.\w+/career\?company=[\w-]+)"),
 ]
 
 
@@ -280,6 +281,24 @@ def successfactors(company: str, base: str) -> list[dict]:
     return rows
 
 
+def successfactors_classic(company: str, url: str) -> list[dict]:
+    """A classic SuccessFactors career portal (EG Bank, career?company=...): its jobs show only once Search is pressed,
+    newest first; the first page (10 jobs) is read. It names no place, so its jobs are the company's own, in Egypt."""
+    soup = BeautifulSoup(rendered(url, click='input[type=submit][value*="Search"], button:has-text("Search")'), "html.parser")
+    portal = url.split("?")[0]
+    rows = []
+    for a in soup.select("a.jobTitle"):
+        title, req = a.get_text(" ", strip=True), re.search(r"career_job_req_id=(\d+)", a["href"])
+        note = a.find_parent("td").get_text(" ", strip=True) if a.find_parent("td") else ""
+        when = re.search(r"Posted on (\d{2}/\d{2}/\d{4})", note)
+        posted = str(datetime.strptime(when.group(1), "%d/%m/%Y").date()) if when else ""
+        if req and posted >= since() and role_of(title):
+            job_url = f"{portal}?career_ns=job_listing&{urlsplit(url).query}&career_job_req_id={req.group(1)}"
+            rows.append(row(company.lower(), None, title, company, HOME, job_url, posted, None,
+                            {"title": title, "requisition": req.group(1), "date": posted}))
+    return rows
+
+
 def rss(company: str, feed: str) -> list[dict]:
     """A career site's RSS feed of its newest jobs (Deloitte Middle East on Avature)."""
     rows = []
@@ -293,4 +312,4 @@ def rss(company: str, feed: str) -> list[dict]:
 
 
 READERS = {"workable": workable, "greenhouse": greenhouse, "lever": lever, "ashby": ashby, "phenom": phenom,
-           "successfactors": successfactors, "rss": rss, "page": career_page}
+           "successfactors": successfactors, "successfactors_classic": successfactors_classic, "rss": rss, "page": career_page}

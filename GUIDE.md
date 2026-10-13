@@ -205,7 +205,7 @@ What to expect, step by step:
 | Everything is slow | Another Docker stack may be using every CPU; stop it, or restart Docker Desktop. |
 | A site seems skipped | It asked job-radar to wait (a file in `output/waits/`); it comes back by itself. |
 | Every task of a run is skipped | The warehouse was down ("the warehouse is unreachable, skipped" in the log): `docker compose up -d`; the next run catches up. |
-| A WARNING says a board dropped all, or none, of its postings | The board changed its locations, or the eligibility rule broke: look at that board's postings and `job_radar\eligibility.py`. |
+| A WARNING says a board suddenly dropped all, or none, of its postings | The board changed its locations, or the eligibility rule broke: look at that board's postings and `job_radar\eligibility.py`. |
 | You need the warehouse back from a copy | `pg_restore` the newest `output\backups\nightly-<day>.dump` into a database (it holds `core` and `raw`; the schema step makes the views again). |
 | A company shows *blocked* | Its site shows a bot check: run `.venv\Scripts\python scripts\open_blocked.py`, get past the check in the window, press Enter. Its session is saved for the next runs. |
 

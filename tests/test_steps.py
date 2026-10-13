@@ -452,7 +452,7 @@ def test_transform_twice_keeps_one_history_line_per_job(conn):
 
 
 def test_a_board_that_drops_all_or_suddenly_none_is_a_warning(conn):
-    """drop_warning (rolled back): 100% dropped means the board changed; 0% where the last 7 days dropped half means the
+    """drop_warning (rolled back): 100% dropped where some were kept before means the board changed; 0% where the last 7 days dropped half means the
     rule broke; a normal day says nothing."""
     board = "zz_test_board"
     for days_ago in range(1, 4):  # a board that usually drops most of what it gives
@@ -463,4 +463,8 @@ def test_a_board_that_drops_all_or_suddenly_none_is_a_warning(conn):
     assert "none of 20 postings dropped" in steps.drop_warning(rolled, board, 20, 0)
     assert "all 20 postings dropped" in steps.drop_warning(rolled, board, 20, 20)
     assert steps.drop_warning(rolled, "zz_new_board", 20, 0) is None  # no history: nothing to compare
+    for days_ago in range(1, 4):  # a board that always drops everything it gives
+        conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %s, 'zz_us_only', 13, 13)",
+                     (days_ago,))
+    assert steps.drop_warning(rolled, "zz_us_only", 13, 13) is None
     assert steps.drop_warning(rolled, board, 3, 3) is None             # too few to judge

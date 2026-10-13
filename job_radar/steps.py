@@ -102,8 +102,9 @@ DROP_MIN = 10  # postings a day before a board's drop rate is judged
 
 def drop_warning(conn, board: str, postings: int, dropped: int) -> str | None:
     """Record today's postings and drops of a board (core.extract_count) and say when they look like a silent failure:
-    every posting dropped (the board changed its "who can apply" field or its locations), or none dropped from a board
-    whose last 7 days dropped half or more (the rule broke). None when they look normal."""
+    every posting dropped from a board whose last 7 days kept some (the board changed its "who can apply" field or its
+    locations), or none dropped from a board whose last 7 days dropped half or more (the rule broke). A board that always
+    drops everything (Remote.co: its data jobs are US and Canada only) is not a change. None when they look normal."""
     conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date, %s, %s, %s)"
                  " ON CONFLICT (day, board) DO UPDATE SET postings = EXCLUDED.postings, dropped = EXCLUDED.dropped",
                  (board, postings, dropped))
@@ -111,7 +112,7 @@ def drop_warning(conn, board: str, postings: int, dropped: int) -> str | None:
         "SELECT coalesce(sum(postings), 0), coalesce(sum(dropped), 0) FROM core.extract_count"
         " WHERE board = %s AND day BETWEEN current_date - 7 AND current_date - 1", (board,)).fetchone()
     conn.commit()
-    if postings >= DROP_MIN and dropped == postings:
+    if postings >= DROP_MIN and dropped == postings and before >= DROP_MIN and before_dropped < before:
         return f"{board}: all {postings} postings dropped as not for Egypt - has the board changed its locations?"
     if postings >= DROP_MIN and dropped == 0 and before >= DROP_MIN and before_dropped * 2 >= before:
         return (f"{board}: none of {postings} postings dropped as not for Egypt, where the last 7 days dropped "

@@ -121,7 +121,7 @@ track_applications (hourly DAG job_radar_applications) reads the All Mail of eve
 
 A job is one row however the boards write its company: the key ignores spacing, case, "and" and legal suffixes ("Care Access" and "careaccess", "J.D. Power" and "JD Power" are one job). Before transform deletes a job, it writes a slim line to core.job_history (key, first and last seen, board, role, place, score, the day its page was found closed; no description), which the Market page's Over time charts read: jobs a week and days to close by role.
 
-Every extract records how many postings each board gave and how many it dropped as not for Egypt (core.extract_count); a board that drops all of 10 or more, or none where the last 7 days dropped half, prints a WARNING into the run log: the board changed, or the rule broke.
+Every extract records how many postings each board gave and how many it dropped as not for Egypt (core.extract_count); a board that suddenly drops all of 10 or more (its last 7 days kept some), or none where the last 7 days dropped half, prints a WARNING into the run log: the board changed, or the rule broke.
 
 The Today page lists your next three deadlines (core.deadline: a coding test, an interview; edit them there) above the follow-ups due.
 

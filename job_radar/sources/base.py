@@ -215,13 +215,14 @@ def relative_date(text: str) -> date | None:
         return None
 
 
-def rendered(url: str) -> str:
+def rendered(url: str, click: str | None = None) -> str:
     """The page's HTML after its JavaScript ran, in a headless Chromium (Playwright): for career
     pages that build their job list in the browser. Each worker thread starts one Chromium and
     reuses it for every page (Playwright is one instance per thread); it ends with the step. The
     page is read once it has loaded and gone quiet, or 10 seconds after it loaded: busy sites (IBM,
     Bain, Capgemini) never go quiet, and waiting for it timed them out. A site you opened by hand
-    gets your session; a page that still shows a bot check raises, for you to open."""
+    gets your session; a page that still shows a bot check raises, for you to open. With `click` (a CSS selector),
+    that button is pressed once the page has gone quiet, and the page it leads to is read the same way."""
     from playwright.sync_api import Error as PageError, TimeoutError as PageTimeout, sync_playwright
     if not hasattr(BROWSERS, "chromium"):
         BROWSERS.chromium = sync_playwright().start().chromium.launch()
@@ -238,10 +239,14 @@ def rendered(url: str) -> str:
             if "ERR_HTTP2_PROTOCOL_ERROR" in str(e):  # how McKinsey's site (Akamai) drops headless Chromium
                 raise Challenge("it drops headless Chromium (ERR_HTTP2_PROTOCOL_ERROR)") from e
             raise
-        try:
-            page.wait_for_load_state("networkidle", timeout=site_left(10) * 1000)
-        except PageTimeout:  # still busy: what has loaded is read
-            pass
+        for step in ([None, click] if click else [None]):
+            if step:  # a button that loads another page (a search form): read that page once it has loaded
+                with page.expect_navigation(wait_until="load", timeout=site_left(30) * 1000):
+                    page.locator(step).first.click()
+            try:
+                page.wait_for_load_state("networkidle", timeout=site_left(10) * 1000)
+            except PageTimeout:  # still busy: what has loaded is read
+                pass
         html = page.content()
     finally:
         context.close()

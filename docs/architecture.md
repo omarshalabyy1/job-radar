@@ -100,7 +100,7 @@ lower hides it with `features.auto_hide`, and a status of yours shows it again. 
 same job from another posting of the last 5 days. A job first seen over 5 days ago
 is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key; `core.job_history`
 keeps a slim line for the Market page's trends). A job's key ignores the company's spacing, case, "and" and legal suffix.
-A board that drops all its postings as not for Egypt, or none where it used to drop half, is a WARNING (`core.extract_count`).
+A board that suddenly drops all its postings as not for Egypt, or none where it used to drop half, is a WARNING (`core.extract_count`).
 With the warehouse unreachable each step exits 99 and Airflow marks it skipped. `job_radar_backup` dumps `core` and
 `raw` every night at 3am to `output/backups/` and keeps the newest 14.
 Every posting is stored once (its source and link), every job once (`core.job`), every email
