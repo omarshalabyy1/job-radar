@@ -21,8 +21,7 @@ if shown.empty:
 
 columns = st.segmented_control("Columns", ["Essentials", "All"], default="Essentials", label_visibility="collapsed",
                                help="Essentials: the columns you decide on. All: the scores, the reasons and the rest.")
-table = shown.assign(score=shown["score"].map(lambda v: "n/a" if v != v else str(int(v))),
-                     company=[c or f"{s} (company hidden)" for c, s in zip(shown["company"], shown["source"])])
+table = shown.assign(company=[c or f"{s} (company hidden)" for c, s in zip(shown["company"], shown["source"])])
 edited = st.data_editor(
     table, key="jobs", hide_index=True, height=620,
     # what you decide on first, then the rest
@@ -34,7 +33,8 @@ edited = st.data_editor(
                   and (columns == "All" or c in ESSENTIALS)],
     disabled=[c for c in shown.columns if c not in ("status", "note")],
     column_config={
-        "score": st.column_config.TextColumn("Score", width="small", help="Claude's grade of the job against your CVs, 0-10; n/a when not graded"),
+        "score": st.column_config.ProgressColumn("Score", min_value=0, max_value=10, format="%d", width="small",  # a number: a click sorts 10 above 9
+                                                help="Claude's grade of the job against your CVs, 0-10; empty when not graded"),
         "title": st.column_config.TextColumn("Title", width=300),
         "company": st.column_config.TextColumn("Company", width=130),
         "place": st.column_config.TextColumn("Where", width="small"),
