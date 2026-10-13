@@ -62,6 +62,12 @@ ALTER TABLE core.job ADD COLUMN IF NOT EXISTS company_size text;
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS restriction text;
 -- when the eligibility step judged it (once per job); empty until then
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS eligibility_at timestamptz;
+-- the employer's or original board's own page for the job, when its source gives one (steps.apply_url); the
+-- tracker shows it, else the careers page of a company you track, else job_url
+ALTER TABLE core.job ADD COLUMN IF NOT EXISTS apply_url text;
+-- the years of experience the posting asks for (its lowest bound, the most of several): steps.years_required reads the
+-- description at match_skills, else grade_claude's Claude; empty when neither found one
+ALTER TABLE core.job ADD COLUMN IF NOT EXISTS years_required smallint;
 -- how close its text is to your nearest CV (embed.py, 0-1, cosine); empty until embed has seen it
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS cv_similarity real;
 -- A job first seen over 5 days ago (config.KEEP_DAYS) is deleted by transform with its raw postings,
@@ -247,6 +253,42 @@ CREATE TABLE IF NOT EXISTS core.claude_grade (
 );
 ALTER TABLE core.claude_grade ADD COLUMN IF NOT EXISTS restriction text;
 
+-- A slim record of every job ever stored, for the market trends: kept when transform deletes the job after KEEP_DAYS.
+-- No description and nothing about you: the key, when it was first and last seen, its board, role, place, Claude's
+-- score and the day its page was found closed (describe). transform writes it before it deletes; a second run the same
+-- day changes nothing.
+CREATE TABLE IF NOT EXISTS core.job_history (
+    job_key    text PRIMARY KEY,
+    first_seen date NOT NULL,
+    last_seen  date NOT NULL,
+    source     text NOT NULL,
+    role       text NOT NULL,
+    place      text NOT NULL,
+    score      smallint,
+    closed_on  date
+);
+
+-- How many postings each board gave a day and how many load dropped as not for Egypt (steps.drop_warning): a board
+-- that suddenly drops all, or none where it used to drop half, gets a WARNING in the run log.
+CREATE TABLE IF NOT EXISTS core.extract_count (
+    day      date    NOT NULL,
+    board    text    NOT NULL,
+    postings integer NOT NULL,
+    dropped  integer NOT NULL,
+    PRIMARY KEY (day, board)
+);
+
+-- Your own deadlines (a coding test, an interview, a document to send), edited on the tracker's Today page: about a job
+-- in the radar (job_id) or free text (what), with the day it is due and a note.
+CREATE TABLE IF NOT EXISTS core.deadline (
+    deadline_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    job_id      bigint REFERENCES core.job ON DELETE SET NULL,
+    what        text    NOT NULL,
+    due         date    NOT NULL,
+    note        text,
+    done        boolean NOT NULL DEFAULT false
+);
+
 -- Views hold no data: dropped and created again on every run, so a change here always applies.
 DROP VIEW IF EXISTS mart.job_status, mart.skill_demand, mart.jobs_daily, mart.job_skill;
 
@@ -266,7 +308,7 @@ SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j
             WHEN now() - j.posted_at <= interval '48 hours' THEN 3 WHEN now() - j.posted_at <= interval '72 hours' THEN 4
             ELSE 5 END AS fresh_level,
        g.score, g.reason AS grade_reason, g.cv AS grade_cv, coalesce(j.restriction, g.restriction) AS restriction,
-       j.cv_similarity
+       j.cv_similarity, j.years_required
 FROM core.job j
 LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
            FROM core.job_skill GROUP BY job_id) k USING (job_id)

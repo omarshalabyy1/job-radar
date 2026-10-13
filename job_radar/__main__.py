@@ -18,6 +18,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
+import psycopg
 from dotenv import load_dotenv
 
 from . import runlog, steps
@@ -43,7 +44,12 @@ def main() -> None:
         timer.start()
     if {"eligibility", "grade_claude", "tailor", "track_applications"} & set(names):
         runlog.watch_claude()  # imports the Claude SDK, most of the import time: only the steps that call Claude need it
-    with connect() as conn:
+    try:
+        conn = connect()
+    except psycopg.OperationalError as e:  # the warehouse container is down: skip, so the run is not a wall of red tasks
+        print(f"{' '.join(names)}: the warehouse is unreachable, skipped; the next run catches up ({e!r})"[:300])
+        raise SystemExit(99)  # BashOperator's skip code
+    with conn:
         for name in names:
             print(f"== {name}")  # outside the capture: the run log keeps what the step itself printed last
             runlog.run(conn, name, getattr(steps, name))

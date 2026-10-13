@@ -57,8 +57,9 @@ def test_unclear_emails_are_left_for_claude(sender, subject):
 
 def test_find_job_by_key_then_by_only_company():
     seen = date(2026, 10, 1)
-    jobs = [(1, "data engineer | acme", "Acme Ltd.", seen), (2, "analyst | globex", "Globex", seen),
-            (3, "bi developer | globex", "GLOBEX", seen), (4, "data engineer | initech", "Initech", date(2026, 10, 8))]
+    jobs = [(1, "Data Engineer", "Acme Ltd.", seen), (2, "Analyst", "Globex", seen),
+            (3, "BI Developer", "GLOBEX", seen), (4, "Data Engineer", "Initech", date(2026, 10, 8)),
+            (5, "Forward Deployed AI Engineer, Egypt - BCG X", "BCG X", seen), (6, "Junior AI Engineer", "SourceQS (recruiter)", seen)]
     on = date(2026, 10, 5)
     assert find_job(jobs, "Data Engineer - Cairo", "ACME", on) == 1  # same job_key
     assert find_job(jobs, None, "Acme", on) == 1                      # no title: the only job of the company
@@ -66,6 +67,8 @@ def test_find_job_by_key_then_by_only_company():
     assert find_job(jobs, None, "Globex", on) is None                 # two jobs: no guess
     assert find_job(jobs, "Data Engineer", "Initech", on) is None     # first seen after the email: a later posting
     assert find_job(jobs, "Data Engineer", "Initech", date(2026, 10, 8)) == 4
+    assert find_job(jobs, "Forward Deployed AI Engineer, Egypt - BCG X", "Boston Consulting Group (BCG)", on) == 5  # a bracketed short name
+    assert find_job(jobs, "Junior AI Engineer", "SourceQS", on) == 6  # a note after the company
 
 
 def test_switched_off_the_mailbox_is_not_touched(monkeypatch, capsys):

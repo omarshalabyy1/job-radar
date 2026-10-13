@@ -31,7 +31,7 @@ from psycopg.types.json import Jsonb
 
 from . import sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
-from .config import (DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT, ROLE_LABEL, ROOT,
+from .config import (BOARD_HOSTS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT, ROLE_LABEL, ROOT,
                      SETTINGS, hidden_reason, in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
 from .eligibility import eligibility, not_for_egypt  # noqa: F401  (python -m job_radar eligibility)
@@ -92,6 +92,31 @@ def load(conn, name: str, rows: list[dict]) -> None:
     conn.commit()
     new = conn.execute(count, (names,)).fetchone()[0] - before
     print(f"{name}: {rows_in} postings, {new} new" + (f", {barred} not for Egypt dropped" if barred else ""))
+    if FEATURES["eligibility"] and rows_in:
+        if warning := drop_warning(conn, name, rows_in, barred):
+            print(f"WARNING {warning}")
+
+
+DROP_MIN = 10  # postings a day before a board's drop rate is judged
+
+
+def drop_warning(conn, board: str, postings: int, dropped: int) -> str | None:
+    """Record today's postings and drops of a board (core.extract_count) and say when they look like a silent failure:
+    every posting dropped (the board changed its "who can apply" field or its locations), or none dropped from a board
+    whose last 7 days dropped half or more (the rule broke). None when they look normal."""
+    conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date, %s, %s, %s)"
+                 " ON CONFLICT (day, board) DO UPDATE SET postings = EXCLUDED.postings, dropped = EXCLUDED.dropped",
+                 (board, postings, dropped))
+    before, before_dropped = conn.execute(
+        "SELECT coalesce(sum(postings), 0), coalesce(sum(dropped), 0) FROM core.extract_count"
+        " WHERE board = %s AND day BETWEEN current_date - 7 AND current_date - 1", (board,)).fetchone()
+    conn.commit()
+    if postings >= DROP_MIN and dropped == postings:
+        return f"{board}: all {postings} postings dropped as not for Egypt - has the board changed its locations?"
+    if postings >= DROP_MIN and dropped == 0 and before >= DROP_MIN and before_dropped * 2 >= before:
+        return (f"{board}: none of {postings} postings dropped as not for Egypt, where the last 7 days dropped "
+                f"{before_dropped} of {before} - is eligibility.not_for_egypt broken?")
+    return None
 
 
 def online() -> bool:
@@ -251,17 +276,27 @@ def company_size(payload: dict) -> str | None:
     return re.sub(r"(\d)(\d{3})\b", r"\1,\2", re.sub(r"\s+to\s+", "-", size.strip()))
 
 
+def apply_url(source: str, payload: dict) -> str | None:
+    """The employer's or original board's own page for a job, when the source's payload gives one (Indeed's
+    job_url_direct, freehire's url when its own source is not himalayas or adzuna): else None, and the job's
+    job_url stays the link."""
+    url = payload.get("job_url_direct") if source == "indeed" else payload.get("url") if source == "freehire" else None
+    return url if isinstance(url, str) and url.startswith("http") and not any(h in url for h in BOARD_HOSTS) else None
+
+
 def job_key(title: str, company: str, job_url: str) -> str:
     """One key per job however the boards word it: the title without its bracketed notes and its
     trailing ' - City' / ' | Remote' / ' / ...' part, the company without its legal suffix, both
-    lower case without punctuation. 'Data Engineer - Cairo (Hybrid)' at 'Acme Ltd.' and
-    'Data Engineer' at 'ACME' are one job. A job with no company is keyed by its link."""
+    lower case without punctuation, the company without its spaces and "and" too ('Care Access' and 'careaccess',
+    'Robots & Pencils' and 'Robots and Pencils' are one).
+    'Data Engineer - Cairo (Hybrid)' at 'Acme Ltd.' and 'Data Engineer' at 'ACME' are one job. A job with no
+    company is keyed by its link."""
     def words(s: str) -> str:
         return " ".join(re.sub(r"[^\w]+", " ", s).split())
     title = re.split(r"\s+[-–—|/@]\s+", re.sub(r"\(.*?\)|\[.*?\]", " ", title.lower()))[0]
-    company = re.sub(r"\b(llc|ltd|limited|inc|corp|corporation|co|company|plc|gmbh|s\.?a\.?e|fze|fzco)\b", " ",
+    company = re.sub(r"\b(and|llc|ltd|limited|inc|corp|corporation|co|company|plc|gmbh|s\.?a\.?e|fze|fzco)\b", " ",
                      company.lower())
-    return f"{words(title)} | {words(company) or job_url}"
+    return f"{words(title)} | {words(company).replace(' ', '') or job_url}"
 
 
 def transform(conn) -> None:
@@ -319,12 +354,13 @@ def transform(conn) -> None:
         job = jobs.setdefault(key, {
             "key": key, "title": p["title"].strip(), "company": p["company"], "location": p["location"],
             "place": place, "source": p["source"], "job_url": p["job_url"], "rank": rank,
-            "role": ROLE_LABEL[rank], "date_posted": p["date_posted"],
+            "role": ROLE_LABEL[rank], "date_posted": p["date_posted"], "apply_url": apply_url(p["source"], p["payload"]),
             "target": (is_target(p["company"]) or yours.search(p["company"]) is not None
                        or letters(p["company"]) in short),
             "description": p["description"], "first_seen": p["run_date"],
             "posted_at": posted_at(p["payload"], p["date_posted"], p["loaded_at"])})
         job["description"] = job["description"] or p["description"] or described.get(key)
+        job["apply_url"] = job["apply_url"] or apply_url(p["source"], p["payload"])
         if place == "Remote" and job["place"] != "Remote":  # found by a remote search too: a remote
             # job, shown with that remote listing's location and link
             job.update(place="Remote", location=p["location"], source=p["source"], job_url=p["job_url"])
@@ -340,11 +376,12 @@ def transform(conn) -> None:
     with conn.cursor() as cur:
         cur.executemany("""
             INSERT INTO core.job AS j (job_key, title, company, location, place, source, job_url, role_rank, role,
-                                       target_company, date_posted, description, first_seen, posted_at, company_size)
+                                       target_company, date_posted, description, first_seen, posted_at, company_size, apply_url)
             VALUES (%(key)s, %(title)s, %(company)s, %(location)s, %(place)s, %(source)s, %(job_url)s, %(rank)s,
                     %(role)s, %(target)s, %(date_posted)s, %(description)s, %(first_seen)s, %(posted_at)s,
-                    %(company_size)s)
+                    %(company_size)s, %(apply_url)s)
             ON CONFLICT (job_key) DO UPDATE SET
+                apply_url = coalesce(j.apply_url, EXCLUDED.apply_url),
                 posted_at = coalesce(j.posted_at, EXCLUDED.posted_at),
                 company_size = coalesce(EXCLUDED.company_size, j.company_size),
                 description = coalesce(j.description, EXCLUDED.description),
@@ -354,6 +391,15 @@ def transform(conn) -> None:
                 source = CASE WHEN EXCLUDED.place = 'Remote' THEN EXCLUDED.source ELSE j.source END,
                 job_url = CASE WHEN EXCLUDED.place = 'Remote' THEN EXCLUDED.job_url ELSE j.job_url END""",
             list(jobs.values()))
+        # the slim history first, so a job deleted below keeps its line (seen today: a posting of it came in this window)
+        cur.execute(
+            "INSERT INTO core.job_history AS h (job_key, first_seen, last_seen, source, role, place, score, closed_on)"
+            " SELECT j.job_key, j.first_seen, CASE WHEN j.job_key = ANY(%s) THEN current_date ELSE j.first_seen END,"
+            " j.source, j.role, j.place, g.score, CASE WHEN j.restriction LIKE 'no longer open%%' THEN current_date END"
+            " FROM core.job j LEFT JOIN core.claude_grade g USING (job_id)"
+            " ON CONFLICT (job_key) DO UPDATE SET last_seen = greatest(h.last_seen, EXCLUDED.last_seen),"
+            " score = coalesce(EXCLUDED.score, h.score), place = EXCLUDED.place, closed_on = coalesce(h.closed_on, EXCLUDED.closed_on)",
+            (list(jobs),))
         cur.execute("DELETE FROM core.job j WHERE first_seen >= current_date - %s AND emailed_at IS NULL"
                     " AND job_key <> ALL(%s) AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
                     (DAYS, list(jobs)))
@@ -432,6 +478,19 @@ def describe(conn) -> None:
     print(f"describe: {found} of {len(todo)} descriptions found" + (f", {len(closed)} jobs closed (hidden)" if closed else ""))
 
 
+# "4+ years of experience", "3-5 yrs of hands-on PySpark experience", "experience: 2 years", "minimum 3 years' experience"
+YEARS = re.compile(r"(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*)?\+?\s*(?:years?|yrs?)['’]?\s*(?:of\s+)?(?:[\w/&.,+#-]+\s+){0,5}?experience"
+                   r"|experience\s*(?:of|:)?\s*(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*)?(?:years?|yrs?)", re.I)
+
+
+def years_required(text: str | None) -> int | None:
+    """The most years of experience a posting asks for, by its lowest bound: "4+ years of experience ... 3+ years of
+    PySpark experience" is 4. None when it names none in digits (grade_claude then asks Claude)."""
+    found = [int(a or b) for a, b in YEARS.findall(text or "")]
+    found = [n for n in found if 0 < n <= 20]
+    return max(found) if found else None
+
+
 def match_skills(conn) -> None:
     """Store which of your skills each job of the window asks for (core.job_skill), so the email
     and the tracker read a small table instead of matching every job's text each time. Re-running it gives the
@@ -445,8 +504,13 @@ def match_skills(conn) -> None:
     conn.execute("DELETE FROM core.cv_skill")  # your CVs: few and small, matched again every run
     conn.execute("INSERT INTO core.cv_skill (label, skill) SELECT c.label, s.skill FROM core.cv c"
                  " JOIN core.skill s ON c.text ~* s.pattern")
+    asked = [(years_required(description), job_id) for job_id, description in conn.execute(
+        "SELECT job_id, description FROM core.job WHERE first_seen >= current_date - %s AND description IS NOT NULL"
+        " AND years_required IS NULL", (KEEP_DAYS,))]
+    with conn.cursor() as cur:
+        cur.executemany("UPDATE core.job SET years_required = %s WHERE job_id = %s", [a for a in asked if a[0]])
     conn.commit()
-    print(f"match_skills: {matched} skill matches")
+    print(f"match_skills: {matched} skill matches, years asked found in {sum(1 for a in asked if a[0])} of {len(asked)} descriptions")
 
 
 def export_career_ops(conn) -> None:

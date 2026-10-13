@@ -8,7 +8,7 @@ apart by plain patterns on its sender and subject first (PATTERNS: free); only t
 Claude (settings.yaml claude.model), a leftover with no ANTHROPIC_API_KEY or no credit is stored
 nowhere, so a later run classifies it. A stored email is never read again.
 
-A matching job in core.job (same job_key when the email names a title, else the only job of that company;
+A matching job in core.job (the same title at a company of the same name when the email names a title, else the only job of that company;
 never a job first seen after the email) gets the email's job_id,
 and its status in core.application moves up only (applied, interview, rejected, offer), never down.
 Switched by features.track_applications in settings.yaml: off, it does not touch the mailbox.
@@ -41,7 +41,7 @@ from pydantic import BaseModel
 from . import claude
 from .config import OUTPUT, SETTINGS
 from .sources.inbox import MAIL_BYTES
-from .tailor import RULES, slug
+from .tailor import GAP_WORDS, RULES, slug  # GAP_WORDS: Claude's text with one is thrown away, not written
 
 # an offer only as a job offer's words ("Offer Letter", "Job Offer", "Offer of Employment"): "offer" alone brought food deals
 SEARCH = ("(subject:(applying OR application OR applied OR interview OR candidate OR position OR interest OR steps)"
@@ -58,9 +58,6 @@ FUNNEL = ["applied", "viewed", "interview", "offer", "hired"]  # the stages, in 
 VOICE = next(p for p in RULES.split("\n\n") if p.startswith("Voice")).split(":", 1)[1].strip()
 SAFETY = ("Never invent an employer, job title, date, degree, certification, skill, client or number: every one must be "
           "in <cv> or <job>. Never mention a gap or something the candidate has not done.")
-# Claude's own text with any of these is thrown away, not written (whole words, so "Slack" is fine; a bare "gap" is
-# not here because a CV can name a "price gap": only a skills or experience gap is a gap in the candidate)
-GAP_WORDS = re.compile(r"\b(?:not yet|haven['’]t|have not|no experience|lack\w*|(?:skills?|experience) gaps?)\b", re.I)
 CAIRO = ZoneInfo("Africa/Cairo")  # the day an application is 7 or 14 days old, for the email and the drafts
 
 # Tried in order on "sender || subject"; the first that fits gives the kind, and the named groups
@@ -131,20 +128,35 @@ def classify(sender: str, subject: str, me: str = "") -> tuple[str, str | None, 
     return None
 
 
+def company_names(company: str) -> list[str]:
+    """The names a company goes by, as job_key writes a company: its name without a bracketed note, and each bracketed
+    note ('Boston Consulting Group (BCG)': both)."""
+    from .steps import job_key  # steps imports this module
+
+    names = [re.sub(r"\(.*?\)", " ", company), *re.findall(r"\((.*?)\)", company)]
+    return [job_key("", n, "-").split(" | ", 1)[1] for n in names]
+
+
+def same_company(a: str, b: str) -> bool:
+    """One of a's names starts with, or is, one of b's ('BCG' and 'BCG X'; 'SourceQS (recruiter)' and 'SourceQS')."""
+    return any(x.startswith(y) or y.startswith(x) for x in company_names(a) for y in company_names(b) if x and y)
+
+
 def find_job(jobs: list[tuple[int, str, str, date]], title: str | None, company: str | None, received: date) -> int | None:
-    """The job_id of (job_id, job_key, company, first_seen) in `jobs` that an email of `received` is
-    about: the same job_key when the email names a title, else the only job of that company. A job
-    first seen after the email is a later posting, not the one the email is about."""
+    """The job_id of (job_id, title, company, first_seen) in `jobs` that an email of `received` is
+    about: the same title (as job_key reads it) at a company that goes by the same name when the email names a
+    title, else the only job of that company. A job first seen after the email is a later posting, not the one the
+    email is about."""
     from .steps import job_key  # steps imports this module
 
     if not company:
         return None
     jobs = [j for j in jobs if j[3] <= received]
     if title:
-        key = job_key(title, company, "")
-        return next((job_id for job_id, k, _, _ in jobs if k == key), None)
-    name = lambda c: job_key("", c, "-").split(" | ", 1)[1]  # noqa: E731  (job_key's company: no suffix, no punctuation)
-    ids = [job_id for job_id, _, c, _ in jobs if name(c) == name(company)]
+        key = job_key(title, "", "-").split(" | ", 1)[0]
+        return next((job_id for job_id, t, c, _ in jobs if job_key(t, "", "-").split(" | ", 1)[0] == key and same_company(c, company)),
+                    None)
+    ids = [job_id for job_id, _, c, _ in jobs if same_company(c, company)]
     return ids[0] if len(ids) == 1 else None
 
 
@@ -425,7 +437,7 @@ def follow_up_drafts(conn, today: date | None = None) -> tuple[int, int]:
         return 0, 0
     today = today or cairo_today()
     due = due_now(conn, today)
-    jobs = conn.execute("SELECT job_id, job_key, company, first_seen FROM core.job").fetchall()
+    jobs = conn.execute("SELECT job_id, title, company, first_seen FROM core.job").fetchall()
     written = 0
     for company, title, applied_on, days in due:
         path = OUTPUT / "followups" / str(today) / f"{slug(company, title) or 'follow-up'}.md"
@@ -579,6 +591,23 @@ def store(cur, jobs: list[tuple], mailbox: str, mails: list[dict]) -> tuple[int,
     return added, matched, moved, kinds
 
 
+def rematch(cur, jobs: list[tuple]) -> tuple[int, int]:
+    """(matched, moved up): the stored emails with no job, matched again (the matcher or the jobs may have changed
+    since they were read), and their job's status moved as store() does. Oldest first, so the status climbs in order."""
+    matched = moved = 0
+    for message_id, company, title, kind, received_at in cur.execute(
+            "SELECT message_id, company, title, kind, received_at FROM core.application_email"
+            " WHERE job_id IS NULL AND kind <> 'other' ORDER BY received_at").fetchall():
+        if not (job_id := find_job(jobs, title, company, received_at.date())):
+            continue
+        cur.execute("UPDATE core.application_email SET job_id = %s WHERE message_id = %s", (job_id, message_id))
+        matched += 1
+        status = "offer" if kind == "hired" else kind
+        if status in LADDER:
+            moved += move_status(cur, job_id, status, f"from your mailbox {received_at:%Y-%m-%d}")
+    return matched, moved
+
+
 def track_applications(conn) -> None:
     if not (SETTINGS.get("features") or {}).get("track_applications"):
         print("track_applications: off in settings.yaml (features.track_applications)")
@@ -590,7 +619,7 @@ def track_applications(conn) -> None:
     stored = {message_id for (message_id,) in conn.execute("SELECT message_id FROM core.application_email")}
     known = dict(conn.execute("SELECT mailbox, count(*) FROM core.application_email GROUP BY mailbox").fetchall())
     cfg = SETTINGS.get("claude") or {}
-    jobs = conn.execute("SELECT job_id, job_key, company, first_seen FROM core.job").fetchall()
+    jobs = conn.execute("SELECT job_id, title, company, first_seen FROM core.job").fetchall()
     emails, leftover, asked, added, matched, moved, kinds, failed = 0, 0, 0, 0, 0, 0, {}, 0
     for n, (address, password) in enumerate(boxes.items(), 1):
         days = DAILY_DAYS if known.get(address) else BACKFILL_DAYS  # a mailbox with nothing stored yet is read from the start
@@ -622,6 +651,10 @@ def track_applications(conn) -> None:
             kinds[k] = kinds.get(k, 0) + c
     if failed == len(boxes):
         raise RuntimeError("track_applications: no mailbox could be read")
+    with conn.cursor() as cur:
+        again, up = rematch(cur, jobs)
+    conn.commit()
+    matched, moved = matched + again, moved + up
     # after the commit, so a failing draft never undoes the mailbox read; each is off unless its switch is on. No prep for
     # a company that already sent an offer (or hired you): its interviews are behind you.
     interviews = [dict(zip(("message_id", "company", "title", "sender", "subject", "received_at", "job_id", "mailbox"), row))

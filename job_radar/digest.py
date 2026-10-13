@@ -219,6 +219,19 @@ def times(items: list) -> str:
     return " and ".join([", ".join(items[:-1]), items[-1]] if len(items) > 1 else items)
 
 
+def push(title: str, message: str, url: str | None = None) -> bool:
+    """A phone notification through ntfy.sh, on the topic NTFY_TOPIC in .env (subscribe to it in the ntfy app; the topic
+    is the only secret, so keep it long and random). False, with nothing sent, when no topic is set."""
+    import requests
+
+    topic = os.environ.get("NTFY_TOPIC")
+    if not topic:
+        return False
+    requests.post("https://ntfy.sh/", json={"topic": topic, "title": title, "message": message,
+                                           **({"click": url} if url else {})}, timeout=15).raise_for_status()
+    return True
+
+
 def send(body: str, title: str, name: str) -> bool:
     """Email the digest; without Gmail settings, write it to output/ instead (one file per email and
     time, so the two emails do not overwrite each other) and return False."""

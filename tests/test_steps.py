@@ -184,7 +184,7 @@ def add_posted(conn, key: str, source: str, location: str, place: str, descripti
 
 
 def test_eligibility_takes_the_boards_word_then_asks_claude_once_and_deletes_nothing(conn, monkeypatch):
-    """A board's own who-can-apply field decides alone; a described job outside ai_places that no board labels is asked
+    """A board's own who-can-apply field decides alone (at the extract: a job it bars is never stored); a described job outside ai_places that no board labels is asked
     once; only a 'no' sets a restriction; ai_places' jobs are left to grade_claude (an old regex flag is cleared); a job
     with no field and no text waits for one. No row is deleted and nothing reaches core.job_seen."""
     haiku = Haiku()
@@ -205,7 +205,7 @@ def test_eligibility_takes_the_boards_word_then_asks_claude_once_and_deletes_not
         return {name: rows.get(job_id, "deleted") for name, job_id in jobs.items()}
 
     eligibility.eligibility(RolledBack(conn))
-    assert state() == {"us_board": ("open to United States only", True), "world_board": (None, True),
+    assert state() == {"us_board": (None, True), "world_board": (None, True),  # a board field the extract kept: open
                        "citizens_only": ("Fictionland citizens only", True), "silent": (None, True),
                        "cairo": (None, True), "no_text": (None, False)}
     assert sorted(a for a in haiku.asked if a in jobs) == ["citizens_only", "silent"]  # the warehouse's own jobs aside
@@ -299,13 +299,14 @@ def test_export_career_ops_leaves_out_ignored_and_hidden_jobs(conn, monkeypatch,
     assert exported(eligibility=False, auto_hide=False, grade=False) == {"plain", "restricted", "low_score"}  # ignored stays out
 
 
-def test_the_egypt_email_goes_out_on_a_day_with_no_new_job_when_a_follow_up_is_due(conn, monkeypatch):
+def test_the_egypt_email_goes_out_on_a_day_with_no_new_job_when_a_follow_up_is_due(conn, monkeypatch, tmp_path):
     """A follow-up must not wait for a day with a new job. Nothing is sent: send is a fake."""
     from datetime import datetime, time, timedelta
 
     from job_radar import applications
 
     sent = []
+    monkeypatch.setattr(steps, "OUTPUT", tmp_path)  # not today's real follow-up marker
     monkeypatch.setattr(steps, "send", lambda body, title, name: sent.append((body, title, name)) or False)
     monkeypatch.setattr(smtplib, "SMTP_SSL", lambda *a, **k: pytest.fail("an email was sent"))
     conn.execute("UPDATE core.job SET emailed_at = now() WHERE emailed_at IS NULL")  # no new job today (rolled back)
@@ -420,3 +421,46 @@ def test_a_watchdog_stop_turns_only_this_runs_running_row_into_warn(conn):
                         " finished_at IS NOT NULL FROM core.step_run WHERE step LIKE 'zz%' ORDER BY 1, 2").fetchall()
     assert rows == [("zz_other", 1, "running", None, False), ("zz_step", 1, "warn", "WARNING zz_step: stopped", True),
                     ("zz_step", 10, "running", None, False)]
+
+
+def test_job_key_ignores_company_spacing_case_and_legal_suffix():
+    from job_radar.steps import job_key
+
+    assert (job_key("Data Engineer - Cairo", "Care Access", "u1") == job_key("data engineer", "careaccess", "u2")
+            == job_key("Data Engineer", "CARE ACCESS Ltd.", "u3"))
+    assert job_key("AI Engineer", "Robots & Pencils", "u") == job_key("AI Engineer", "Robots and Pencils", "u")
+    assert job_key("Data Engineer", "Care Access", "u") != job_key("Data Engineer", "Care Accessories", "u")
+
+
+def test_years_required_reads_the_most_years_a_posting_asks_for():
+    from job_radar.steps import years_required
+
+    assert years_required("4+ years of experience in data engineering, 3+ years of hands-on PySpark experience") == 4
+    assert years_required("Minimum 2-3 years' experience with SQL") == 2
+    assert years_required("Experience: 5 years in BI") == 5
+    assert years_required("Founded 30 years ago; no experience needed") is None
+    assert years_required(None) is None
+
+
+def test_transform_twice_keeps_one_history_line_per_job(conn):
+    """core.job_history: one line per job_key, however often transform runs (rolled back)."""
+    steps.transform(RolledBack(conn))
+    first = conn.execute("SELECT count(*), count(DISTINCT job_key) FROM core.job_history").fetchone()
+    steps.transform(RolledBack(conn))
+    assert conn.execute("SELECT count(*), count(DISTINCT job_key) FROM core.job_history").fetchone() == first
+    assert first[0] == first[1] and first[0] >= conn.execute("SELECT count(*) FROM core.job").fetchone()[0]
+
+
+def test_a_board_that_drops_all_or_suddenly_none_is_a_warning(conn):
+    """drop_warning (rolled back): 100% dropped means the board changed; 0% where the last 7 days dropped half means the
+    rule broke; a normal day says nothing."""
+    board = "zz_test_board"
+    for days_ago in range(1, 4):  # a board that usually drops most of what it gives
+        conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %s, %s, 20, 15)",
+                     (days_ago, board))
+    rolled = RolledBack(conn)
+    assert steps.drop_warning(rolled, board, 20, 12) is None
+    assert "none of 20 postings dropped" in steps.drop_warning(rolled, board, 20, 0)
+    assert "all 20 postings dropped" in steps.drop_warning(rolled, board, 20, 20)
+    assert steps.drop_warning(rolled, "zz_new_board", 20, 0) is None  # no history: nothing to compare
+    assert steps.drop_warning(rolled, board, 3, 3) is None             # too few to judge

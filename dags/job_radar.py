@@ -8,6 +8,7 @@ The collect's time is in settings.yaml (schedule), Cairo time; as shipped:
     job_radar_email_egypt   after ranked: your home's jobs (Egypt) not emailed yet
     job_radar_email_abroad  after ranked: the jobs everywhere else (remote only) not emailed yet
     job_radar_applications  every hour: track_applications reads your mailbox (read-only) for your applications
+    job_radar_backup        3am: pg_dump of the core and raw schemas to output/backups, the last 14 kept
 
 The smart steps have a switch each in settings.yaml (features) and print that they are off when it is false.
 embed gives each job a local vector (how close it is to your CV). grade_claude (Claude,
@@ -32,6 +33,9 @@ credit or network) its task is red, the jobs go out ungraded and the next run gr
   source + link), a job is one row (core: its normalized title + company, so the same job on
   three boards or reposted is one job) and is emailed once. A re-run, a manual run right after a
   scheduled one, or a retry adds nothing twice.
+
+With the warehouse unreachable every step prints so and exits 99 (BashOperator's skip code): the run's tasks are
+skipped, not red, and the next run catches up.
 
 A source that fails is a warning in its task's log and the task stays green; a failed task (the
 warehouse down, no network, the email not sent) is not retried (schema is: twice, a minute apart, as the
@@ -125,3 +129,16 @@ with DAG(dag_id="job_radar_applications", schedule="0 * * * *", start_date=pendu
          catchup=False, max_active_runs=1, is_paused_upon_creation=False,
          default_args={"retries": 0, "execution_timeout": timedelta(seconds=300)}):
     step("track_applications")
+
+# the warehouse's own data (core and raw; the mart views are made again by schema), every night, in pg_dump's custom
+# format (nightly-<day>.dump): restore one with pg_restore. Only the newest 14 nightly dumps are kept; other files stay.
+BACKUPS, KEEP_BACKUPS = "/opt/job-radar/output/backups", 14
+with DAG(dag_id="job_radar_backup", schedule=cron(["3am"]), start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
+         catchup=False, max_active_runs=1, is_paused_upon_creation=False,
+         default_args={"retries": 1, "retry_delay": timedelta(minutes=5), "execution_timeout": timedelta(minutes=10)}):
+    BashOperator(task_id="pg_dump", bash_command=(
+        f"set -euo pipefail; mkdir -p {BACKUPS}; file={BACKUPS}/nightly-$(date +%Y-%m-%d).dump; "
+        'PGPASSWORD="$WAREHOUSE_PASSWORD" pg_dump -h "$WAREHOUSE_HOST" -p "$WAREHOUSE_PORT" -U jobradar -d jobradar'
+        ' -n core -n raw -Fc -f "$file.part" && mv "$file.part" "$file"; '
+        f"ls -1t {BACKUPS}/nightly-*.dump | tail -n +{KEEP_BACKUPS + 1} | xargs -r rm --; "
+        f'echo "backup: $file ($(du -h "$file" | cut -f1)), $(ls {BACKUPS}/nightly-*.dump | wc -l) kept"'))

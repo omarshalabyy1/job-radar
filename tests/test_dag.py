@@ -44,3 +44,9 @@ def test_a_trigger_sends_no_email_when_manual_collect_emails_is_off():
 def test_the_dag_retries_schema_and_puts_every_extract_behind_it():
     source = DAG.read_text(encoding="utf-8")
     assert 'step("schema", retries=2, retry_delay=timedelta(seconds=60)) >> extracts' in source
+
+
+def test_the_backup_keeps_the_newest_14_dumps_of_core_and_raw():
+    source = DAG.read_text(encoding="utf-8")
+    assert 'BACKUPS, KEEP_BACKUPS = "/opt/job-radar/output/backups", 14' in source
+    assert "-n core -n raw -Fc" in source and "tail -n +{KEEP_BACKUPS + 1} | xargs -r rm --" in source

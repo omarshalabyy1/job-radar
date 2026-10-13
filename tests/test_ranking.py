@@ -4,7 +4,9 @@ or the warehouse. Run on the laptop:
     .venv\Scripts\python -m pytest tests
 """
 
+import json
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -224,7 +226,7 @@ class Bronze:
         return self
 
     def fetchone(self):
-        return (len(self.stored),)
+        return (len(self.stored), 0)  # the row count; drop_warning reads its 7 days as (rows, 0)
 
     def cursor(self):
         return self
@@ -281,3 +283,13 @@ def test_load_never_stores_a_posting_someone_in_egypt_cannot_take(monkeypatch, c
     ("email", "United States", "USA", {}, False)])                                                  # a LinkedIn alert: always kept
 def test_not_for_egypt(source, location, place, payload, barred):
     assert bool(eligibility.not_for_egypt(source, location, place, payload)) == barred
+
+
+SAMPLE = json.loads((Path(__file__).parent / "fixtures" / "eligibility_sample.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("row", SAMPLE, ids=[f"{r['source']}: {r['location'][:40]}" for r in SAMPLE])
+def test_not_for_egypt_on_real_postings(row):
+    """Postings from the boards, labeled by hand barred or open to someone in Cairo (tests/fixtures/eligibility_sample.json):
+    a rule that silently stops matching ("Egypt", "EMEA", "worldwide") fails here."""
+    assert bool(eligibility.not_for_egypt(row["source"], row["location"], row["place"], row["payload"])) == row["barred"]

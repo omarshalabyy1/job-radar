@@ -1,18 +1,31 @@
 ---
 name: job-radar
-description: Run Omar's job-radar (C:\Users\DELL\GitHub\job-radar) and bring Claude into it - start a collect and check it, then grade the best new matches against his CV, tailor a CV and cover letter for the ones he picks, and help him apply. Use this whenever Omar types /job-radar, or says things like "run the radar", "any new jobs?", "check today's matches", "review my matches", "tailor my CV for this job", "write a cover letter for job 123", "apply to the best ones", "send the job emails now", or asks whether job-radar's last run worked - even if he never names the skill. Airflow's daily run has Claude grade Egypt's jobs and draft the best (settings.yaml features); this skill is where Claude works on his job search with him. Not for the Argus project.
+description: Run Omar's job-radar (C:\Users\DELL\GitHub\job-radar) and bring Claude into it - start a collect and check it, then grade the best new matches against his CV, tailor a CV and cover letter for the ones he picks, and help him apply. Use this whenever Omar types /job-radar, or says things like "run the radar", "any new jobs?", "check today's matches", "review my matches", "tailor my CV for this job", "write a cover letter for job 123", "apply to the best ones", "send the job emails now", or asks whether job-radar's last run worked - even if he never names the skill. Airflow's daily run has Claude grade the 20 jobs a day closest to his CV and draft Egypt's best (settings.yaml features); this skill is where Claude works on his job search with him. Not for the Argus project.
 ---
 
 # job-radar, with Claude
 
 job-radar finds data and AI jobs for Omar every day: Airflow collects once a day at 12pm (Cairo) and
-emails him right after it (about 12:30pm). At the end of the collect, on Egypt's jobs only (`ai_places`), embed
-gives each job a local vector (its closeness to his CV), grade_claude has Claude (Sonnet 5.5) grade each job that
-has a description 0-10 against his CV (`core.claude_grade`, shown as Score and Why in the tracker and the emails;
-about $3.70 a month at today's volume), and tailor writes cv.md, cover-letter.md and notes.md to
-output/applications/<day>/<company>-<title>/ for up to 5 jobs a run scoring 8+ in ai_places, and marks them saved
-('draft ready <day>'); the Ready to apply page shows them. About $0.05 a draft. Each step has a switch under
+emails him right after it (about 12:30pm). At the end of the collect embed
+gives each job with a description, in any place, a local vector (its closeness to his CV, core.job.cv_similarity),
+grade_claude has Claude (Sonnet 5.5) grade the closest ones, at most `claude.max_jobs` (20) a Cairo day, 0-10 against his
+CV (`core.claude_grade`, shown as Score and Why in the tracker and the emails; about $0.30 a day), naming first a
+years mismatch ("asks 5+ yrs, CV shows about 2"; core.job.years_required, read from the text at match_skills, else
+Claude's), and pushes an 8+ job in its first 12 hours to his phone (ntfy.sh, NTFY_TOPIC in .env). tailor writes cv.md,
+cv.html, cover-letter.md, cover-letter.html, notes.md and two one-page A4 PDFs (CV and cover letter, Playwright's
+Chromium) to output/applications/<day>/<company>-<title>/ for up to 5 jobs a run scoring 8+ in ai_places (Egypt), and
+marks them saved ('draft ready <day>'); a draft naming a gap is thrown away, a CV PDF over one page or missing a link
+stays unmarked and turns the task red. `tailor.tailor_job(conn, job_id)` drafts a job he names. The Ready to apply
+page shows each with one Apply link (core.job.apply_url, the employer's or original board's page, else a tracked
+company's careers page, else job_url) and a Mark applied button. About $0.07 a draft. Each step has a switch under
 `features` in settings.yaml.
+
+A job's key (steps.job_key) ignores the company's spacing, case, "and" and legal suffix, so "Care Access" and
+"careaccess" are one job. Before transform deletes a job (KEEP_DAYS) it writes a slim line to core.job_history (no
+description) for the Market page's trends. Each extract records postings and drops per board (core.extract_count): a
+board dropping all, or none where it used to drop half, is a WARNING. The Today page lists his next three deadlines (core.deadline, edited
+there) above the follow-ups. With the warehouse down every step exits 99 (skipped, not red). The job_radar_backup DAG
+dumps core and raw at 3am to output/backups/nightly-<day>.dump and keeps the newest 14.
 
 With features.eligibility on, a job someone living in Cairo cannot legally take is never stored (every extract drops it before it reaches raw.job_posting) when its board's own "who can apply" field bars Egypt or its location ties it to the USA, Canada or Europe, else hidden, never deleted:
 the eligibility step (after match_skills) reads the board's own "who can apply" field where it has one (Daily Remote, Remotive, Jobicy, Remote.co, Himalayas, We Work Remotely, Relomote, Wellfound: a list without worldwide, EMEA, MENA, Africa, the Middle East, Egypt or Cairo's time zone bars it), else asks Claude Haiku once per described job outside ai_places (yes, no or unclear; only no hides; about $0.70 a month). It sets core.job.restriction, and the tracker and the emails leave the job
@@ -28,7 +41,9 @@ APPLICATION_SENDERS in .env: people and domains who hire him directly, kept out 
 after its first confirmation email (Cairo calendar days) gets a draft in output/followups/<day>/, in his voice from his CV; with
 features.interview_prep on, an interview email gets notes in output/interviews/<company>-<title>/notes.md, written
 from the email's own text and the matching job's description only (a section with no source says 'No detail given in
-the email'). They are files; nothing is ever sent.
+the email'). They are files; nothing is ever sent. An email matches a job by the same title at a company of the same
+name ("Boston Consulting Group (BCG)" is BCG X), else the company's only job, and each run matches again the stored
+emails with no job yet; a match moves the job's status up only (applied, never down from interview, offer or rejected).
 
 This skill is the Claude side: run a collect
 on demand, judge the matches against his CV the way a recruiter would, and prepare and send
@@ -67,6 +82,11 @@ There are two ways to run it (docs/architecture.md draws them):
   source. The code never logs in and never solves a bot check: he does, in
   `scripts/open_blocked.py`, and his session is saved for Airflow.
 - Commits only when he asks, as omarshalabyy1 (the repo's own git identity), with no co-author line.
+- The containers mount the repo itself (`.:/opt/job-radar`), so a code edit is live in the next Airflow task, even
+  one already running. A change to `steps.job_key` re-keys jobs: rewrite core.job and core.job_seen in the same
+  sitting, before the next transform (dry run on a copy of the database first: `pg_dump | psql` into a scratch
+  database), or every job already emailed comes back as new and is emailed again (it happened on 2026-10-13). A bulk
+  DELETE on the warehouse needs his allow: ask for the exact command.
 
 Run SQL with `docker exec job-radar-warehouse-1 psql -U jobradar -d jobradar -At -c "..."`; for
 Airflow's tables, `docker exec job-radar-airflow-db-1 psql -U airflow -d airflow -At -c "..."`. In Git Bash, put `MSYS_NO_PATHCONV=1` before a `docker exec`
@@ -236,7 +256,17 @@ gap or something he hasn't done: they are confident and lead with his strengths,
 achievements (numbers only from his CV). Gaps, and how to address them, go only in `notes.md`.
 These are drafts: each one is sent only after his yes for that message.
 
-He wants files to send: offer PDFs (the pdf skill) or Word (the docx skill).
+He wants files to send: the tailor step already prints the one-page PDFs. For a job he picks here (it needs a
+description in core.job), draft it the same way, with the same checks, in the airflow container:
+
+```bash
+MSYS_NO_PATHCONV=1 docker exec -w /opt/job-radar job-radar-airflow-1 /opt/job-radar-venv/bin/python -c "from job_radar.db import connect; from job_radar.tailor import tailor_job; c = connect(); print(tailor_job(c, <job_id>))"
+```
+
+It overwrites a draft already in today's folder for that job. Open the PDFs before sending (one page, every link).
+Or build the PDF from cv.html, or Word (the docx skill). A coding test, interview or other date in a job's emails goes
+in his deadlines, shown on the Today page:
+`INSERT INTO core.deadline (job_id, what, due, note) VALUES (<job_id or NULL>, '<what>', '<YYYY-MM-DD>', '<note>');`
 
 Mark each one saved in the tracker, so it shows there:
 `INSERT INTO core.application (job_id, status, note) VALUES (<job_id>, 'saved', 'tailored <date>')
@@ -262,7 +292,8 @@ after a clear yes, open the application page in the browser and fill the form fr
 folder. Logins, passwords and CAPTCHAs are his to do; if a form needs one, hand over. Never apply
 through LinkedIn or Indeed - their terms ban automation and accounts get banned: give him the link
 and the prepared texts instead. When he confirms it was sent, set the job's status to `applied`
-(same SQL, `'applied'`).
+(same SQL, `'applied'`), or he presses Mark applied on the Ready page; a confirmation email in his mailbox marks it
+applied within the hour anyway when it names the job (or the company has one job in the radar).
 
 When a job says to apply by email, write that email too: to the address in the posting, the job
 title in the subject, the tailored CV and cover letter PDFs attached, and a short body (in his

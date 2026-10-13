@@ -6,7 +6,7 @@ from job_radar.config import FEATURES
 from job_radar.db import connect
 from tracker.common import HIDDEN_JOBS, HIDES, STATUSES, filtered, load_jobs, nothing_matches, numbers, plural, query
 
-ESSENTIALS = {"score", "title", "company", "place", "posted", "skill_matches", "status", "job_url"}
+ESSENTIALS = {"score", "title", "company", "place", "posted", "skill_matches", "years_required", "status", "job_url"}
 
 st.title("Jobs", icon=":material/work:")
 jobs = load_jobs()
@@ -26,7 +26,7 @@ table = shown.assign(score=shown["score"].map(lambda v: "n/a" if v != v else str
 edited = st.data_editor(
     table, key="jobs", hide_index=True, height=620,
     # what you decide on first, then the rest
-    column_order=[c for c in ["score", "title", "company", "role", "place", "posted", "skill_matches", "why", "cv_match", "status",
+    column_order=[c for c in ["score", "title", "company", "role", "place", "posted", "skill_matches", "years_required", "why", "cv_match", "status",
                               "note", "job_url", "target_company", "cv_coverage", "skills_matched", "company_size",
                               "posted_at", "first_seen", "source"]
                   # Claude's columns only with features.grade, the CV match only with features.embeddings
@@ -42,6 +42,8 @@ edited = st.data_editor(
         "posted_at": st.column_config.DatetimeColumn("Posted at", format="D MMM, h:mma"),
         "why": st.column_config.TextColumn("Why", width="medium", help="Why the job is hidden, else Claude's reason for its score"),
         "skill_matches": st.column_config.NumberColumn("Skills", width="small", help="How many of your skills the job asks for"),
+        "years_required": st.column_config.NumberColumn("Years", width="small", format="%d+",
+                                                        help="The years of experience the posting asks for"),
         "cv_coverage": st.column_config.ProgressColumn("CV covers", min_value=0, max_value=100, format="%d%%",
                                                        help="How much of what the job asks for your best CV shows"),
         "cv_match": st.column_config.ProgressColumn("CV match", min_value=0, max_value=100, format="%d%%",

@@ -106,8 +106,8 @@ linkedin:
   words: [data engineer, AI engineer, BI developer, data analyst]
   places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
 
-# Claude grading, in the job_radar DAG after embed (ANTHROPIC_API_KEY in .env): each job in ai_places with a
-# description scored 0-10 against your CVs, with the CV to send, one line why and what keeps someone living in
+# Claude grading, in the job_radar DAG after embed (ANTHROPIC_API_KEY in .env): the jobs of every place with a
+# description, closest to your CV first (embed's free cv_similarity), at most max_jobs a Cairo day, scored 0-10 against your CVs, with the CV to send, one line why and what keeps someone living in
 # Cairo from taking it, into core.claude_grade; it also learns from your last 30 clicks in the tracker. A job
 # scored 3 or lower is hidden in the tracker and left out of the emails (features.auto_hide; Claude's own restriction
 # only with features.eligibility); an 8+ job gets a tailored CV draft. Only a job that has a description is graded (LinkedIn pages
@@ -115,10 +115,10 @@ linkedin:
 # and is overwritten on the next run. About $3.70 a month at today's volume (measured); Haiku was tested and kept only
 # 3 of Sonnet's 8 top picks, so Sonnet stays. The task turns red when it selected jobs and graded none (key, credit or
 # network), and it stops by itself when the API credit runs out. Switched back on 2026-10-10 (features.grade; off since
-# 2026-10-08). max_jobs: the most graded per run.
+# 2026-10-08). max_jobs: the most graded a Cairo day (the cost cap; all places since 2026-10-13).
 claude:
   model: claude-sonnet-5-5
-  max_jobs: 100
+  max_jobs: 20
 
 # Above your level: a title with any of these words is left out (entry, mid and senior stay in)
 too_senior: [lead, principal, staff, head, director, manager, vp, chief, architect]

@@ -66,11 +66,14 @@ def test_a_job_is_graded_when_it_has_no_fresh_grade_and_nothing_bars_it(conn):
     add_grade(conn, mine["graded_after_the_cv"], f"{cv} + {HOUR}")
     for name in ("saved", "ignored", "rejected"):
         conn.execute("INSERT INTO core.application (job_id, status) VALUES (%s, %s)", (mine[name], name))
-    assert queue(conn, mine) == {"new", "age_at_the_window_edge", "saved", "stale"}
+    assert queue(conn, mine) == {"new", "age_at_the_window_edge", "saved", "stale", "other_place"}  # every place
     # features.eligibility off: a regex flag no longer keeps a job from being graded
     grade.FEATURES["eligibility"] = False
     assert "restricted" in queue(conn, mine)
-    assert len(grade.jobs_to_grade(conn, 1)) == 1  # the limit
+    today = conn.execute("SELECT count(*) FROM core.claude_grade WHERE (graded_at AT TIME ZONE 'Africa/Cairo')::date"
+                         " = (now() AT TIME ZONE 'Africa/Cairo')::date").fetchone()[0]
+    assert len(grade.jobs_to_grade(conn, today + 1)) == 1  # the day's cap, less what was graded today
+    assert grade.jobs_to_grade(conn, today) == []
 
 
 def test_a_job_graded_before_your_newest_cv_is_graded_again_once_and_only_once(conn):
@@ -101,6 +104,18 @@ class FakeConn:
     def commit(self):
         pass
 
+    def cursor(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        pass
+
+    def executemany(self, *_):
+        pass
+
 
 class FakeClient:
     """messages.parse returns a grade for a job unless its title says to fail, with no network."""
@@ -118,7 +133,7 @@ class FakeClient:
                 raise error
         usage = type("Usage", (), {"input_tokens": 1, "cache_read_input_tokens": 0,
                                    "cache_creation_input_tokens": 0, "output_tokens": 1})
-        return type("Reply", (), {"parsed_output": grade.Grade(score=5, cv="Data Analyst", reason="ok", restriction=""),
+        return type("Reply", (), {"parsed_output": grade.Grade(score=5, cv="Data Analyst", reason="ok", restriction="", years_required=0),
                                   "usage": usage})
 
 
@@ -128,7 +143,8 @@ def run_grade(monkeypatch, titles: list[str]) -> None:
     monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
     monkeypatch.setattr(grade, "recent_clicks", lambda conn: [])
     monkeypatch.setattr(grade, "save_grades", lambda conn, rows: None)
-    monkeypatch.setattr(grade, "jobs_to_grade", lambda conn, limit: [(i, t, "Acme", "Cairo", "text") for i, t in enumerate(titles)])
+    monkeypatch.setattr(grade, "alert_fresh", lambda conn, job_ids: None)
+    monkeypatch.setattr(grade, "jobs_to_grade", lambda conn, limit: [(i, t, "Acme", "Cairo", "text", None) for i, t in enumerate(titles)])
     grade.grade_claude(FakeConn())
 
 
@@ -186,3 +202,15 @@ def test_recent_clicks_leave_out_the_saved_rows_the_tailor_writes(conn):
     lines = [line for line, _ in grade.recent_clicks(conn) if line.startswith("Zz ")]
     assert sorted(lines) == ["Zz applied_after_draft at Acme -> applied", "Zz ignored at Acme -> ignored",
                              "Zz own_save at Acme -> saved", "Zz own_save_with_note at Acme -> saved"]
+
+
+def test_a_fresh_job_graded_8_or_more_is_pushed_to_the_phone(conn, monkeypatch):
+    pushed = []
+    monkeypatch.setattr(grade, "push", lambda title, message, url=None: pushed.append(title))
+    jobs = {name: add_job(conn, name) for name in ("fresh_good", "old_good", "fresh_weak")}
+    conn.execute("UPDATE core.job SET posted_at = now() - interval '2 hours' WHERE job_id IN (%s, %s)", (jobs["fresh_good"], jobs["fresh_weak"]))
+    conn.execute("UPDATE core.job SET posted_at = now() - interval '30 hours' WHERE job_id = %s", (jobs["old_good"],))
+    for name, score in (("fresh_good", 9), ("old_good", 9), ("fresh_weak", 7)):
+        conn.execute("INSERT INTO core.claude_grade (job_id, score, cv, reason, model) VALUES (%s, %s, 'cv', 'why', 'm')", (jobs[name], score))
+    grade.alert_fresh(conn, list(jobs.values()))
+    assert pushed == ["9/10: Data Engineer"]

@@ -120,3 +120,54 @@ def test_tailor_ties_on_score_go_to_the_role_you_ranked_first_then_the_older_job
     mine = {"worse_role": add_graded_job(conn, "worse_role", 9, role_rank=2), "better_role": add_graded_job(conn, "better_role", 9, role_rank=1),
             "better_role_later": add_graded_job(conn, "better_role_later", 9, role_rank=1)}
     assert picked(conn, mine) == ["better_role", "better_role_later", "worse_role"]
+
+
+def sample_draft(**changes) -> tailor.Draft:
+    fields = dict(
+        name="Zz Candidate", title_line="Data Engineer | Pipelines",
+        contact=[tailor.Link(text="Rehab, Cairo, Egypt", url=""), tailor.Link(text="zz@example.com", url="mailto:zz@example.com"),
+                 tailor.Link(text="Portfolio: omarlabs.dev", url="https://omarlabs.dev")],
+        summary="Data Engineer with 2 years of experience building pipelines in Python and SQL.",
+        skills=[tailor.SkillGroup(label="Data", items="SQL, Python")],
+        experience=[tailor.Entry(title="Data Engineer", org="Acme | Cairo", when="2025 – Present (1 yr)",
+                                 bullets=["Cut a report from 3 days to 2 hours."], technologies="", repo_url="")],
+        projects=[tailor.Entry(title="Warehouse", org="Star schema", when="2026", bullets=["Built it."],
+                               technologies="PostgreSQL", repo_url="https://github.com/zz/warehouse")],
+        education=[], certifications=[], languages="Arabic, English", file_tag="de",
+        cover_letter_md="Dear team,\n\nI build pipelines your analysts trust.\n\nZz Candidate", notes_md="notes")
+    return tailor.Draft(**{**fields, **changes})
+
+
+def test_a_draft_is_written_as_html_and_one_page_pdfs_with_their_links(monkeypatch, tmp_path):
+    problems = tailor.write_draft(tmp_path, sample_draft(), "Acme Ltd.")
+    assert problems == []
+    names = sorted(p.name for p in tmp_path.iterdir())
+    assert names == ["Zz Candidate Acme Ltd. DE Cover Letter.pdf", "Zz Candidate Acme Ltd. DE.pdf", "cover-letter.html",
+                     "cover-letter.md", "cv.html", "cv.md", "notes.md"]
+    cv = (tmp_path / "cv.html").read_text(encoding="utf-8")
+    assert 'Portfolio: <a href="https://omarlabs.dev">omarlabs.dev</a>' in cv and '(<a href="https://github.com/zz/warehouse">GitHub</a>)' in cv
+
+
+def test_a_cv_pdf_over_one_page_or_without_its_links_fails_its_check():
+    long = sample_draft(experience=[tailor.Entry(title="Role", org="Acme", when="2025", bullets=["Built a pipeline. " * 30] * 40,
+                                                 technologies="", repo_url="")])
+    page = tailor.cv_html(long)
+    assert any("pages, not 1" in p for p in tailor.pdf_problems(tailor.pdf_of(page), page))
+    short = tailor.cv_html(sample_draft())
+    no_links = tailor.pdf_of(short.replace("<a href=", "<span data-href="))  # printed without its links
+    assert any("lost its links" in p for p in tailor.pdf_problems(no_links, short))
+
+
+def test_a_cover_letter_that_names_a_gap_is_thrown_away(capsys):
+    class Client:
+        def __init__(self, draft):
+            self.messages, self.draft = self, draft
+
+        def parse(self, **_):
+            return type("R", (), {"parsed_output": self.draft})()
+
+    job = (1, "Data Engineer", "Acme", "Cairo", "text", 9, "cv", "fits")
+    for letter in ("I have not used Spark yet.", "I have no experience with Kafka.", "I lack Airflow."):
+        assert tailor.ask(Client(sample_draft(cover_letter_md=letter)), {"cv": "text"}, job) is None
+    assert "names a gap" in capsys.readouterr().out
+    assert tailor.ask(Client(sample_draft()), {"cv": "text"}, job) is not None

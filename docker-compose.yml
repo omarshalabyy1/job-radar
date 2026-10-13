@@ -24,6 +24,7 @@ x-job-env: &job-env
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   MAILBOXES: ${MAILBOXES:-}
   APPLICATION_SENDERS: ${APPLICATION_SENDERS:-}
+  NTFY_TOPIC: ${NTFY_TOPIC:-}
   PYTHONUNBUFFERED: "1"
   JOB_RADAR_OUTPUT: /opt/job-radar/output  # the bind mount below; set here so a host path from .env (e.g. E:/) never reaches the container
 

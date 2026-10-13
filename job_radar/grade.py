@@ -1,6 +1,8 @@
-"""grade_claude: Claude (settings.yaml claude.model) scores each job that has a description, in a place of
-ai_places, against your CVs in core.cv, 0-10 (again after you upload a CV), names the CV to send, gives one line why and (features.eligibility)
-says what keeps someone living in Cairo from taking it (restriction), into core.claude_grade. The job_radar DAG
+"""grade_claude: Claude (settings.yaml claude.model) scores the jobs with a description, in any place, closest to your
+CV first (core.job.cv_similarity, embed's free score), at most claude.max_jobs a Cairo day, against your CVs in core.cv, 0-10
+(again after you upload a CV), names the CV to send, gives one line why (naming a years-of-experience mismatch) and
+(features.eligibility) says what keeps someone living in Cairo from taking it (restriction), into core.claude_grade. A
+job whose description gave no years asked (steps.years_required) gets Claude's reading in core.job.years_required. The job_radar DAG
 runs it after embed; the emails, the tracker and the tailor step read the grade, and a job scored 3 or lower, or
 with a restriction (features.eligibility), is hidden (config.hidden_reason, features.auto_hide). It learns from your last 30
 clicks. With features.grade false, no ANTHROPIC_API_KEY or no CV it prints why and stops green. When jobs were selected
@@ -15,7 +17,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pydantic import BaseModel
 
 from . import claude
-from .config import AI_PLACES, FEATURES, KEEP_DAYS, SETTINGS
+from .config import FEATURES, KEEP_DAYS, SETTINGS
+from .digest import push
 from .sources import time_left
 
 GRADE_SECONDS = 540  # the DAG gives the task 600 s; the jobs left are graded next run
@@ -28,22 +31,27 @@ class Grade(BaseModel):
     cv: str           # the label of the CV to send
     reason: str
     restriction: str  # empty when someone living in Cairo, Egypt can legally take the job
+    years_required: int  # the years of experience the posting asks for, 0 when it names none
 
 
 def jobs_to_grade(conn, limit: int) -> list[tuple]:
-    """The jobs still alive, in ai_places, with a description (a title alone is a weak signal, so those stay
+    """The jobs still alive, in any place, with a description (a title alone is a weak signal, so those stay
     ungraded), that the eligibility step did not bar (with features.eligibility), with no grade yet or one made before your newest
     CV was uploaded (graded again: graded_at >= uploaded_at counts as fresh) and that you did not ignore or
-    reject: most skills first, then freshest."""
+    reject: closest to your CV first (embed), then most skills, then freshest; `limit` less the jobs graded today (a
+    Cairo day), so a second collect the same day grades only what the first left of the day's cap."""
     return conn.execute(
-        "SELECT j.job_id, j.title, j.company, j.location, j.description FROM core.job j"
-        " WHERE j.first_seen >= current_date - %s AND j.place = ANY(%s) AND j.description IS NOT NULL"
+        "SELECT j.job_id, j.title, j.company, j.location, j.description, j.years_required FROM core.job j"
+        " WHERE j.first_seen >= current_date - %s AND j.description IS NOT NULL"
         " AND (j.restriction IS NULL OR NOT %s)"
         " AND NOT EXISTS (SELECT 1 FROM core.claude_grade g WHERE g.job_id = j.job_id"
         " AND g.graded_at >= (SELECT max(uploaded_at) FROM core.cv))"
         " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id AND a.status IN ('ignored', 'rejected'))"
-        " ORDER BY (SELECT count(*) FROM core.job_skill k WHERE k.job_id = j.job_id) DESC,"
-        " j.posted_at DESC NULLS LAST, j.job_id LIMIT %s", (KEEP_DAYS, AI_PLACES, FEATURES["eligibility"], limit)).fetchall()
+        " ORDER BY j.cv_similarity DESC NULLS LAST, (SELECT count(*) FROM core.job_skill k WHERE k.job_id = j.job_id) DESC,"
+        " j.posted_at DESC NULLS LAST, j.job_id"
+        " LIMIT greatest(0, %s - (SELECT count(*) FROM core.claude_grade"
+        " WHERE (graded_at AT TIME ZONE 'Africa/Cairo')::date = (now() AT TIME ZONE 'Africa/Cairo')::date))",
+        (KEEP_DAYS, FEATURES["eligibility"], limit)).fetchall()
 
 
 def recent_clicks(conn) -> list[tuple]:
@@ -66,9 +74,12 @@ def system_blocks(cvs: list[tuple], clicks: list[tuple], eligibility: bool) -> l
                         "or a job in Cairo or Giza; a job they cannot legally take from Egypt (a citizenship, a "
                         "security clearance, a work permit or residence in another country, nationals only) "
                         "scores 0-3." if eligibility else "")
-                     + " score: 0-10, how well they fit and could get it (10 = apply today). cv: the label of the "
+                     + " score: 0-10, how well they fit and could get it (10 = apply today); a posting that asks for "
+                       "more years of experience than the CV shows scores lower. cv: the label of the "
                        "CV they should send, exactly as given. reason: one short line naming the deciding match or "
-                       "gap. restriction: "
+                       "gap; when the posting asks for more years than the CV shows, it says so first (\"asks 4+ yrs, CV "
+                       "shows about 2\"). years_required: the years of experience the posting asks for (its lowest "
+                       "bound, the most of several), 0 when it names none. restriction: "
                      + ("empty when someone living in Cairo, Egypt can legally take the job, else a short phrase "
                         "saying what bars them." if eligibility else "always empty.")
                      + "\n\n" + "\n\n".join(f"<cv label=\"{label}\">\n{text}\n</cv>" for label, text in cvs)
@@ -83,6 +94,19 @@ def save_grades(conn, rows: list[tuple]) -> None:
                         " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (job_id) DO UPDATE SET score = EXCLUDED.score,"
                         " cv = EXCLUDED.cv, reason = EXCLUDED.reason, restriction = EXCLUDED.restriction,"
                         " model = EXCLUDED.model, graded_at = now()", rows)
+
+
+def alert_fresh(conn, job_ids: list[int]) -> None:
+    """A phone push (digest.push) for each job just graded 8 or more that is still in its first 12 hours since it was
+    posted: the ones worth applying to today. A push that fails is a warning; the grades are kept."""
+    for title, company, score, url in conn.execute(
+            "SELECT j.title, j.company, g.score, coalesce(j.apply_url, j.job_url) FROM core.claude_grade g JOIN core.job j"
+            " USING (job_id) WHERE j.job_id = ANY(%s) AND g.score >= 8 AND now() - j.posted_at <= interval '12 hours'",
+            (job_ids,)).fetchall():
+        try:
+            push(f"{score}/10: {title}", f"{company}, posted in the last 12 hours", url)
+        except Exception as e:  # the network or ntfy.sh: the grades matter more than the push
+            print(f"WARNING grade_claude: push for {company}: {e!r}"[:200])
 
 
 def grade_claude(conn) -> None:
@@ -106,14 +130,15 @@ def grade_claude(conn) -> None:
 
     def grade(job: tuple) -> tuple | None:
         nonlocal out_of_credit
-        job_id, title, company, location, description = job
+        job_id, title, company, location, description, years = job
         if out_of_credit or time_left(GRADE_SECONDS) < 30:
             return None
         try:
             r = client.messages.parse(
                 model=cfg["model"], max_tokens=MAX_TOKENS, system=system, output_format=Grade,
                 output_config={"effort": "low"},
-                messages=[{"role": "user", "content": f"{title} at {company} ({location})\n\n{description[:6000]}"}])
+                messages=[{"role": "user", "content": f"{title} at {company} ({location})"
+                           + (f"\nYears of experience it asks for: {years}+" if years else "") + f"\n\n{description[:6000]}"}])
         except anthropic.BadRequestError as e:
             if claude.out_of_credit(e):  # the balance ran out: every call would be refused
                 out_of_credit = True
@@ -127,13 +152,17 @@ def grade_claude(conn) -> None:
         if g is None:
             return None
         return (job_id, max(0, min(10, g.score)), g.cv, g.reason, (g.restriction.strip() or None) if eligibility else None,
-                cfg["model"])
+                cfg["model"], g.years_required if 0 < g.years_required <= 20 else None)
 
     # the first job alone writes the cache; only then do the other calls start, so they all read it
     first = [grade(jobs[0])] if jobs else []
     with ThreadPoolExecutor(4) as pool:
         done = [row for row in [*first, *pool.map(grade, jobs[1:])] if row]
-    save_grades(conn, done)
+    save_grades(conn, [row[:6] for row in done])
+    alert_fresh(conn, [row[0] for row in done])
+    with conn.cursor() as cur:  # the description's own digits (steps.years_required) win over Claude's reading
+        cur.executemany("UPDATE core.job SET years_required = %s WHERE job_id = %s AND years_required IS NULL",
+                        [(row[6], row[0]) for row in done if row[6]])
     conn.commit()
     print(f"grade_claude: {len(done)} of {len(jobs)} jobs graded with {cfg['model']}"
           + (" - WARNING the API credit ran out: no more grades until you buy more" if out_of_credit else ""))

@@ -1,6 +1,6 @@
 """embed: local Ollama vectors for the jobs and your CVs: how close each job is to your CV.
 
-Each job still in the window (config.KEEP_DAYS), in a place of ai_places, with a description (a title alone is a
+Each job still in the window (config.KEEP_DAYS), in any place, with a description (a title alone is a
 weak signal) and no vector yet from settings.yaml embeddings.model gets one from its title, company and the
 start of its description, into core.job_vector. Your CVs in core.cv are embedded when they have no vector from that model
 yet or were uploaded after their vector was made (core.cv_vector.embedded_at; a CV uploaded again keeps its label), into
@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-from .config import AI_PLACES, FEATURES, KEEP_DAYS, SETTINGS
+from .config import FEATURES, KEEP_DAYS, SETTINGS
 from .sources import time_left
 
 EMBED_SECONDS = 200  # the DAG gives the task 240 s; the jobs left are embedded next run
@@ -57,9 +57,9 @@ def embed(conn) -> None:
     cvs = stale_cvs(conn, model)
     jobs = conn.execute(
         "SELECT j.job_id, j.title || ' at ' || j.company || E'\\n\\n' || left(j.description, 2000) FROM core.job j"
-        " WHERE j.first_seen >= current_date - %s AND j.place = ANY(%s) AND j.description IS NOT NULL"
+        " WHERE j.first_seen >= current_date - %s AND j.description IS NOT NULL"
         " AND NOT EXISTS (SELECT 1 FROM core.job_vector v WHERE v.job_id = j.job_id AND v.model = %s)"
-        " ORDER BY j.job_id", (KEEP_DAYS, AI_PLACES, model)).fetchall()
+        " ORDER BY j.job_id", (KEEP_DAYS, model)).fetchall()
     embedded = 0
     try:
         if cvs:
@@ -90,8 +90,7 @@ def embed(conn) -> None:
 
     cv_vectors = [v for v, in conn.execute("SELECT vector FROM core.cv_vector WHERE model = %s", (model,))]
     if cv_vectors:  # no CV: cv_similarity stays empty
-        vectors = conn.execute("SELECT v.job_id, v.vector FROM core.job_vector v JOIN core.job j USING (job_id)"
-                               " WHERE v.model = %s AND j.place = ANY(%s)", (model, AI_PLACES)).fetchall()
+        vectors = conn.execute("SELECT job_id, vector FROM core.job_vector WHERE model = %s", (model,)).fetchall()
         with conn.cursor() as cur:
             cur.executemany("UPDATE core.job SET cv_similarity = %s WHERE job_id = %s",
                             [(max(cosine(v, cv) for cv in cv_vectors), job_id) for job_id, v in vectors])

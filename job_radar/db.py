@@ -9,4 +9,5 @@ import psycopg
 def connect() -> psycopg.Connection:
     return psycopg.connect(host=os.environ.get("WAREHOUSE_HOST", "127.0.0.1"),
                            port=os.environ.get("WAREHOUSE_PORT", "5433"),
-                           dbname="jobradar", user="jobradar", password=os.environ["WAREHOUSE_PASSWORD"])
+                           dbname="jobradar", user="jobradar", password=os.environ["WAREHOUSE_PASSWORD"],
+                           connect_timeout=15)  # a warehouse that is down is said in seconds, not minutes

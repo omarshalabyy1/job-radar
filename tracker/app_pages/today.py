@@ -1,6 +1,7 @@
-"""Today: what to apply to next, where your applications stand, and whether the last run worked."""
+"""Today: what to apply to next, your deadlines, where your applications stand, and whether the last run worked."""
 
 import altair as alt
+import pandas as pd
 import streamlit as st
 
 from job_radar.config import FEATURES
@@ -36,7 +37,40 @@ else:
         "why": st.column_config.TextColumn("Why", width="large", help="Claude's reason for the score"),
         "job_url": st.column_config.LinkColumn("Link", display_text="Open", width="small")})
 
-# 2. your applications: the stages from your mailbox, and what is due today
+# 2. your deadlines (core.deadline): the next three not done, and every one to edit
+st.subheader("Deadlines")
+deadlines = query("SELECT d.deadline_id, d.due, d.what, d.note, d.done, d.job_id FROM core.deadline d ORDER BY d.done, d.due")
+upcoming = deadlines[~deadlines["done"]].head(3)
+if upcoming.empty:
+    st.caption("No deadline set: add one below.")
+else:
+    st.dataframe(upcoming[["due", "what", "note"]], hide_index=True, column_config={
+        "due": st.column_config.DateColumn("Due", format="ddd D MMM", width="small"),
+        "what": st.column_config.TextColumn("What", width=300), "note": st.column_config.TextColumn("Note", width="large")})
+with st.expander("Edit deadlines"):
+    edited = st.data_editor(deadlines, key="deadlines", hide_index=True, num_rows="dynamic",
+                            column_order=["due", "what", "note", "job_id", "done"], column_config={
+                                "due": st.column_config.DateColumn("Due", required=True),
+                                "what": st.column_config.TextColumn("What", required=True),
+                                "note": st.column_config.TextColumn("Note", width="large"),
+                                "job_id": st.column_config.NumberColumn("Job id", help="The job in the radar, if any", format="%d"),
+                                "done": st.column_config.CheckboxColumn("Done", default=False)})
+    if st.button("Save deadlines", icon=":material/save:"):
+        with connect() as conn:
+            kept = [int(i) for i in edited["deadline_id"].dropna()]
+            conn.execute("DELETE FROM core.deadline WHERE deadline_id <> ALL(%s)", (kept,))
+            for d in edited.itertuples():
+                row = (d.due, d.what, d.note if isinstance(d.note, str) and d.note.strip() else None,
+                       int(d.job_id) if pd.notna(d.job_id) else None, bool(d.done))
+                if pd.notna(d.deadline_id):  # empty for a new row
+                    conn.execute("UPDATE core.deadline SET due = %s, what = %s, note = %s, job_id = %s, done = %s"
+                                 " WHERE deadline_id = %s", (*row, int(d.deadline_id)))
+                else:
+                    conn.execute("INSERT INTO core.deadline (due, what, note, job_id, done) VALUES (%s, %s, %s, %s, %s)", row)
+        query.clear()
+        st.rerun()
+
+# 3. your applications: the stages from your mailbox, and what is due today
 st.subheader("Your applications")
 stage = query("SELECT kind, count(DISTINCT lower(coalesce(company, title))) AS companies FROM core.application_email"
               " WHERE kind IN ('applied', 'viewed', 'interview', 'offer', 'hired') GROUP BY kind")
@@ -60,7 +94,7 @@ right.metric("Applied in the tracker", int((jobs["status"] == "applied").sum()),
              help="Jobs you set to applied, with or without a confirmation email")
 right.metric("Follow-ups due today", due, border=True, help="Applied 7 or 14 days ago with no answer yet (Applications)")
 
-# 3. the pipeline: did the last run work, and what it cost
+# 4. the pipeline: did the last run work, and what it cost
 st.subheader("The pipeline")
 runs = query("SELECT DISTINCT ON (step) step, status, started_at FROM core.step_run ORDER BY step, started_at DESC")
 if runs.empty:

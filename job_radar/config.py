@@ -14,6 +14,8 @@ KEEP_DAYS = 5  # a job first seen longer ago is deleted (transform), unless you 
 # fit waits for the next run.
 EXTRACT_SECONDS = 150
 DESCRIBE_SECONDS = 60
+# boards that only list a job; their own link is not where it is applied for
+BOARD_HOSTS = ("indeed.", "linkedin.", "bayt.", "tanqeeb.", "himalayas.", "adzuna.", "jooble.", "naukrigulf.", "gulftalent.")
 
 ROOT = Path(__file__).resolve().parent.parent  # the repo
 load_dotenv(ROOT / ".env")  # so OUTPUT below sees .env however the code is started

@@ -8,8 +8,8 @@ says where to change what. How each source is read, with the tests behind each c
 
 ## Two ways to run it
 
-Docker and Airflow run on their own once a day; at the end of each collect Claude grades Egypt's jobs and
-drafts the best (each step has a switch under `features` in `settings.yaml`). Claude Code runs with you, by hand,
+Docker and Airflow run on their own once a day; at the end of each collect Claude grades the jobs closest to your CV (20 a day, any place) and
+drafts Egypt's best (each step has a switch under `features` in `settings.yaml`). Claude Code runs with you, by hand,
 when you type `/job-radar`: that is where your own limit pays for what the schedule never gets, and what it
 fixes or unlocks (a saved login, a repaired reader) the daily run uses from then on.
 
@@ -89,14 +89,20 @@ mindmap
 Twelve extract tasks run one by one, each within 150 seconds (LinkedIn's Apify run within 280), so a
 busy laptop is not swamped; a task may wait up to an hour for its turn (`task_queued_timeout` 3600 in
 `docker-compose.yml`), so the last extracts are never failed unrun. A whole collect takes about 15
-minutes, and both emails go right after `ranked`, which runs when grade_claude has ended, red or green. On Egypt's jobs only (`ai_places`), embed gives each job a
-local vector (CV match: closeness to your CV, $0 on the CPU), grade_claude has Claude score each one with a
-description 0-10 against your CV, and tailor drafts the 8+ ones. With `features.eligibility` on, a job someone living in Cairo cannot legally take is never stored (every extract drops it before it reaches raw.job_posting) when its board's own "who can apply" field bars Egypt or its location ties it to the USA, Canada or Europe, else hidden, not deleted:
+minutes, and both emails go right after `ranked`, which runs when grade_claude has ended, red or green. embed gives each job with a description a
+local vector (CV match: closeness to your CV, $0 on the CPU), grade_claude has Claude score the closest ones (at most
+`claude.max_jobs`, 20, a Cairo day, any place) 0-10 against your CV, naming a years-of-experience mismatch, and pushes an
+8+ job in its first 12 hours to your phone (ntfy.sh); tailor drafts the 8+ ones in Egypt (`ai_places`) as markdown, html and
+one-page PDFs, checked in code (no gap named, one page, every link kept). With `features.eligibility` on, a job someone living in Cairo cannot legally take is never stored (every extract drops it before it reaches raw.job_posting) when its board's own "who can apply" field bars Egypt or its location ties it to the USA, Canada or Europe, else hidden, not deleted:
 the eligibility step (after match_skills) reads the board's own "who can apply" field where it has one (Daily Remote, Remotive, Jobicy, Remote.co, Himalayas, We Work Remotely, Relomote, Wellfound: a list without worldwide, EMEA, MENA, Africa, the Middle East, Egypt or Cairo's time zone bars it), else asks Claude Haiku once per described job outside ai_places (yes, no or unclear; only no hides; about $0.70 a month); it sets `core.job.restriction`, and the email and the tracker leave it out
 (`config.hidden_reason`; the tracker's Show hidden jobs brings it back). Claude's own restriction hides a job the same way, a score of 3 or
 lower hides it with `features.auto_hide`, and a status of yours shows it again. The describe step also hides a job whose page says it is closed (404, 410, Greenhouse's ?error=true, or "no longer available"). A job whose own posting has no text takes the text of the
 same job from another posting of the last 5 days. A job first seen over 5 days ago
-is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key).
+is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key; `core.job_history`
+keeps a slim line for the Market page's trends). A job's key ignores the company's spacing, case, "and" and legal suffix.
+A board that drops all its postings as not for Egypt, or none where it used to drop half, is a WARNING (`core.extract_count`).
+With the warehouse unreachable each step exits 99 and Airflow marks it skipped. `job_radar_backup` dumps `core` and
+`raw` every night at 3am to `output/backups/` and keeps the newest 14.
 Every posting is stored once (its source and link), every job once (`core.job`), every email
 sends a job once. Newsletters with no jobs are remembered in `core.email_seen` for 7 days, and every step
 leaves a row in `core.step_run` (the tracker's Last run page). In Docker, `output/` is a bind mount of
@@ -134,10 +140,10 @@ flowchart LR
     describe --> match["match_skills"]
     match --> export["export_career_ops"]
     match --> eligible["eligibility<br>board field, else Haiku"]:::ai
-    eligible --> embed["embed<br>local vectors, Egypt"]:::ai
-    embed --> grade["grade_claude<br>Claude scores Egypt's jobs"]:::ai
+    eligible --> embed["embed<br>local vectors"]:::ai
+    embed --> grade["grade_claude<br>Claude scores the 20 closest a day"]:::ai
     grade --> ranked["ranked<br>releases the emails,<br>even if grading failed"]
-    ranked --> tailor["tailor<br>drafts for 8+"]:::ai
+    ranked --> tailor["tailor<br>drafts and PDFs for 8+"]:::ai
     core -.-> mart[("mart.job_status")]
     mart -.-> emails(["2 emails<br>right after<br>each job once"]):::success
 
@@ -172,16 +178,17 @@ flowchart LR
 | Step | Reads | Writes |
 |---|---|---|
 | `schema` | `settings.yaml`, `sql/schema.sql` | `core.company`, `core.skill`, the `mart` views |
-| `extract_*` (12) | the sources | `raw.job_posting`; `extract_email` also `core.email_seen` |
-| `transform` | `raw.job_posting` | `core.job`, `core.job_seen` (the keys of jobs deleted after 5 days) |
+| `extract_*` (12) | the sources | `raw.job_posting`, `core.extract_count`; `extract_email` also `core.email_seen` |
+| `transform` | `raw.job_posting` | `core.job` (with `apply_url`), `core.job_history`, `core.job_seen` (the keys of jobs deleted after 5 days) |
 | `describe` | the jobs' pages | `core.job.description` |
-| `match_skills` | `core.job`, `core.cv` | `core.job_skill`, `core.cv_skill` |
+| `match_skills` | `core.job`, `core.cv` | `core.job_skill`, `core.cv_skill`, `core.job.years_required` |
 | `eligibility` | `core.job`, its raw posting, Claude Haiku | `core.job.restriction`, `core.job.eligibility_at` (a barred job is hidden, not deleted) |
 | `embed` | `core.job`, `core.cv`, a local Ollama model | `core.job_vector`, `core.cv_vector`, `core.job.cv_similarity` |
-| `grade_claude` | `core.job`, `core.cv`, your last 30 clicks | `core.claude_grade` (a grade older than your newest CV upload is overwritten) |
-| `tailor` | `core.claude_grade` scoring 8+ | `output/applications/<day>/`, `core.application` as saved |
+| `grade_claude` | `core.job`, `core.cv`, your last 30 clicks | `core.claude_grade` (a grade older than your newest CV upload is overwritten), `core.job.years_required` when the text gave none, a phone push |
+| `tailor` | `core.claude_grade` scoring 8+ | `output/applications/<day>/` (md, html, PDFs), `core.application` as saved |
 | `check_extracts` | the tasks' states | nothing: it fails the run when `schema` or an extract did not succeed |
 | `track_applications` | Gmail, read-only | `core.application_email`, `core.application`, `output/followups/`, `output/interviews/` |
+| `job_radar_backup` (its own DAG) | `core`, `raw` | `output/backups/nightly-<day>.dump`, the newest 14 |
 | every step | | one row in `core.step_run`: status, summary, Claude tokens and exact dollars |
 
 ## Every request
