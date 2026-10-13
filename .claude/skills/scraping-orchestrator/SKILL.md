@@ -99,6 +99,7 @@ Re-test when it breaks: a refusal, a falling count or empty fields mean the verd
 - Set `PYTHONUTF8=1` (the Windows console dies on Arabic). Not installed: Scrapy, Camoufox; do not route to them.
 - A project that scrapes gets a copy: `SKILL.md` and `unlock.py` in `<repo>/.claude/skills/scraping-orchestrator/`, committed; re-copy when this skill changes. Never commit profiles or cookies.
 - Scheduled scrapers are Airflow tasks (skill `authoring-dags`); storage in Postgres (`postgresql_de`) or files with `duckdb`.
+- Scraped data that ends in a Power BI report: hand the clean tables to skill `powerbi-orchestrator` (Power BI reads clean tables only).
 
 ## Omar's rules
 
