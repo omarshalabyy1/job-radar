@@ -6,8 +6,8 @@ start of its description, into core.job_vector. Your CVs in core.cv are embedded
 yet or were uploaded after their vector was made (core.cv_vector.embedded_at; a CV uploaded again keeps its label), into
 core.cv_vector. Each sentence of your CVs' experience and projects (cv_lines) is embedded once, into core.cv_line. Then
 core.job.cv_similarity = 0.55 x how close the job is to your closest CV + 0.45 x how close it is to your closest single CV
-line (cosine, 0-1), so one strong project counts even inside an unrelated CV, and core.job.cv_evidence = that line (the
-YC Match blend, data/references/ycmatch.md). The job_radar DAG runs it after match_skills. With features.embeddings false,
+line (cosine, 0-1), so one strong project counts even inside an unrelated CV, and core.job.cv_evidence = that line.
+The job_radar DAG runs it after match_skills. With features.embeddings false,
 or Ollama not running or without the model, it prints why and stops green (a WARNING line when jobs or CVs were waiting)."""
 
 from __future__ import annotations
