@@ -70,6 +70,8 @@ ALTER TABLE core.job ADD COLUMN IF NOT EXISTS apply_url text;
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS years_required smallint;
 -- how close its text is to your nearest CV (embed.py, 0-1, cosine); empty until embed has seen it
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS cv_similarity real;
+-- the one line of your CVs the job is closest to (embed.py): why it matched
+ALTER TABLE core.job ADD COLUMN IF NOT EXISTS cv_evidence text;
 -- A job first seen over 5 days ago (config.KEEP_DAYS) is archived (core.job_archive), then deleted by transform with its raw postings,
 -- unless you noted or applied to it; only its key stays here, so a job still posted later is never
 -- stored or emailed again.
@@ -263,6 +265,12 @@ CREATE TABLE IF NOT EXISTS core.cv_vector (
     model       text   NOT NULL,
     embedded_at timestamptz  -- embed.py embeds a CV again only when it was uploaded after this (empty: embed it)
 );
+-- Each sentence of your CVs' experience and projects, once however many CVs have it, and its vector (embed.py cv_lines).
+CREATE TABLE IF NOT EXISTS core.cv_line (
+    line   text   PRIMARY KEY,
+    vector real[] NOT NULL,
+    model  text   NOT NULL
+);
 
 -- Claude's grade of a job (grade.py, run by the job_radar DAG after embed): the tracker and the
 -- emails read it through mart.job_status; goes with its job. restriction: what keeps someone living in
@@ -332,7 +340,7 @@ SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j
             WHEN now() - j.posted_at <= interval '48 hours' THEN 3 WHEN now() - j.posted_at <= interval '72 hours' THEN 4
             ELSE 5 END AS fresh_level,
        g.score, g.reason AS grade_reason, g.cv AS grade_cv, coalesce(j.restriction, g.restriction) AS restriction,
-       j.cv_similarity, j.years_required, v.skills_on_cv, v.skills_missing
+       j.cv_similarity, j.years_required, v.skills_on_cv, v.skills_missing, j.cv_evidence
 FROM core.job j
 LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
            FROM core.job_skill GROUP BY job_id) k USING (job_id)

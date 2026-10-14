@@ -110,6 +110,8 @@ def job_card(j: dict) -> str:
             + (f'<div style="margin-top:2px;font-size:13px;line-height:18px;color:{INK2}">{html.escape(j["grade_reason"])}</div>'
                if j.get("grade_reason") else "")
             + (f'<div style="margin-top:2px;font-size:12px;line-height:18px;color:{INK2}">{skills}</div>' if skills else "")
+            + (f'<div style="margin-top:2px;font-size:12px;line-height:18px;color:{INK2}">Closest CV line: '
+               f'{html.escape(j["cv_evidence"][:160])}</div>' if j.get("cv_evidence") else "")
             + '</td></tr>')
 
 

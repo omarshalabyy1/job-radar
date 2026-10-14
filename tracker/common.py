@@ -67,7 +67,7 @@ def colors() -> dict:
 def load_jobs() -> pd.DataFrame:
     jobs = query("SELECT job_id, role_rank, fresh_level, posted_at, score, skill_matches, cv_coverage, cv_similarity, target_company,"
                  " title, company, company_size, role, place, source, status, note, first_seen, job_url, skills_matched, described,"
-                 " restriction, grade_reason, years_required, skills_missing FROM mart.job_status")
+                 " restriction, grade_reason, years_required, skills_missing, cv_evidence FROM mart.job_status")
     jobs["posted"] = jobs["fresh_level"].map(FRESH)
     jobs["score"] = pd.to_numeric(jobs["score"])
     jobs["hidden_reason"] = [hidden_reason(*row) for row in zip(jobs["status"], jobs["restriction"], jobs["score"])]

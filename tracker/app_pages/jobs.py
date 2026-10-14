@@ -26,7 +26,7 @@ edited = st.data_editor(
     table, key="jobs", hide_index=True, height=620,
     # what you decide on first, then the rest
     column_order=[c for c in ["score", "title", "company", "role", "place", "posted", "skill_matches", "years_required", "why", "cv_match", "status",
-                              "note", "job_url", "target_company", "cv_coverage", "skills_matched", "skills_missing", "company_size",
+                              "note", "job_url", "target_company", "cv_coverage", "cv_evidence", "skills_matched", "skills_missing", "company_size",
                               "posted_at", "first_seen", "source"]
                   # Claude's columns only with features.grade, the CV match only with features.embeddings
                   if (FEATURES["grade"] or c not in ("score", "why")) and (FEATURES["embeddings"] or c != "cv_match")
@@ -47,7 +47,10 @@ edited = st.data_editor(
         "cv_coverage": st.column_config.ProgressColumn("CV covers", min_value=0, max_value=100, format="%d%%",
                                                        help="How much of what the job asks for your best CV shows"),
         "cv_match": st.column_config.ProgressColumn("CV match", min_value=0, max_value=100, format="%d%%",
-                                                    help="How close the job's text is to your nearest CV (embeddings)"),
+                                                    help="How close the job's text is to your nearest CV (55%) and to "
+                                                         "your closest single CV line (45%), by embeddings"),
+        "cv_evidence": st.column_config.TextColumn("Closest CV line", width="large",
+                                                   help="The line of your CVs the job is closest to: why it matched"),
         "target_company": st.column_config.CheckboxColumn("Target"),
         "company_size": st.column_config.TextColumn("Company size", help="Employees, when a job board gives it (Indeed, freehire)"),
         "status": st.column_config.SelectboxColumn("Status", options=STATUSES, required=True),

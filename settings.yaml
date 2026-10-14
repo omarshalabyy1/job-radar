@@ -137,7 +137,8 @@ research:
       csv: startups/startups.csv   # the report's last csv block is merged into this file, which the tracker's Startups page reads
       prompt: |
         Find up to {count} startups in {region} with about {size} people or fewer, building {kinds}, that hire or may hire
-        data engineers, AI engineers or analytics engineers. Skip any that is a staffing firm, an outsourcing shop or has
+        data engineers, AI engineers or analytics engineers. Check Y Combinator's company directory
+        (ycombinator.com/companies, by region and hiring) along with the rest. Skip any that is a staffing firm, an outsourcing shop or has
         shut down. For each give: name, city, headcount (with where you read it), what it does in one line, funding and
         investors if public, careers page link, website, and why it is a fit for a data and AI engineer. Close with the
         sources you could not open and the regions or kinds you found too little for.

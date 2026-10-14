@@ -15,6 +15,29 @@ def test_cosine():
     assert cosine([0, 0], [1, 0]) == 0  # an empty vector matches nothing, no division by zero
 
 
+CV = ("Omar Shalaby PROFESSIONAL SUMMARY Builds pipelines. PROFESSIONAL EXPERIENCE Data Engineer — Null Labs | Florida "
+      "Apr 2026 – Present (6 mos) Own the data platform for a retail supplier end to end. Matched every short payment to "
+      "its invoice to the cent, so each deduction traces back to its source. PROJECTS Supplier Scorecard — Local LLM "
+      "summaries (GitHub) 2026 Generated a weekly supplier summary over 98,666 orders with a local LLM. Technologies: Python, "
+      "Docker EDUCATION B.Sc. Engineering, 2023 with a long line that is not experience at all.")
+
+
+def test_cv_lines_are_the_experience_and_project_sentences_without_headers():
+    from job_radar.embed import cv_lines
+    assert cv_lines(CV) == ["Own the data platform for a retail supplier end to end.",
+                            "Matched every short payment to its invoice to the cent, so each deduction traces back to its source.",
+                            "Generated a weekly supplier summary over 98,666 orders with a local LLM."]
+
+
+def test_a_job_scores_55_45_on_the_whole_cv_and_its_closest_line_and_names_that_line():
+    from job_radar.embed import match
+    lines = ["Built pipelines.", "Built dashboards."]
+    [(similarity, line)] = match([[1, 0]], cv_vectors=[[1, 1]], line_vectors=[[0, 1], [1, 0]], lines=lines)
+    assert line == "Built dashboards." and similarity == pytest.approx(0.55 * 0.7071 + 0.45 * 1, abs=1e-4)
+    [(similarity, line)] = match([[1, 0]], cv_vectors=[[1, 1]], line_vectors=[], lines=[])  # no lines: the whole CV only
+    assert line is None and similarity == pytest.approx(0.7071, abs=1e-4)
+
+
 # ---- which CVs are embedded again, against the warehouse (rolled back; skipped without it) ----
 from pathlib import Path  # noqa: E402
 

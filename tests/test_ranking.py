@@ -63,6 +63,12 @@ def test_a_card_lists_the_skills_your_cv_shows_and_the_ones_it_misses():
     assert "On your CV" not in digest.job_card(job(3, 8))  # no skill found on the job: no line
 
 
+def test_a_card_names_the_cv_line_the_job_is_closest_to():
+    card = digest.job_card(job(1, 8) | {"cv_evidence": "Matched every short payment to its invoice to the cent."})
+    assert "Closest CV line: Matched every short payment to its invoice to the cent." in card
+    assert "Closest CV line" not in digest.job_card(job(2, 8))
+
+
 def test_no_job_of_7_or_more_means_no_top_five_block():
     assert "Top 5 today" not in digest.digest([job(1, 6), job(2, None)], "Egypt")
 

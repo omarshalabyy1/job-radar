@@ -24,7 +24,17 @@ A job's key (steps.job_key) ignores the company's spacing, case, "and" and legal
 "careaccess" are one job. Before transform deletes a job (KEEP_DAYS) it writes a slim line to core.job_history (no
 description) for the Market page's trends. Each extract records postings and drops per board (core.extract_count): a
 board suddenly dropping all (it kept some the last 7 days), or none where it used to drop half, is a WARNING;
-Remote.co drops all every day (its data jobs are US and Canada only), which is no warning. The Today page lists his next three deadlines (core.deadline, edited
+Remote.co drops all every day (its data jobs are US and Canada only), which is no warning.
+With features.outreach_drafts on, the outreach_drafts task (after `ranked`) takes each startup role (its company in that
+file) scored 7+ whose company has a Founder or Hiring row with an email in data/contacts.csv: Claude researches the
+startup on the web once (output/outreach/briefs/<company>.md), then drafts a cold email in his brand voice and the
+humanizer's rules to output/outreach/<company>-<title>.md; never sent. `python -m job_radar.research founders` finds the
+founders' published emails (company site and press, never LinkedIn) for the rest and merges them into data/contacts.csv.
+embed also embeds each sentence of his CVs' experience and projects (core.cv_line): cv_similarity is 0.55 x the closest
+whole CV + 0.45 x the closest line, that line is core.job.cv_evidence ("Closest CV line" in the emails and the Jobs
+page), and each card lists the job's skills his best CV shows and the ones it misses (mart.job_status skills_on_cv,
+skills_missing).
+The Today page lists his next three deadlines (core.deadline, edited
 there) above the follow-ups. With the warehouse down every step exits 99 (skipped, not red). The job_radar_backup DAG
 dumps core and raw at 3am to output/backups/nightly-<day>.dump and keeps the newest 14. LinkedIn's search (Apify) reads APIFY_TOKENS in .env, several
 accounts comma-separated, and moves to the next when one answers 402 or 403 (its usage limit); else APIFY_TOKEN.
