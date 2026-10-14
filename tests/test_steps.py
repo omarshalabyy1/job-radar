@@ -451,6 +451,18 @@ def test_transform_twice_keeps_one_history_line_per_job(conn):
     assert first[0] == first[1] and first[0] >= conn.execute("SELECT count(*) FROM core.job").fetchone()[0]
 
 
+def test_a_job_is_archived_whole_before_it_is_deleted(conn):
+    """core.job_archive (rolled back): the removed job keeps its text and Claude's grade; one that stays is not copied."""
+    old, young = add_job(conn, "archive old", "the text", age=30), add_job(conn, "archive young", "other", age=0)
+    conn.execute("INSERT INTO core.claude_grade (job_id, score, cv, reason, model) VALUES (%s, 7, 'cv', 'a fit', 'm')", (old,))
+    with conn.cursor() as cur:
+        gone = steps.archive_and_delete(cur, "job_key = 'test_steps archive old'", (), "aged")
+    assert gone == 1 and conn.execute("SELECT count(*) FROM core.job WHERE job_id = ANY(%s)", ([old, young],)).fetchone() == (1,)
+    assert conn.execute("SELECT description, score, reason, why FROM core.job_archive WHERE job_id = %s", (old,)).fetchone() == (
+        "the text", 7, "a fit", "aged")
+    assert conn.execute("SELECT count(*) FROM core.job_archive WHERE job_id = %s", (young,)).fetchone() == (0,)
+
+
 def test_a_board_that_drops_all_or_suddenly_none_is_a_warning(conn):
     """drop_warning (rolled back): 100% dropped where some were kept before means the board changed; 0% where the last 7 days dropped half means the
     rule broke; a normal day says nothing."""

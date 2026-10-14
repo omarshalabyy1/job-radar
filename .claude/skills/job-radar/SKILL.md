@@ -1,6 +1,6 @@
 ---
 name: job-radar
-description: Run Omar's job-radar (C:\Users\DELL\GitHub\job-radar) and bring Claude into it - start a collect and check it, then grade the best new matches against his CV, tailor a CV and cover letter for the ones he picks, and help him apply. Use this whenever Omar types /job-radar, or says things like "run the radar", "any new jobs?", "check today's matches", "review my matches", "tailor my CV for this job", "write a cover letter for job 123", "apply to the best ones", "send the job emails now", or asks whether job-radar's last run worked - even if he never names the skill. Airflow's daily run has Claude grade the 20 jobs a day closest to his CV and draft Egypt's best (settings.yaml features); this skill is where Claude works on his job search with him. Not for the Argus project.
+description: Run Omar's job-radar (C:\Users\DELL\GitHub\job-radar) and bring Claude into it - start a collect and check it, then grade the best new matches against his CV, tailor a CV and cover letter for the ones he picks, and help him apply. Use this whenever Omar types /job-radar, or says things like "run the radar", "any new jobs?", "check today's matches", "review my matches", "tailor my CV for this job", "write a cover letter for job 123", "apply to the best ones", "send the job emails now", or asks whether job-radar's last run worked - even if he never names the skill. Airflow's daily run has Claude grade every new job closest to his CV first and draft Egypt's best (settings.yaml features); this skill is where Claude works on his job search with him. Not for the Argus project.
 ---
 
 # job-radar, with Claude
@@ -8,7 +8,7 @@ description: Run Omar's job-radar (C:\Users\DELL\GitHub\job-radar) and bring Cla
 job-radar finds data and AI jobs for Omar every day: Airflow collects once a day at 12pm (Cairo) and
 emails him right after it (about 12:30pm). At the end of the collect embed
 gives each job with a description, in any place, a local vector (its closeness to his CV, core.job.cv_similarity),
-grade_claude has Claude (Sonnet 5.5) grade the closest ones, at most `claude.max_jobs` (20) a Cairo day, 0-10 against his
+grade_claude has Claude (Sonnet 5.5) grade the closest ones, with no daily cap, 0-10 against his
 CV (`core.claude_grade`, shown as Score and Why in the tracker and the emails; about $0.30 a day), naming first a
 years mismatch ("asks 5+ yrs, CV shows about 2"; core.job.years_required, read from the text at match_skills, else
 Claude's), and pushes an 8+ job in its first 12 hours to his phone (ntfy.sh, NTFY_TOPIC in .env). tailor writes cv.md,

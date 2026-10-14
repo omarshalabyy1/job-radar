@@ -300,6 +300,20 @@ def job_key(title: str, company: str, job_url: str) -> str:
     return f"{words(title)} | {words(company).replace(' ', '') or job_url}"
 
 
+def archive_and_delete(cur, where: str, args: tuple, why: str) -> int:
+    """Copy the jobs matching `where` (on core.job j) to core.job_archive with Claude's grade, then delete them from
+    core.job; returns how many. A job already archived keeps its first row."""
+    cur.execute(
+        "INSERT INTO core.job_archive (job_id, job_key, title, company, location, place, source, job_url, role, date_posted,"
+        " posted_at, description, company_size, first_seen, score, reason, why)"
+        " SELECT j.job_id, j.job_key, j.title, j.company, j.location, j.place, j.source, j.job_url, j.role, j.date_posted,"
+        " j.posted_at, j.description, j.company_size, j.first_seen, g.score, g.reason, %s"
+        f" FROM core.job j LEFT JOIN core.claude_grade g USING (job_id) WHERE {where} ON CONFLICT (job_id) DO NOTHING",
+        (why, *args))
+    cur.execute(f"DELETE FROM core.job j WHERE {where}", args)
+    return cur.rowcount
+
+
 def transform(conn) -> None:
     """raw -> core.job: the window's postings with a role, not above senior, in a place in scope and
     in reach (remote, or onsite/hybrid in Cairo or Giza), one row per job (job_key: the same job on
@@ -307,7 +321,8 @@ def transform(conn) -> None:
     (load drops it); one only its description bars is stored, and the eligibility step sets its restriction and the
     email and the tracker hide it (config.hidden_reason). A job of the
     window not emailed yet that no longer passes the rules (they changed) is removed, and so is a job first seen over
-    KEEP_DAYS ago (with the raw postings of then) unless you noted or applied to it. With no posting in the window at
+    KEEP_DAYS ago (with the raw postings of then) unless you noted or applied to it; each removed job is copied to
+    core.job_archive first. With no posting in the window at
     all it fails before deleting anything (every extract failed, or the raw table was emptied). Re-running it
     changes nothing."""
     postings = conn.cursor(row_factory=dict_row).execute(
@@ -401,15 +416,14 @@ def transform(conn) -> None:
             " ON CONFLICT (job_key) DO UPDATE SET last_seen = greatest(h.last_seen, EXCLUDED.last_seen),"
             " score = coalesce(EXCLUDED.score, h.score), place = EXCLUDED.place, closed_on = coalesce(h.closed_on, EXCLUDED.closed_on)",
             (list(jobs),))
-        cur.execute("DELETE FROM core.job j WHERE first_seen >= current_date - %s AND emailed_at IS NULL"
-                    " AND job_key <> ALL(%s) AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
-                    (DAYS, list(jobs)))
-        dropped = cur.rowcount
-        old = ("FROM core.job j WHERE first_seen < current_date - %s"
+        dropped = archive_and_delete(
+            cur, "first_seen >= current_date - %s AND emailed_at IS NULL AND job_key <> ALL(%s)"
+                 " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
+            (DAYS, list(jobs)), "out of scope")
+        old = ("first_seen < current_date - %s"
                " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)")
-        cur.execute(f"INSERT INTO core.job_seen SELECT job_key {old} ON CONFLICT DO NOTHING", (KEEP_DAYS,))
-        cur.execute(f"DELETE {old}", (KEEP_DAYS,))
-        aged = cur.rowcount
+        cur.execute(f"INSERT INTO core.job_seen SELECT job_key FROM core.job j WHERE {old} ON CONFLICT DO NOTHING", (KEEP_DAYS,))
+        aged = archive_and_delete(cur, old, (KEEP_DAYS,), "aged")
         cur.execute("DELETE FROM raw.job_posting WHERE run_date < current_date - %s", (KEEP_DAYS,))
     conn.commit()
     print(f"transform: {len(postings)} postings -> {len(jobs)} jobs in scope, {dropped} no longer in scope removed,"

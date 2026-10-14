@@ -70,11 +70,35 @@ ALTER TABLE core.job ADD COLUMN IF NOT EXISTS apply_url text;
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS years_required smallint;
 -- how close its text is to your nearest CV (embed.py, 0-1, cosine); empty until embed has seen it
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS cv_similarity real;
--- A job first seen over 5 days ago (config.KEEP_DAYS) is deleted by transform with its raw postings,
+-- A job first seen over 5 days ago (config.KEEP_DAYS) is archived (core.job_archive), then deleted by transform with its raw postings,
 -- unless you noted or applied to it; only its key stays here, so a job still posted later is never
 -- stored or emailed again.
 CREATE TABLE IF NOT EXISTS core.job_seen (
     job_key text PRIMARY KEY
+);
+
+-- The jobs transform removes are archived here first, whole (title, company, link, description, Claude's score and
+-- why): one row per job_id, `why` says which removal took it. Nothing deletes from here; the tracker's jobs and the
+-- emails never read it.
+CREATE TABLE IF NOT EXISTS core.job_archive (
+    job_id      bigint PRIMARY KEY,
+    job_key     text        NOT NULL,
+    title       text        NOT NULL,
+    company     text        NOT NULL,
+    location    text        NOT NULL,
+    place       text        NOT NULL,
+    source      text        NOT NULL,
+    job_url     text        NOT NULL,
+    role        text        NOT NULL,
+    date_posted date,
+    posted_at   timestamptz,
+    description text,
+    company_size text,
+    first_seen  date        NOT NULL,
+    score       smallint,
+    reason      text,
+    why         text        NOT NULL,   -- 'aged' (first seen over KEEP_DAYS ago) or 'out of scope' (the rules changed)
+    archived_on date        NOT NULL DEFAULT current_date
 );
 
 -- Your companies: settings.yaml (companies) is the list, made the same here by the schema step every

@@ -148,7 +148,7 @@ Open [`settings.yaml`](settings.yaml). Everything is plain words; save, and the 
 - **The smart features** under `features`: Claude's score, the eligibility check (a job someone in Cairo cannot legally take is hidden: the board's
   own "who can apply" field, else Claude Haiku), whether a manual Trigger sends the emails (`manual_collect_emails`), hiding a low score (`auto_hide`), Top 5, follow-ups, drafts, the mailbox tracker, follow-up drafts, interview notes,
   embeddings; `false` turns one off from the next run. Claude scores the jobs of every place, closest to your CV first,
-  at most `claude.max_jobs` (20) a day; the CV drafts are for Egypt's jobs only (`ai_places`); the eligibility check
+  with no daily cap; the CV drafts are for Egypt's jobs only (`ai_places`); the eligibility check
   applies to every job, wherever it is.
 - **Phone alerts:** put a long random topic in `.env` as `NTFY_TOPIC=...`, subscribe to it in the ntfy app, and a job
   scored 8+ in its first 12 hours since posted reaches your phone. Run `docker compose up -d` after editing `.env`.

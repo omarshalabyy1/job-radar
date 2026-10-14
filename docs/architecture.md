@@ -91,14 +91,14 @@ busy laptop is not swamped; a task may wait up to an hour for its turn (`task_qu
 `docker-compose.yml`), so the last extracts are never failed unrun. A whole collect takes about 15
 minutes, and both emails go right after `ranked`, which runs when grade_claude has ended, red or green. embed gives each job with a description a
 local vector (CV match: closeness to your CV, $0 on the CPU), grade_claude has Claude score the closest ones (at most
-`claude.max_jobs`, 20, a Cairo day, any place) 0-10 against your CV, naming a years-of-experience mismatch, and pushes an
+no daily cap, any place) 0-10 against your CV, naming a years-of-experience mismatch, and pushes an
 8+ job in its first 12 hours to your phone (ntfy.sh); tailor drafts the 8+ ones in Egypt (`ai_places`) as markdown, html and
 one-page PDFs, checked in code (no gap named, one page, every link kept). With `features.eligibility` on, a job someone living in Cairo cannot legally take is never stored (every extract drops it before it reaches raw.job_posting) when its board's own "who can apply" field bars Egypt or its location ties it to the USA, Canada or Europe, else hidden, not deleted:
 the eligibility step (after match_skills) reads the board's own "who can apply" field where it has one (Daily Remote, Remotive, Jobicy, Remote.co, Himalayas, We Work Remotely, Relomote, Wellfound: a list without worldwide, EMEA, MENA, Africa, the Middle East, Egypt or Cairo's time zone bars it), else asks Claude Haiku once per described job outside ai_places (yes, no or unclear; only no hides; about $0.70 a month); it sets `core.job.restriction`, and the email and the tracker leave it out
 (`config.hidden_reason`; the tracker's Show hidden jobs brings it back). Claude's own restriction hides a job the same way, a score of 3 or
 lower hides it with `features.auto_hide`, and a status of yours shows it again. The describe step also hides a job whose page says it is closed (404, 410, Greenhouse's ?error=true, or "no longer available"). A job whose own posting has no text takes the text of the
 same job from another posting of the last 5 days. A job first seen over 5 days ago
-is deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key; `core.job_history`
+is archived whole in `core.job_archive` (with Claude's score and why), then deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key; `core.job_history`
 keeps a slim line for the Market page's trends). A job's key ignores the company's spacing, case, "and" and legal suffix.
 A board that suddenly drops all its postings as not for Egypt, or none where it used to drop half, is a WARNING (`core.extract_count`).
 With the warehouse unreachable each step exits 99 and Airflow marks it skipped. `job_radar_backup` dumps `core` and
@@ -179,7 +179,7 @@ flowchart LR
 |---|---|---|
 | `schema` | `settings.yaml`, `sql/schema.sql` | `core.company`, `core.skill`, the `mart` views |
 | `extract_*` (12) | the sources | `raw.job_posting`, `core.extract_count`; `extract_email` also `core.email_seen` |
-| `transform` | `raw.job_posting` | `core.job` (with `apply_url`), `core.job_history`, `core.job_seen` (the keys of jobs deleted after 5 days) |
+| `transform` | `raw.job_posting` | `core.job` (with `apply_url`), `core.job_history`, `core.job_seen` (the keys of jobs removed after 5 days), `core.job_archive` (those jobs whole) |
 | `describe` | the jobs' pages | `core.job.description` |
 | `match_skills` | `core.job`, `core.cv` | `core.job_skill`, `core.cv_skill`, `core.job.years_required` |
 | `eligibility` | `core.job`, its raw posting, Claude Haiku | `core.job.restriction`, `core.job.eligibility_at` (a barred job is hidden, not deleted) |
