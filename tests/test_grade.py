@@ -47,7 +47,7 @@ def add_grade(conn, job_id: int, graded_at_sql: str) -> None:
 
 def queue(conn, mine: dict[str, int]) -> set[str]:
     """The names of my test jobs that the selection returns (the warehouse's own jobs are ignored)."""
-    ids = {job[0] for job in grade.jobs_to_grade(conn, 10_000)}
+    ids = {job[0] for job in grade.jobs_to_grade(conn)}
     return {name for name, job_id in mine.items() if job_id in ids}
 
 
@@ -70,10 +70,6 @@ def test_a_job_is_graded_when_it_has_no_fresh_grade_and_nothing_bars_it(conn):
     # features.eligibility off: a regex flag no longer keeps a job from being graded
     grade.FEATURES["eligibility"] = False
     assert "restricted" in queue(conn, mine)
-    today = conn.execute("SELECT count(*) FROM core.claude_grade WHERE (graded_at AT TIME ZONE 'Africa/Cairo')::date"
-                         " = (now() AT TIME ZONE 'Africa/Cairo')::date").fetchone()[0]
-    assert len(grade.jobs_to_grade(conn, today + 1)) == 1  # the day's cap, less what was graded today
-    assert grade.jobs_to_grade(conn, today) == []
 
 
 def test_a_job_graded_before_your_newest_cv_is_graded_again_once_and_only_once(conn):
@@ -81,7 +77,7 @@ def test_a_job_graded_before_your_newest_cv_is_graded_again_once_and_only_once(c
     job = add_job(conn, "regrade")
     add_grade(conn, job, f"now() - {HOUR}")
     before = conn.execute("SELECT count(*) FROM core.claude_grade WHERE job_id = %s", (job,)).fetchone()[0]
-    assert job in {row[0] for row in grade.jobs_to_grade(conn, 10_000)}
+    assert job in {row[0] for row in grade.jobs_to_grade(conn)}
     regrade = [(job, 9, "AI & Data Engineer", "new CV fits", None, "claude-sonnet-5-5")]
     grade.save_grades(conn, regrade)
     grade.save_grades(conn, regrade)  # the second run changes nothing
@@ -89,7 +85,7 @@ def test_a_job_graded_before_your_newest_cv_is_graded_again_once_and_only_once(c
                         " FROM core.claude_grade WHERE job_id = %s", (job,)).fetchone()
     assert before == 1 and rows == (1, 9, "new CV fits", "AI & Data Engineer", "claude-sonnet-5-5", True)
     # graded_at = the CV's uploaded_at counts as fresh (>=), so the job leaves the queue and is not graded every run
-    assert job not in {row[0] for row in grade.jobs_to_grade(conn, 10_000)}
+    assert job not in {row[0] for row in grade.jobs_to_grade(conn)}
 
 
 class FakeConn:
@@ -144,7 +140,7 @@ def run_grade(monkeypatch, titles: list[str]) -> None:
     monkeypatch.setattr(grade, "recent_clicks", lambda conn: [])
     monkeypatch.setattr(grade, "save_grades", lambda conn, rows: None)
     monkeypatch.setattr(grade, "alert_fresh", lambda conn, job_ids: None)
-    monkeypatch.setattr(grade, "jobs_to_grade", lambda conn, limit: [(i, t, "Acme", "Cairo", "text", None) for i, t in enumerate(titles)])
+    monkeypatch.setattr(grade, "jobs_to_grade", lambda conn: [(i, t, "Acme", "Cairo", "text", None) for i, t in enumerate(titles)])
     grade.grade_claude(FakeConn())
 
 

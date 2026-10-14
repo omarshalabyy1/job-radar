@@ -1,5 +1,5 @@
 """grade_claude: Claude (settings.yaml claude.model) scores the jobs with a description, in any place, closest to your
-CV first (core.job.cv_similarity, embed's free score), at most claude.max_jobs a Cairo day, against your CVs in core.cv, 0-10
+CV first (core.job.cv_similarity, embed's free score), with no daily cap, against your CVs in core.cv, 0-10
 (again after you upload a CV), names the CV to send, gives one line why (naming a years-of-experience mismatch) and
 (features.eligibility) says what keeps someone living in Cairo from taking it (restriction), into core.claude_grade. A
 job whose description gave no years asked (steps.years_required) gets Claude's reading in core.job.years_required. The job_radar DAG
@@ -34,12 +34,12 @@ class Grade(BaseModel):
     years_required: int  # the years of experience the posting asks for, 0 when it names none
 
 
-def jobs_to_grade(conn, limit: int) -> list[tuple]:
+def jobs_to_grade(conn) -> list[tuple]:
     """The jobs still alive, in any place, with a description (a title alone is a weak signal, so those stay
     ungraded), that the eligibility step did not bar (with features.eligibility), with no grade yet or one made before your newest
     CV was uploaded (graded again: graded_at >= uploaded_at counts as fresh) and that you did not ignore or
-    reject: closest to your CV first (embed), then most skills, then freshest; `limit` less the jobs graded today (a
-    Cairo day), so a second collect the same day grades only what the first left of the day's cap."""
+    reject: closest to your CV first (embed), then most skills, then freshest. No cap: the step's time check leaves
+    the rest for the next run."""
     return conn.execute(
         "SELECT j.job_id, j.title, j.company, j.location, j.description, j.years_required FROM core.job j"
         " WHERE j.first_seen >= current_date - %s AND j.description IS NOT NULL"
@@ -48,10 +48,8 @@ def jobs_to_grade(conn, limit: int) -> list[tuple]:
         " AND g.graded_at >= (SELECT max(uploaded_at) FROM core.cv))"
         " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id AND a.status IN ('ignored', 'rejected'))"
         " ORDER BY j.cv_similarity DESC NULLS LAST, (SELECT count(*) FROM core.job_skill k WHERE k.job_id = j.job_id) DESC,"
-        " j.posted_at DESC NULLS LAST, j.job_id"
-        " LIMIT greatest(0, %s - (SELECT count(*) FROM core.claude_grade"
-        " WHERE (graded_at AT TIME ZONE 'Africa/Cairo')::date = (now() AT TIME ZONE 'Africa/Cairo')::date))",
-        (KEEP_DAYS, FEATURES["eligibility"], limit)).fetchall()
+        " j.posted_at DESC NULLS LAST, j.job_id",
+        (KEEP_DAYS, FEATURES["eligibility"])).fetchall()
 
 
 def recent_clicks(conn) -> list[tuple]:
@@ -121,7 +119,7 @@ def grade_claude(conn) -> None:
     if not cvs:
         print("grade_claude: no CV uploaded in the tracker, skipped")
         return
-    jobs = jobs_to_grade(conn, cfg["max_jobs"])
+    jobs = jobs_to_grade(conn)
     eligibility = FEATURES["eligibility"]
     system = system_blocks(cvs, recent_clicks(conn), eligibility)
     import anthropic  # for its errors; the SDK loads only in a run that calls Claude

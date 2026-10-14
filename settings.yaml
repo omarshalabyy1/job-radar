@@ -107,18 +107,60 @@ linkedin:
   places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
 
 # Claude grading, in the job_radar DAG after embed (ANTHROPIC_API_KEY in .env): the jobs of every place with a
-# description, closest to your CV first (embed's free cv_similarity), at most max_jobs a Cairo day, scored 0-10 against your CVs, with the CV to send, one line why and what keeps someone living in
+# description, closest to your CV first (embed's free cv_similarity), with no cap, scored 0-10 against your CVs, with the CV to send, one line why and what keeps someone living in
 # Cairo from taking it, into core.claude_grade; it also learns from your last 30 clicks in the tracker. A job
 # scored 3 or lower is hidden in the tracker and left out of the emails (features.auto_hide; Claude's own restriction
 # only with features.eligibility); an 8+ job gets a tailored CV draft. Only a job that has a description is graded (LinkedIn pages
 # are never opened: paste the description in /job-radar). A grade made before your newest CV upload counts as ungraded
-# and is overwritten on the next run. About $3.70 a month at today's volume (measured); Haiku was tested and kept only
+# and is overwritten on the next run. Haiku was tested and kept only
 # 3 of Sonnet's 8 top picks, so Sonnet stays. The task turns red when it selected jobs and graded none (key, credit or
 # network), and it stops by itself when the API credit runs out. Switched back on 2026-10-10 (features.grade; off since
-# 2026-10-08). max_jobs: the most graded a Cairo day (the cost cap; all places since 2026-10-13).
+# 2026-10-08). No cap since 2026-10-14 (the $200 promotional API credit, expires 2026-11-14): grading and the CV
+# drafts take every job they can; the step stops itself before its timeout and the rest wait for the next run.
 claude:
   model: claude-sonnet-5-5
-  max_jobs: 20
+
+# Deep research on Claude Managed Agents, by hand: python -m job_radar.research <job> [key=value ...] (job_radar/research.py).
+# Always Haiku. A job's prompt takes {keys} from the command line, else its defaults; a list under `each` runs the job once
+# per item when its key is not given. job_id=N adds that job's company, title, location, description and your newest CV.
+# The report is written to output/<out>. Change a prompt, a region or a size here; nothing else needs touching.
+research:
+  model: claude-haiku-5-5
+  effort: high
+  jobs:
+    startups:
+      each: {region: [Egypt, Gulf, US, Europe]}
+      defaults: {size: 50, count: 15, kinds: "AI, data, analytics and software products"}
+      out: research/startups/{region}-{date}.md
+      csv: startups/startups.csv   # the report's last csv block is merged into this file, which the tracker's Startups page reads
+      prompt: |
+        Find up to {count} startups in {region} with about {size} people or fewer, building {kinds}, that hire or may hire
+        data engineers, AI engineers or analytics engineers. Skip any that is a staffing firm, an outsourcing shop or has
+        shut down. For each give: name, city, headcount (with where you read it), what it does in one line, funding and
+        investors if public, careers page link, website, and why it is a fit for a data and AI engineer. Close with the
+        sources you could not open and the regions or kinds you found too little for.
+
+        End the report with one ```csv block, nothing after it, one row per startup you verified, with exactly this header:
+        region,name,city,size,kind,what,careers,website,source
+        region: "{region}", or "{region} (office)" when the startup is headquartered elsewhere and has an office there.
+        size: a whole number. kind: "AI/data" or "product". what: one line. careers and website: full links, or empty.
+        source: "Managed Agents research {date}". Quote any field that holds a comma.
+    interview:
+      out: research/interviews/{company} - {title}.md
+      prompt: |
+        Prepare me for an interview at {company} for the role "{title}" ({location}).
+
+        The posting:
+        {description}
+
+        My CV:
+        {cv}
+
+        Research the company: what it sells and to whom, its stage, funding, size, leadership, recent news and launches,
+        its engineering stack and blog, and how it hires (public interview reports, Glassdoor-style reviews, the process
+        steps). Then give: a 10-line company brief; the likely interview rounds; 15 questions they are likely to ask for this
+        role, each with a short answer outline drawn from my CV; 8 sharp questions for me to ask them; and the gaps between
+        the posting and my CV with how to answer each one honestly. Extra from me: {note}
 
 # Above your level: a title with any of these words is left out (entry, mid and senior stay in)
 too_senior: [lead, principal, staff, head, director, manager, vp, chief, architect]

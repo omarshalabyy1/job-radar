@@ -27,7 +27,6 @@ from .sources import time_left
 
 TAILOR_SECONDS = 300  # the DAG gives the task 300 s; a new draft starts only with 60 s left
 MIN_SCORE = 8
-MAX_DRAFTS = 5  # a run; the rest wait for the next one
 MAX_TOKENS = 8000  # what the three drafts need
 # Claude's own text with any of these names a gap (whole words, so "Slack" is fine; a bare "gap" is not here because a
 # CV can name a "price gap": only a skills or experience gap is a gap in the candidate)
@@ -279,7 +278,7 @@ def write_draft(folder: Path, d: Draft, company: str) -> list[str]:
     return pdf_problems(cv_pdf, cv)
 
 
-def jobs_to_tailor(conn, limit: int) -> list[tuple]:
+def jobs_to_tailor(conn) -> list[tuple]:
     """The jobs to draft, best score first: graded MIN_SCORE or more, in ai_places, with no application row yet and (with
     features.eligibility) no restriction of the eligibility step's or of Claude's."""
     return conn.execute(
@@ -287,8 +286,8 @@ def jobs_to_tailor(conn, limit: int) -> list[tuple]:
         " FROM core.claude_grade g JOIN core.job j USING (job_id)"
         " WHERE g.score >= %s AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)"
         " AND j.place = ANY(%s) AND (coalesce(j.restriction, '') = '' AND coalesce(g.restriction, '') = '' OR NOT %s)"
-        " ORDER BY g.score DESC, j.role_rank, j.job_id LIMIT %s",
-        (MIN_SCORE, SETTINGS.get("ai_places") or [], FEATURES["eligibility"], limit)).fetchall()
+        " ORDER BY g.score DESC, j.role_rank, j.job_id",
+        (MIN_SCORE, SETTINGS.get("ai_places") or [], FEATURES["eligibility"])).fetchall()
 
 
 def ask(client, cvs: dict[str, str], job: tuple) -> Draft | None:
@@ -345,7 +344,7 @@ def tailor(conn) -> None:
     if not cvs:
         print("tailor: no CV uploaded in the tracker, skipped")
         return
-    jobs = jobs_to_tailor(conn, MAX_DRAFTS)
+    jobs = jobs_to_tailor(conn)  # no cap: the time check leaves the rest for the next run
     import anthropic  # for its errors; the SDK loads only in a run that calls Claude
     client = claude.client()  # a stuck call gives up inside the DAG's 300 s
     today = str(date.today())

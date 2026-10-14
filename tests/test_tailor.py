@@ -99,7 +99,7 @@ def add_graded_job(conn, key: str, score: int, place: str = AI_PLACES[0], restri
 def picked(conn, mine: dict[str, int]) -> list[str]:
     """The names of my test jobs the selection returns, in its order (the warehouse's own jobs are ignored)."""
     names = {job_id: name for name, job_id in mine.items()}
-    return [names[row[0]] for row in tailor.jobs_to_tailor(conn, 10_000) if row[0] in names]
+    return [names[row[0]] for row in tailor.jobs_to_tailor(conn) if row[0] in names]
 
 
 def test_tailor_drafts_the_best_graded_jobs_nothing_restricts_and_you_have_not_touched(conn):
@@ -113,7 +113,7 @@ def test_tailor_drafts_the_best_graded_jobs_nothing_restricts_and_you_have_not_t
     assert picked(conn, mine) == ["ten", "nine", "eight"]  # best score first; 8 is in, 7 is out
     tailor.FEATURES["eligibility"] = False  # features.eligibility off: restrictions no longer keep a job from a draft
     assert sorted(picked(conn, mine)) == ["claude_bars_it", "eight", "nine", "regex_bars_it", "ten"]
-    assert len(tailor.jobs_to_tailor(conn, 1)) == 1 and tailor.MIN_SCORE == 8  # the limit; the bar
+    assert tailor.MIN_SCORE == 8  # the bar
 
 
 def test_tailor_ties_on_score_go_to_the_role_you_ranked_first_then_the_older_job(conn):
