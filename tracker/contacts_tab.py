@@ -12,7 +12,7 @@ BLUE, ORANGE = "#3987e5", "#d95926"  # app.py's two accents
 
 def render() -> None:
     if not CONTACTS.exists():
-        st.caption("No data/contacts.csv yet (gitignored): columns company, side (Recruiting, Hiring or Email), name, "
+        st.caption("No data/contacts.csv yet (gitignored): columns company, side (Recruiting, Hiring, Founder or Email), name, "
                    "title, location, linkedin, email, why.")
         return
     st.caption("Recruiters and hiring managers at the companies you applied to, from data/contacts.csv "
@@ -29,8 +29,9 @@ def render() -> None:
                  column_order=["name", "company", "side", "title", "why", "linkedin", "email", "location"],
                  column_config={
                      "side": st.column_config.MultiselectColumn(
-                         "Side", options=["Recruiting", "Hiring", "Email"], color=[BLUE, ORANGE, "gray"],
-                         help="Recruiting: talent acquisition and HR. Hiring: the team the role sits in."),
+                         "Side", options=["Recruiting", "Hiring", "Founder", "Email"], color=[BLUE, ORANGE, "green", "gray"],
+                         help="Recruiting: talent acquisition and HR. Hiring: the team the role sits in. "
+                              "Founder: a startup's founder or CEO, for the outreach drafts."),
                      "name": st.column_config.TextColumn("Name", pinned=True),
                      "title": st.column_config.TextColumn("Title", width="medium"),
                      "company": st.column_config.TextColumn("Company", width="small"),

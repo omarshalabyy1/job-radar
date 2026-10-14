@@ -26,7 +26,7 @@ edited = st.data_editor(
     table, key="jobs", hide_index=True, height=620,
     # what you decide on first, then the rest
     column_order=[c for c in ["score", "title", "company", "role", "place", "posted", "skill_matches", "years_required", "why", "cv_match", "status",
-                              "note", "job_url", "target_company", "cv_coverage", "skills_matched", "company_size",
+                              "note", "job_url", "target_company", "cv_coverage", "skills_matched", "skills_missing", "company_size",
                               "posted_at", "first_seen", "source"]
                   # Claude's columns only with features.grade, the CV match only with features.embeddings
                   if (FEATURES["grade"] or c not in ("score", "why")) and (FEATURES["embeddings"] or c != "cv_match")
@@ -56,6 +56,7 @@ edited = st.data_editor(
         "job_url": st.column_config.LinkColumn("Link", display_text="Open", width="small"),
         "first_seen": "First seen",
         "skills_matched": "Your skills it asks for",
+        "skills_missing": st.column_config.TextColumn("Not on your CV", help="Skills the job asks for that your best CV does not show"),
     })
 changed = edited[(edited["status"] != shown["status"]) | (edited["note"].fillna("") != shown["note"].fillna(""))]
 if st.button(f"Save {plural(len(changed), 'change')}", type="primary", disabled=changed.empty, icon=":material/save:"):

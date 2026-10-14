@@ -6,8 +6,9 @@ A job is a prompt in settings.yaml (research.jobs). The agent runs on Anthropic'
 its report is written to output/<out>. Values for the prompt's {keys} come from the command line, else the job's
 defaults; a list under `each` runs the job once per item when its key is not given (startups: one run per region).
 job_id=N adds that job's company, title, location and description, and your newest CV, from the warehouse (interview).
-A job with `csv: <file>` also has its report's last ```csv block merged into output/<file>, a name already there replaced
-(startups: the tracker's Startups page reads that file).
+A job with `csv: <file>` also has its report's last ```csv block merged into output/<file> (data/<file>: the repo's data/), a
+name already there replaced (startups: the tracker's Startups page reads that file; founders: data/contacts.csv).
+A prompt with {companies} gets the startups outreach has no one to write to (outreach.without_contact).
 The agent and its environment are made once and kept in output/research/ids.json."""
 
 import io
@@ -20,7 +21,7 @@ from datetime import date
 import anthropic
 import pandas as pd
 
-from .config import OUTPUT, SETTINGS
+from .config import OUTPUT, ROOT, SETTINGS
 
 CFG = SETTINGS["research"]
 IDS = OUTPUT / "research" / "ids.json"
@@ -110,6 +111,14 @@ def main() -> None:
     values = {**job.get("defaults", {}), "date": str(date.today()), **given}
     if "job_id" in given:
         values.update(job_values(given["job_id"]))
+    if "{companies}" in job["prompt"] and "companies" not in given:  # founders: the startups outreach has no one to write to
+        from .db import connect
+        from .outreach import without_contact
+
+        with connect() as conn:
+            values["companies"] = "; ".join(without_contact(conn))
+        if not values["companies"]:
+            raise SystemExit(f"research {name}: every startup with a 7+ role already has a contact")
     each = {k: v for k, v in job.get("each", {}).items() if k not in given}
     client = anthropic.Anthropic()
     ids = agent_ids(client)
@@ -123,8 +132,9 @@ def main() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(report, encoding="utf-8")
         print(f"research {name} {dict(zip(each, combo))}: {path}")
-        if job.get("csv"):
-            print(f"  {merge_csv(report, OUTPUT / job['csv'])} rows merged into {job['csv']}")
+        if job.get("csv"):  # a path under data/ is the repo's (gitignored), any other is under output/
+            target = (ROOT if job["csv"].startswith("data/") else OUTPUT) / job["csv"]
+            print(f"  {merge_csv(report, target)} rows merged into {target}")
 
 
 if __name__ == "__main__":

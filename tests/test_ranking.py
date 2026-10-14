@@ -55,6 +55,14 @@ def test_the_email_shows_the_score_the_reason_and_the_top_five():
     assert linked == [1, 2, 3, 5, 6]  # the two 9s, the two 8s and the first 7; 7 7, 5 and no score are left out
 
 
+def test_a_card_lists_the_skills_your_cv_shows_and_the_ones_it_misses():
+    j = job(1, 8) | {"skills_on_cv": "Airflow, Segmentation (RFM, cohorts)", "skills_missing": "Kafka"}
+    card = digest.job_card(j)
+    assert "On your CV: Airflow, Segmentation (RFM, cohorts)" in card and "Not on it: Kafka" in card
+    assert "Not on it" not in digest.job_card(job(2, 8) | {"skills_on_cv": "Spark", "skills_missing": None})
+    assert "On your CV" not in digest.job_card(job(3, 8))  # no skill found on the job: no line
+
+
 def test_no_job_of_7_or_more_means_no_top_five_block():
     assert "Top 5 today" not in digest.digest([job(1, 6), job(2, None)], "Egypt")
 
@@ -75,7 +83,7 @@ def test_a_switched_off_block_is_gone(monkeypatch, switch, shown):
 
 def test_every_smart_feature_has_a_switch_in_settings():
     assert {"grade", "eligibility", "auto_hide", "top5", "follow_up", "follow_up_drafts", "tailor", "track_applications",
-            "interview_prep", "embeddings", "manual_collect_emails"} <= set(config.FEATURES)
+            "interview_prep", "embeddings", "manual_collect_emails", "outreach_drafts"} <= set(config.FEATURES)
     assert all(isinstance(on, bool) for on in config.FEATURES.values())
 
 

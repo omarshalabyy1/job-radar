@@ -32,6 +32,8 @@ features:
   embeddings: true          # local Ollama vectors: how close each job is to your CV (CV match); a CV is embedded again only when it changed
   follow_up_drafts: true    # draft a follow-up email (never sent) when an application is 7 or 14 days old with no answer
   interview_prep: true      # draft interview notes when your mailbox shows an interview invite
+  outreach_drafts: true     # draft a cold email (never sent) to a startup's founder for its roles scored 7+, when data/contacts.csv
+                            # has their email (output/outreach/); find them with python -m job_radar.research founders
 # The AI features (grade, tailor, embeddings) run on jobs in these places only. Egypt = Cairo/Giza
 # onsite and hybrid and Egypt's remote jobs. Add Remote, UAE ... to widen them.
 ai_places: [Egypt]
@@ -145,6 +147,23 @@ research:
         region: "{region}", or "{region} (office)" when the startup is headquartered elsewhere and has an office there.
         size: a whole number. kind: "AI/data" or "product". what: one line. careers and website: full links, or empty.
         source: "Managed Agents research {date}". Quote any field that holds a comma.
+    founders:
+      # {companies}: the startups with a role scored 7+ and no one in data/contacts.csv to write to (outreach.py)
+      out: research/founders/{date}.md
+      csv: data/contacts.csv   # merged into the tracker's Contacts (a path under data/ is the repo's, not output/)
+      prompt: |
+        For each of these startups: {companies}
+        find the founder or CEO, and the CTO or head of data or engineering when there is one. Read only the company's own
+        site (team, about, contact, blog), press interviews, startup databases, conference talks and the people's own sites
+        or GitHub. Never use LinkedIn. For each person give name, title and city, and a work email only when it is published
+        on a page you read, with that page's URL; never guess an email from a pattern. Say which startups you found no
+        published email for.
+
+        End the report with one ```csv block, nothing after it, one row per person, with exactly this header:
+        company,side,name,title,location,linkedin,email,why
+        company: the startup's name as given above. side: "Founder" for a founder or CEO, "Hiring" for a CTO or head of
+        data or engineering. linkedin: always empty. email: a published one, else empty. why: one line ending with the
+        source URL. Quote any field that holds a comma.
     interview:
       out: research/interviews/{company} - {title}.md
       prompt: |

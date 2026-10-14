@@ -37,6 +37,7 @@ from .digest import digest, send, subject
 from .eligibility import eligibility, not_for_egypt  # noqa: F401  (python -m job_radar eligibility)
 from .embed import embed  # noqa: F401  (python -m job_radar embed)
 from .grade import grade_claude  # noqa: F401  (python -m job_radar grade_claude)
+from .outreach import outreach_drafts  # noqa: F401  (python -m job_radar outreach_drafts)
 from .tailor import tailor  # noqa: F401  (python -m job_radar tailor)
 
 DAYS = HOURS_OLD // 24

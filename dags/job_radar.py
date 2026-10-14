@@ -115,6 +115,7 @@ with DAG(
     extracts >> EmptyOperator(task_id="check_extracts")
     checked = step("eligibility", trigger_rule="all_done")
     matched >> checked >> embedded >> graded >> ranked >> step("tailor", trigger_rule="all_done", execution_timeout=timedelta(seconds=300))
+    ranked >> step("outreach_drafts", trigger_rule="all_done", execution_timeout=timedelta(seconds=300))  # cold emails to founders, never sent
     matched >> step("export_career_ops")
 
 # your two emails, right after each collect (a manual one too: they hold only jobs not emailed yet)

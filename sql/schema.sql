@@ -332,12 +332,15 @@ SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j
             WHEN now() - j.posted_at <= interval '48 hours' THEN 3 WHEN now() - j.posted_at <= interval '72 hours' THEN 4
             ELSE 5 END AS fresh_level,
        g.score, g.reason AS grade_reason, g.cv AS grade_cv, coalesce(j.restriction, g.restriction) AS restriction,
-       j.cv_similarity, j.years_required
+       j.cv_similarity, j.years_required, v.skills_on_cv, v.skills_missing
 FROM core.job j
 LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
            FROM core.job_skill GROUP BY job_id) k USING (job_id)
-LEFT JOIN (SELECT DISTINCT ON (job_id) job_id, label AS cv_label, cv_coverage
-           FROM (SELECT k.job_id, c.label, round(100.0 * count(cs.skill) / count(*)) AS cv_coverage
+-- the best CV for the job (highest coverage) and which of the job's skills that CV shows and does not show
+LEFT JOIN (SELECT DISTINCT ON (job_id) job_id, label AS cv_label, cv_coverage, skills_on_cv, skills_missing
+           FROM (SELECT k.job_id, c.label, round(100.0 * count(cs.skill) / count(*)) AS cv_coverage,
+                        string_agg(k.skill, ', ' ORDER BY k.skill) FILTER (WHERE cs.skill IS NOT NULL) AS skills_on_cv,
+                        string_agg(k.skill, ', ' ORDER BY k.skill) FILTER (WHERE cs.skill IS NULL) AS skills_missing
                  FROM core.job_skill k CROSS JOIN core.cv c
                  LEFT JOIN core.cv_skill cs ON cs.label = c.label AND cs.skill = k.skill
                  GROUP BY k.job_id, c.label) per_cv

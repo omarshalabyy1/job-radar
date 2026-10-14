@@ -98,13 +98,19 @@ def job_card(j: dict) -> str:
         f"{j['date_posted']:%d %b}" if j["date_posted"] else "",
         f"CV {j['cv_coverage']:.0f}%" if j.get("cv_coverage") is not None else "") if x)
     where = " · ".join(html.escape(x) for x in (str(j["company"] or "").strip(" -"), str(j["location"] or "").strip(" -")) if x)
+    # of your skills the job asks for, the ones your best CV shows and the ones it does not (mart.job_status)
+    skills = " · ".join(x for x in (
+        f"On your CV: {html.escape(j['skills_on_cv'])}" if j.get("skills_on_cv") else "",
+        f'<span style="color:#9a3b12">Not on it: {html.escape(j["skills_missing"])}</span>' if j.get("skills_missing") else "") if x)
     return (f'<tr><td style="padding:14px 20px;border-top:1px solid {LINE};{"background:#fffaeb;" if star else ""}">'
             f'<a href="{html.escape(j["job_url"])}" style="font-size:16px;line-height:22px;font-weight:600;color:{LINK};'
             f'text-decoration:none">{html.escape(j["title"])}</a>'
             f'<div style="margin-top:2px;font-size:14px;line-height:20px;color:{INK}">{where}</div>'
             f'<div style="margin-top:4px;font-size:12px;line-height:20px;color:{INK2}">{meta}</div>'
             + (f'<div style="margin-top:2px;font-size:13px;line-height:18px;color:{INK2}">{html.escape(j["grade_reason"])}</div>'
-               if j.get("grade_reason") else "") + '</td></tr>')
+               if j.get("grade_reason") else "")
+            + (f'<div style="margin-top:2px;font-size:12px;line-height:18px;color:{INK2}">{skills}</div>' if skills else "")
+            + '</td></tr>')
 
 
 def block(title: str, lines: list[str]) -> str:
