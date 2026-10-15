@@ -165,9 +165,11 @@ Open [`settings.yaml`](settings.yaml). Everything is plain words; save, and the 
 3. **Mark it in the tracker**: *saved*, *applied*, *interview*, *offer*, *rejected* or *ignored*.
    Ignored jobs drop out of Claude's review and the career-ops export. On **Ready to apply**, each draft has one
    **Apply** link and **Mark applied**; a confirmation email marks the job applied by itself within the hour.
-4. **Check Today's deadlines**: the next three (a coding test, an interview) sit above your follow-ups; add or edit
+4. **Look at Startups** (under Insights) for small companies in Egypt, the Gulf, the US and Europe, with their careers
+   pages; filter by region, kind or a word.
+5. **Check Today's deadlines**: the next three (a coding test, an interview) sit above your follow-ups; add or edit
    them under *Edit deadlines*.
-5. **Ask Claude** when you want help (next section).
+6. **Ask Claude** when you want help (next section).
 
 ## 🤖 Working with Claude
 

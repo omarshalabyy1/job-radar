@@ -124,6 +124,8 @@ A job is one row however the boards write its company: the key ignores spacing, 
 
 Every extract records how many postings each board gave and how many it dropped as not for Egypt (core.extract_count); a board that suddenly drops all of 10 or more (its last 7 days kept some), or none where the last 7 days dropped half, prints a WARNING into the run log: the board changed, or the rule broke.
 
+The Startups page lists the small companies found for your search (`output/startups/startups.csv`: Egypt, the Gulf, the US and Europe, with their careers pages) and whether the radar reads or stars each.
+
 The Today page lists your next three deadlines (core.deadline: a coding test, an interview; edit them there) above the follow-ups due.
 
 Every step `python -m job_radar` runs leaves a row in core.step_run: when, how long, ok / warn / failed / off / running, its summary (warnings kept), and its Claude tokens and exact dollars. The tracker's Last run page shows each step's latest run (a 'running' row older than its timeout shows as killed?), 14 days of Claude $ and failures, and this month's total.
@@ -226,9 +228,9 @@ and the next run uses it; a schedule change shows in Airflow within a minute.
 | `roles` | the jobs you want, **in your order** (the email follows it): the words a title needs, and what the job boards are searched for |
 | `search_words` | the plain search words for Himalayas, Workable, freehire, Jooble and Welcome to the Jungle |
 | `linkedin` | LinkedIn's search through Apify: its words and places, jobs a run (`max_jobs`) and hours between runs (`every_hours`) |
+| `research` | Deep research on Claude Managed Agents, always Haiku, run by hand: `python -m job_radar.research startups [region=Egypt]` (one report per region: Egypt, Gulf, US, Europe) or `python -m job_radar.research interview job_id=123 "note=..."` (company brief, likely questions, answers from your CV). `python -m job_radar.research founders` looks up the founders of the startups with a 7+ role and no contact, and merges them into `data/contacts.csv`. Prompts, regions, size and model are in settings.yaml; reports go to `output/research/` |
 | `too_senior`, `never` | titles to leave out: above your level, or never yours |
 | `experience` | the words for entry and senior, and the years that make a job entry (1 or less) or senior (5 or more) |
-| `research` | Deep research on Claude Managed Agents, always Haiku, run by hand: `python -m job_radar.research startups [region=Egypt]` (one report per region: Egypt, Gulf, US, Europe) or `python -m job_radar.research interview job_id=123 "note=..."` (company brief, likely questions, answers from your CV). `python -m job_radar.research founders` looks up the founders of the startups with a 7+ role and no contact, and merges them into `data/contacts.csv`. Prompts, regions, size and model are in settings.yaml; reports go to `output/research/` |
 | `places` | the places, **in email order**, where the boards search, and the words that name each one |
 | `onsite_areas`, `other_home_cities` | where in Egypt an onsite or hybrid job is fine (Cairo, Giza ...), and the cities that are not; anywhere else a job must be remote |
 | `remote_words` | how a remote job says so |

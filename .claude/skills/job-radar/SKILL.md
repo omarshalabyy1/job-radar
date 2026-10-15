@@ -24,7 +24,8 @@ A job's key (steps.job_key) ignores the company's spacing, case, "and" and legal
 "careaccess" are one job. Before transform deletes a job (KEEP_DAYS) it writes a slim line to core.job_history (no
 description) for the Market page's trends. Each extract records postings and drops per board (core.extract_count): a
 board suddenly dropping all (it kept some the last 7 days), or none where it used to drop half, is a WARNING;
-Remote.co drops all every day (its data jobs are US and Canada only), which is no warning.
+Remote.co drops all every day (its data jobs are US and Canada only), which is no warning. The Startups page reads output/startups/startups.csv (region, name, city,
+size, kind, what, careers, website, source), the startup search Claude ran on 2026-10-13; a new search rewrites that file.
 With features.outreach_drafts on, the outreach_drafts task (after `ranked`) takes each startup role (its company in that
 file) scored 7+ whose company has a Founder or Hiring row with an email in data/contacts.csv: Claude researches the
 startup on the web once (output/outreach/briefs/<company>.md), then drafts a cold email in his brand voice and the
