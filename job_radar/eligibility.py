@@ -51,7 +51,7 @@ SYSTEM = ("You read one job posting for a candidate who lives in Cairo, Egypt, h
           "work permit, residence or security clearance anywhere else. answer: yes when they can legally take the job "
           "from Cairo; no when the posting requires something they cannot meet (another country's citizenship, work "
           "authorization or residence, living or being located in another country or region, a security clearance, "
-          "nationals of a country only); unclear when the posting does not say. Where the company or office is, a "
+          "nationals of a country only, fluency in a language other than Arabic or English); unclear when the posting does not say. Where the company or office is, a "
           "visa it will not sponsor, or a time zone to overlap is not a bar by itself. reason: a short phrase, the "
           "posting's own words when it says no.")
 

@@ -5,13 +5,15 @@ CV first (core.job.cv_similarity, embed's free score), with no daily cap, agains
 job whose description gave no years asked (steps.years_required) gets Claude's reading in core.job.years_required. The job_radar DAG
 runs it after embed; the emails, the tracker and the tailor step read the grade, and a job scored 3 or lower, or
 with a restriction (features.eligibility), is hidden (config.hidden_reason, features.auto_hide). It learns from your last 30
-clicks. With features.grade false, no ANTHROPIC_API_KEY or no CV it prints why and stops green. When jobs were selected
+clicks and from the last 30 jobs your mailbox shows answering you (an interview or offer, or a rejection). A job graded
+8+ that names a closing date gets it as an "Apply by" deadline on the Today page. With features.grade false, no ANTHROPIC_API_KEY or no CV it prints why and stops green. When jobs were selected
 and none was graded (every call failed, or the credit ran out) it prints the summary and fails, so the task is red
 and the run log says failed (a refused call costs nothing; the next run tries again)."""
 
 from __future__ import annotations
 
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel
@@ -32,6 +34,7 @@ class Grade(BaseModel):
     reason: str
     restriction: str  # empty when someone living in Cairo, Egypt can legally take the job
     years_required: int  # the years of experience the posting asks for, 0 when it names none
+    apply_by: str     # the posting's closing date, YYYY-MM-DD, empty when it names none
 
 
 def jobs_to_grade(conn) -> list[tuple]:
@@ -62,27 +65,44 @@ def recent_clicks(conn) -> list[tuple]:
         (list(PICKED),)).fetchall()
 
 
-def system_blocks(cvs: list[tuple], clicks: list[tuple], eligibility: bool) -> list[dict]:
-    """The CVs and the clicks are the same for every job: cached, so each call after the first reads them at a tenth of the price."""
+def replies(conn) -> list[tuple]:
+    """The last 30 jobs your mailbox shows answering you, as (line, answered): an interview, offer or hire is answered,
+    a rejection is not. Each job's newest answer counts."""
+    return conn.execute(
+        "SELECT j.title || ' at ' || j.company || ' -> ' || e.kind, e.kind <> 'rejected' FROM (SELECT DISTINCT ON (job_id)"
+        " job_id, kind, received_at FROM core.application_email WHERE job_id IS NOT NULL"
+        " AND kind IN ('interview', 'offer', 'hired', 'rejected') ORDER BY job_id, received_at DESC) e"
+        " JOIN core.job j USING (job_id) ORDER BY e.received_at DESC LIMIT 30").fetchall()
+
+
+def system_blocks(cvs: list[tuple], clicks: list[tuple], eligibility: bool, answers: list[tuple] = ()) -> list[dict]:
+    """The CVs, the clicks and the answers are the same for every job: cached, so each call after the first reads them
+    at a tenth of the price."""
     picked = "\n".join(line for line, yes in clicks if yes)
     passed = "\n".join(line for line, yes in clicks if not yes)
+    answered = "\n".join(line for line, yes in answers if yes)
+    rejected = "\n".join(line for line, yes in answers if not yes)
     return [{"type": "text", "cache_control": {"type": "ephemeral"},
              "text": "You grade job postings for one candidate against their CVs."
                      + (" The candidate lives in Cairo, Egypt, has no work permit anywhere else and wants a remote job abroad, "
                         "or a job in Cairo or Giza; a job they cannot legally take from Egypt (a citizenship, a "
-                        "security clearance, a work permit or residence in another country, nationals only) "
-                        "scores 0-3." if eligibility else "")
+                        "security clearance, a work permit or residence in another country, nationals only, fluency in a "
+                        "language other than Arabic or English) scores 0-3." if eligibility else "")
                      + " score: 0-10, how well they fit and could get it (10 = apply today); a posting that asks for "
                        "more years of experience than the CV shows scores lower. cv: the label of the "
                        "CV they should send, exactly as given. reason: one short line naming the deciding match or "
                        "gap; when the posting asks for more years than the CV shows, it says so first (\"asks 4+ yrs, CV "
                        "shows about 2\"). years_required: the years of experience the posting asks for (its lowest "
-                       "bound, the most of several), 0 when it names none. restriction: "
+                       "bound, the most of several), 0 when it names none. apply_by: the closing date the posting names, "
+                       "YYYY-MM-DD, empty when it names none. restriction: "
                      + ("empty when someone living in Cairo, Egypt can legally take the job, else a short phrase "
                         "saying what bars them." if eligibility else "always empty.")
                      + "\n\n" + "\n\n".join(f"<cv label=\"{label}\">\n{text}\n</cv>" for label, text in cvs)
                      + f"\n\nJobs they picked (saved or applied to) and jobs they passed on (ignored or rejected), "
-                       f"newest first; grade like them:\n<picked>\n{picked}\n</picked>\n<passed>\n{passed}\n</passed>"}]
+                       f"newest first; grade like them:\n<picked>\n{picked}\n</picked>\n<passed>\n{passed}\n</passed>"
+                     + f"\n\nJobs that answered their application with an interview or offer, and jobs that rejected it, "
+                       f"newest first; score jobs like the answered ones higher:\n<answered>\n{answered}\n</answered>\n"
+                       f"<rejected>\n{rejected}\n</rejected>"}]
 
 
 def save_grades(conn, rows: list[tuple]) -> None:
@@ -92,6 +112,16 @@ def save_grades(conn, rows: list[tuple]) -> None:
                         " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (job_id) DO UPDATE SET score = EXCLUDED.score,"
                         " cv = EXCLUDED.cv, reason = EXCLUDED.reason, restriction = EXCLUDED.restriction,"
                         " model = EXCLUDED.model, graded_at = now()", rows)
+
+
+def save_deadlines(conn, rows: list[tuple]) -> None:
+    """An "Apply by" deadline (core.deadline, the Today page) for each (job_id, closing date) not yet passed, once per
+    job; a date that is not YYYY-MM-DD is skipped."""
+    rows = [(job_id, day) for job_id, day in rows if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day)]
+    with conn.cursor() as cur:
+        cur.executemany("INSERT INTO core.deadline (job_id, what, due, note) SELECT %s, 'Apply by', %s::date, 'from the posting'"
+                        " WHERE %s::date >= current_date AND NOT EXISTS (SELECT 1 FROM core.deadline WHERE job_id = %s"
+                        " AND what = 'Apply by')", [(job_id, day, day, job_id) for job_id, day in rows])
 
 
 def alert_fresh(conn, job_ids: list[int]) -> None:
@@ -121,7 +151,7 @@ def grade_claude(conn) -> None:
         return
     jobs = jobs_to_grade(conn)
     eligibility = FEATURES["eligibility"]
-    system = system_blocks(cvs, recent_clicks(conn), eligibility)
+    system = system_blocks(cvs, recent_clicks(conn), eligibility, replies(conn))
     import anthropic  # for its errors; the SDK loads only in a run that calls Claude
     client = claude.client()  # a stuck call gives up well inside the DAG's 600 s
     out_of_credit = False
@@ -150,7 +180,7 @@ def grade_claude(conn) -> None:
         if g is None:
             return None
         return (job_id, max(0, min(10, g.score)), g.cv, g.reason, (g.restriction.strip() or None) if eligibility else None,
-                cfg["model"], g.years_required if 0 < g.years_required <= 20 else None)
+                cfg["model"], g.years_required if 0 < g.years_required <= 20 else None, g.apply_by.strip())
 
     # the first job alone writes the cache; only then do the other calls start, so they all read it
     first = [grade(jobs[0])] if jobs else []
@@ -158,6 +188,7 @@ def grade_claude(conn) -> None:
         done = [row for row in [*first, *pool.map(grade, jobs[1:])] if row]
     save_grades(conn, [row[:6] for row in done])
     alert_fresh(conn, [row[0] for row in done])
+    save_deadlines(conn, [(row[0], row[7]) for row in done if row[1] >= 8 and not row[4] and row[7]])
     with conn.cursor() as cur:  # the description's own digits (steps.years_required) win over Claude's reading
         cur.executemany("UPDATE core.job SET years_required = %s WHERE job_id = %s AND years_required IS NULL",
                         [(row[6], row[0]) for row in done if row[6]])

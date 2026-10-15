@@ -134,7 +134,8 @@ def sample_draft(**changes) -> tailor.Draft:
         projects=[tailor.Entry(title="Warehouse", org="Star schema", when="2026", bullets=["Built it."],
                                technologies="PostgreSQL", repo_url="https://github.com/zz/warehouse")],
         education=[], certifications=[], languages="Arabic, English", file_tag="de",
-        cover_letter_md="Dear team,\n\nI build pipelines your analysts trust.\n\nZz Candidate", notes_md="notes")
+        cover_letter_md="Dear team,\n\nI build pipelines your analysts trust.\n\nZz Candidate", notes_md="notes",
+        form_answers_md="**Why this role?**\nI build pipelines your analysts trust.")
     return tailor.Draft(**{**fields, **changes})
 
 
@@ -143,7 +144,7 @@ def test_a_draft_is_written_as_html_and_one_page_pdfs_with_their_links(monkeypat
     assert problems == []
     names = sorted(p.name for p in tmp_path.iterdir())
     assert names == ["Zz Candidate Acme Ltd. DE Cover Letter.pdf", "Zz Candidate Acme Ltd. DE.pdf", "cover-letter.html",
-                     "cover-letter.md", "cv.html", "cv.md", "notes.md"]
+                     "cover-letter.md", "cv.html", "cv.md", "forms.md", "notes.md"]
     cv = (tmp_path / "cv.html").read_text(encoding="utf-8")
     assert 'Portfolio: <a href="https://omarlabs.dev">omarlabs.dev</a>' in cv and '(<a href="https://github.com/zz/warehouse">GitHub</a>)' in cv
 
@@ -156,18 +157,35 @@ def test_a_cv_pdf_over_one_page_or_without_its_links_fails_its_check():
     short = tailor.cv_html(sample_draft())
     no_links = tailor.pdf_of(short.replace("<a href=", "<span data-href="))  # printed without its links
     assert any("lost its links" in p for p in tailor.pdf_problems(no_links, short))
+    assert tailor.pdf_problems(tailor.pdf_of(short), short) == []  # every heading is in the PDF's text
+    no_text = tailor.pdf_of(short.replace("<h2>Core Skills</h2>", "<h2></h2>"))  # the heading is not printed
+    assert any("no text an ATS can read for: Core Skills" in p for p in tailor.pdf_problems(no_text, short))
+
+
+class Client:
+    """messages.parse gives the draft, then the reviewed draft (reviewed when given one), with no network."""
+
+    def __init__(self, draft, reviewed=None):
+        self.messages, self.draft, self.reviewed = self, draft, reviewed
+
+    def parse(self, output_format, **_):
+        out = self.draft if output_format is tailor.Draft else tailor.Review(
+            draft=self.reviewed or self.draft, changes=["Used the posting's word: dbt"], missing_keywords=["Kafka"])
+        return type("R", (), {"parsed_output": out})()
+
+
+def test_the_review_replaces_the_draft_and_its_changes_go_in_the_notes():
+    job = (1, "Data Engineer", "Acme", "Cairo", "text", 9, "cv", "fits")
+    d = tailor.ask(Client(sample_draft(), sample_draft(summary="Data Engineer building dbt pipelines.")), {"cv": "text"}, job)
+    assert d.summary == "Data Engineer building dbt pipelines."
+    assert "## Review\n- Used the posting's word: dbt" in d.notes_md and "Keywords the CV cannot show: Kafka" in d.notes_md
 
 
 def test_a_cover_letter_that_names_a_gap_is_thrown_away(capsys):
-    class Client:
-        def __init__(self, draft):
-            self.messages, self.draft = self, draft
-
-        def parse(self, **_):
-            return type("R", (), {"parsed_output": self.draft})()
 
     job = (1, "Data Engineer", "Acme", "Cairo", "text", 9, "cv", "fits")
     for letter in ("I have not used Spark yet.", "I have no experience with Kafka.", "I lack Airflow."):
         assert tailor.ask(Client(sample_draft(cover_letter_md=letter)), {"cv": "text"}, job) is None
+    assert tailor.ask(Client(sample_draft(form_answers_md="I have no experience with Kafka.")), {"cv": "text"}, job) is None
     assert "names a gap" in capsys.readouterr().out
     assert tailor.ask(Client(sample_draft()), {"cv": "text"}, job) is not None

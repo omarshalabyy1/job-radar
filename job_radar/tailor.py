@@ -1,13 +1,13 @@
 """tailor: for the best-graded jobs (score 8+, in ai_places, no application row yet, nothing restricting them) Claude
-(settings.yaml claude.model) drafts a CV, a cover letter and notes from the CV it picked, into
-output/applications/<day>/<company>-<title>/: cv.md, cv.html and its one-page A4 PDF, cover-letter.md, cover-letter.html
-and its PDF, notes.md. It marks the job saved in the tracker ("draft ready <day>"), for you to finish in /job-radar.
+(settings.yaml claude.model) drafts a CV, a cover letter, notes (with STAR stories) and form answers from the CV it picked, then a second call
+reviews them against the job and the CV, into output/applications/<day>/<company>-<title>/: cv.md, cv.html and its
+one-page A4 PDF, cover-letter.md, cover-letter.html and its PDF, notes.md, forms.md. It marks the job saved in the tracker ("draft ready <day>"), for you to finish in /job-radar.
 It sends nothing and applies to nothing. With features.tailor off, no ANTHROPIC_API_KEY, no CV or no credit left it
 prints why and stops green (a refused call costs nothing; the next run tries again). A job whose call fails or times
 out is skipped and tried again next run. A restriction counts only with features.eligibility.
 
-Two checks, in code: a CV or cover letter that names a gap ("I have not", "no experience" ...) is thrown away and tried
-again next run; a CV PDF that is not one page or lost its links leaves the files for you to look at, is not marked
+Two checks, in code: a CV, cover letter or form answer that names a gap ("I have not", "no experience" ...) is thrown away and tried
+again next run; a CV PDF that is not one page, lost its links or has a heading an ATS cannot read leaves the files for you to look at, is not marked
 ready, and turns the task red. tailor_job(conn, job_id) drafts one job you name (in /job-radar)."""
 
 from __future__ import annotations
@@ -25,9 +25,9 @@ from . import claude
 from .config import FEATURES, OUTPUT, SETTINGS
 from .sources import time_left
 
-TAILOR_SECONDS = 300  # the DAG gives the task 300 s; a new draft starts only with 60 s left
+TAILOR_SECONDS = 300  # the DAG gives the task 300 s; a new draft (two calls) starts only with 120 s left
 MIN_SCORE = 8
-MAX_TOKENS = 8000  # what the three drafts need
+MAX_TOKENS = 8000  # what the drafts need, and the reviewed copy of them
 # Claude's own text with any of these names a gap (whole words, so "Slack" is fine; a bare "gap" is not here because a
 # CV can name a "price gap": only a skills or experience gap is a gap in the candidate)
 GAP_WORDS = re.compile(r"\b(?:not yet|haven['’]t|have not|(?:no|limited) (?:prior |direct |hands-on |professional )?experience"
@@ -74,7 +74,25 @@ with their numbers, that prove it. End with one clear ask: a short call about th
 only.
 
 notes_md: the score and why, the gaps between the job and the CV and how to address each, then three likely \
-interview questions with answers drawn only from the CV (same plain style as the letter)."""
+interview questions with answers drawn only from the CV (same plain style as the letter), then "STAR stories": three \
+stories from the CV that answer this job's main needs, each as Situation, Task, Action and Result in one short line \
+each, with numbers only from the CV.
+
+form_answers_md: ready answers to the questions application forms ask, for this job: why this company, why this role, \
+a short summary of the candidate, then any question the posting itself asks. Same voice and limits as the letter, 2-4 \
+sentences each, as "**Question**" then the answer. Salary, notice period, work authorization and other personal facts \
+come only from <answers> when it is given, else write "see application-answers.md"."""
+
+REVIEW_RULES = """You review one tailored application before it is sent. <cv> is the candidate's real CV, <job> the \
+posting and <draft> the tailored CV, cover letter, notes and form answers, as JSON. Return the draft corrected: remove \
+any employer, title, date, degree, skill, client or number not in <cv>; use the posting's own keywords wherever <cv> \
+backs them, so an applicant tracking system (ATS) finds them; keep every rule the draft was written under (one A4 page, \
+about 520 words, no gap named in the CV, the letter or the form answers, the same voice). Change nothing that is \
+already right. changes: one short line per change you made. missing_keywords: the posting's key skills and tools the \
+CV still does not show, because <cv> does not back them. The rules the draft was written under follow; their fixed \
+facts and backed outcomes count as in <cv>, so keep them.
+
+"""
 
 CV_CSS = """@page { size: A4; margin: 8mm 12mm; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -147,6 +165,13 @@ class Draft(BaseModel):
     file_tag: str
     cover_letter_md: str
     notes_md: str
+    form_answers_md: str
+
+
+class Review(BaseModel):
+    draft: Draft
+    changes: list[str]
+    missing_keywords: list[str]
 
 
 def draft_day(note: str | None) -> str | None:
@@ -252,15 +277,20 @@ def pdf_of(page_html: str) -> bytes:
 
 
 def pdf_problems(pdf: bytes, page_html: str, pages: int = 1) -> list[str]:
-    """What is wrong with a printed page: more than `pages` pages, or a link of the page missing from the PDF's
-    annotations (/Annots), so it is not clickable."""
+    """What is wrong with a printed page: more than `pages` pages, a link of the page missing from the PDF's
+    annotations (/Annots), so it is not clickable, or a section heading missing from the PDF's text, so an applicant
+    tracking system (ATS) reading the text cannot find that section."""
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(pdf))
     problems = [f"is {len(reader.pages)} pages, not {pages}"] if len(reader.pages) > pages else []
     found = {str(a.get_object().get("/A", {}).get("/URI")).rstrip("/") for p in reader.pages for a in p.get("/Annots") or []}
     missing = sorted({html.unescape(u).rstrip("/") for u in re.findall(r'href="([^"]+)"', page_html)} - found)
-    return problems + ([f"lost its links: {', '.join(missing)}"] if missing else [])
+    problems += [f"lost its links: {', '.join(missing)}"] if missing else []
+    squash = lambda s: re.sub(r"\s+", "", s).casefold()  # letter spacing and capitals change the text's spaces and case
+    text = squash("".join(p.extract_text() or "" for p in reader.pages))
+    unread = [html.unescape(h) for h in re.findall(r"<h2>(.*?)</h2>", page_html) if squash(html.unescape(h)) not in text]
+    return problems + ([f"has no text an ATS can read for: {', '.join(unread)}"] if unread else [])
 
 
 def write_draft(folder: Path, d: Draft, company: str) -> list[str]:
@@ -269,7 +299,7 @@ def write_draft(folder: Path, d: Draft, company: str) -> list[str]:
     folder.mkdir(parents=True, exist_ok=True)
     cv, letter = cv_html(d), letter_html(d)
     for name, text in (("cv.md", cv_markdown(d)), ("cv.html", cv), ("cover-letter.md", d.cover_letter_md),
-                       ("cover-letter.html", letter), ("notes.md", d.notes_md)):
+                       ("cover-letter.html", letter), ("notes.md", d.notes_md), ("forms.md", d.form_answers_md)):
         (folder / name).write_text(text, encoding="utf-8")
     stem = f"{d.name} {re.sub(r'[^A-Za-z0-9 &.-]+', '', company).strip() or 'Job'} {d.file_tag.strip().upper() or 'CV'}"
     cv_pdf = pdf_of(cv)
@@ -290,25 +320,44 @@ def jobs_to_tailor(conn) -> list[tuple]:
         (MIN_SCORE, SETTINGS.get("ai_places") or [], FEATURES["eligibility"])).fetchall()
 
 
+def form_facts() -> str:
+    """Your own answers to the personal questions of a form (salary, notice period ...): output/applications/
+    application-answers.md, or "" when you have not written it."""
+    path = OUTPUT / "applications" / "application-answers.md"
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
 def ask(client, cvs: dict[str, str], job: tuple) -> Draft | None:
-    """Claude's draft for one job (job_id, title, company, location, description, score, cv, reason), or None when it
-    came back empty or named a gap in the CV or the cover letter (printed; tried again next run). API errors are raised."""
+    """Claude's draft for one job (job_id, title, company, location, description, score, cv, reason), then a second call
+    that reviews it against the job and the CV (its changes and the keywords the CV cannot back are added to notes.md),
+    or None when it came back empty or named a gap in the CV, the cover letter or the form answers (printed; tried again
+    next run). API errors are raised."""
     job_id, title, company, location, description, score, cv, reason = job
-    # the rules and the CV are the same for every job that picked this CV: cached, so each call after the
+    # the rules, the CV and your answers are the same for every job that picked this CV: cached, so each call after the
     # first reads them at a tenth of the price
-    system = [{"type": "text", "text": RULES},
-              {"type": "text", "cache_control": {"type": "ephemeral"}, "text": f"<cv>\n{cvs.get(cv) or list(cvs.values())[-1]}\n</cv>"}]
+    facts = form_facts()
+    context = f"<cv>\n{cvs.get(cv) or list(cvs.values())[-1]}\n</cv>" + (f"\n<answers>\n{facts}\n</answers>" if facts else "")
+    posting = (f"<job>\n{title} at {company} ({location})\n" + (f"Graded {score}/10: {reason}\n" if score is not None else "")
+               + f"\n{(description or 'No description.')[:6000]}\n</job>")
     r = client.messages.parse(
-        model=SETTINGS["claude"]["model"], max_tokens=MAX_TOKENS, system=system, output_format=Draft,
-        output_config={"effort": "medium"},
-        messages=[{"role": "user", "content": f"<job>\n{title} at {company} ({location})\n"
-                                              + (f"Graded {score}/10: {reason}\n" if score is not None else "")
-                                              + f"\n{(description or 'No description.')[:6000]}\n</job>"}])
+        model=SETTINGS["claude"]["model"], max_tokens=MAX_TOKENS, system=[
+            {"type": "text", "text": RULES}, {"type": "text", "cache_control": {"type": "ephemeral"}, "text": context}],
+        output_format=Draft, output_config={"effort": "medium"}, messages=[{"role": "user", "content": posting}])
     d = r.parsed_output
     if d is None or not (d.summary.strip() and d.experience and d.cover_letter_md.strip() and d.notes_md.strip()):
         print(f"tailor: job {job_id} ({company}) came back empty, left for the next run")
         return None
-    if found := GAP_WORDS.search(f"{d.cover_letter_md}\n{cv_markdown(d)}"):
+    r = client.messages.parse(
+        model=SETTINGS["claude"]["model"], max_tokens=MAX_TOKENS, system=[
+            {"type": "text", "text": REVIEW_RULES + RULES}, {"type": "text", "cache_control": {"type": "ephemeral"}, "text": context}],
+        output_format=Review, output_config={"effort": "medium"},
+        messages=[{"role": "user", "content": f"{posting}\n<draft>\n{d.model_dump_json()}\n</draft>"}])
+    review = r.parsed_output
+    if review is not None and review.draft.summary.strip() and review.draft.experience:
+        d = review.draft
+        d.notes_md += ("\n\n## Review\n" + "".join(f"- {c}\n" for c in review.changes or ["No change needed."])
+                       + "\nKeywords the CV cannot show: " + (", ".join(review.missing_keywords) or "none") + "\n")
+    if found := GAP_WORDS.search(f"{d.cover_letter_md}\n{d.form_answers_md}\n{cv_markdown(d)}"):
         print(f"WARNING tailor: job {job_id} ({company}): the CV or cover letter names a gap ({found.group(0)!r}), "
               "thrown away, tried again next run")
         return None
@@ -351,7 +400,7 @@ def tailor(conn) -> None:
     done, out_of_credit, failed = 0, False, []
     for job in jobs:
         job_id, title, company = job[:3]
-        if time_left(TAILOR_SECONDS) < 60:
+        if time_left(TAILOR_SECONDS) < 120:
             break
         try:
             d = ask(client, cvs, job)

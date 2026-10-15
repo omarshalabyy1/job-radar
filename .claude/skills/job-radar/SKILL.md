@@ -257,8 +257,16 @@ holding:
   facts from his CV that answer the job's main needs), a short close. Plain, specific English.
   In his voice (below), so it persuades the reader to call him. Short
   paragraphs: two or three sentences each, about 200-250 words in all.
-- `notes.md` - the grade, the gaps and how to address them, and three likely interview questions
-  with answers drawn from his experience.
+- `notes.md` - the grade, the gaps and how to address them, three likely interview questions
+  with answers drawn from his experience, three STAR stories (Situation, Task, Action, Result) from his CV
+  for this job, and a "Review" part: what the second Claude pass changed and the job's keywords his CV cannot show.
+- `forms.md` - ready answers to the usual form questions (why this company, why this role, a short summary,
+  and any question the posting asks); salary, notice period and work authorization come from
+  `application-answers.md` only.
+
+The tailor step drafts, then a second Claude call reviews the draft against the job and his CV (removes any claim
+the CV does not back, adds the posting's keywords the CV backs), so an applicant tracking system (ATS) finds them.
+The PDF check also fails a CV whose section headings are missing from the PDF's text (an ATS could not read it).
 
 Every email, DM, LinkedIn note, cover letter and application-form answer drafted here (and the
 interview answers in `notes.md`) is written in his voice. Load and apply three skills, in this order:
@@ -312,6 +320,16 @@ When a job says to apply by email, write that email too: to the address in the p
 title in the subject, the tailored CV and cover letter PDFs attached, and a short body (in his
 voice, as in step 4, three short paragraphs at most) that always carries his GitHub (github.com/omarshalabyy1) and portfolio
 ("Portfolio: https://omarlabs.dev") links. Show it with the rest and send it only after his yes, like a form.
+
+## 6. Prepare an interview - mock interview on request
+
+When he has an interview ("prep me for <company>", "mock interview"), read that job's `notes.md` (questions, STAR
+stories, gaps), its `forms.md`, the CV he sent (the PDF in the same folder) and the interview email's notes
+(`applications.interview_prep`). Then run a mock interview: one question at a time, waiting for his answer each
+time. After each answer give one line of feedback: is it a STAR story, does it end with a result or number from his
+CV, is it under two minutes, does it match what the CV he sent says. Mix the posting's technical questions, behavioral
+questions and his gaps (from notes.md). End with the three answers to practise again and three questions he can
+ask them. Never invent experience for an answer: only what his CV shows.
 
 ## /job-radar emails
 

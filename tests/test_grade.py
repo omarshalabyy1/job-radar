@@ -129,7 +129,7 @@ class FakeClient:
                 raise error
         usage = type("Usage", (), {"input_tokens": 1, "cache_read_input_tokens": 0,
                                    "cache_creation_input_tokens": 0, "output_tokens": 1})
-        return type("Reply", (), {"parsed_output": grade.Grade(score=5, cv="Data Analyst", reason="ok", restriction="", years_required=0),
+        return type("Reply", (), {"parsed_output": grade.Grade(score=5, cv="Data Analyst", reason="ok", restriction="", years_required=0, apply_by=""),
                                   "usage": usage})
 
 
@@ -198,6 +198,31 @@ def test_recent_clicks_leave_out_the_saved_rows_the_tailor_writes(conn):
     lines = [line for line, _ in grade.recent_clicks(conn) if line.startswith("Zz ")]
     assert sorted(lines) == ["Zz applied_after_draft at Acme -> applied", "Zz ignored at Acme -> ignored",
                              "Zz own_save at Acme -> saved", "Zz own_save_with_note at Acme -> saved"]
+
+
+def test_replies_give_each_job_its_newest_answer_and_the_prompt_shows_them(conn):
+    rows = {}
+    for name, kinds in (("interviewed", ["applied", "interview"]), ("turned_down", ["interview", "rejected"]), ("only_applied", ["applied"])):
+        job_id = add_job(conn, name)
+        conn.execute("UPDATE core.job SET title = %s WHERE job_id = %s", (f"Zz {name}", job_id))
+        for i, kind in enumerate(kinds):
+            conn.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, kind, job_id)"
+                         " VALUES (%s, now() + interval '1 day' + %s * interval '1 minute', 'hr@acme.test', 's', %s, %s)",
+                         (f"test_grade {name} {i}", i, kind, job_id))
+        rows[name] = job_id
+    answers = [row for row in grade.replies(conn) if row[0].startswith("Zz ")]
+    assert sorted(answers) == [("Zz interviewed at Acme -> interview", True), ("Zz turned_down at Acme -> rejected", False)]
+    text = grade.system_blocks([("cv", "sql")], [], False, answers)[0]["text"]
+    assert "<answered>\nZz interviewed at Acme -> interview\n</answered>" in text and "Zz turned_down at Acme -> rejected" in text
+
+
+def test_an_apply_by_date_becomes_one_deadline_and_a_past_or_bad_date_none(conn):
+    jobs = {name: add_job(conn, name) for name in ("future", "past", "bad")}
+    rows = [(jobs["future"], "2099-01-31"), (jobs["past"], "2001-01-31"), (jobs["bad"], "next Friday")]
+    grade.save_deadlines(conn, rows)
+    grade.save_deadlines(conn, rows)  # graded again: still one deadline
+    got = conn.execute("SELECT job_id, due::text FROM core.deadline WHERE job_id = ANY(%s)", (list(jobs.values()),)).fetchall()
+    assert got == [(jobs["future"], "2099-01-31")]
 
 
 def test_a_fresh_job_graded_8_or_more_is_pushed_to_the_phone(conn, monkeypatch):
