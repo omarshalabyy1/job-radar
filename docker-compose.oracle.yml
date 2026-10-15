@@ -1,0 +1,28 @@
+# Overrides for a small always-on VM (Oracle Cloud Always Free Ampere A1). Not for the laptop.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.oracle.yml up -d --build
+#
+# Same four containers as docker-compose.yml, with memory caps, smaller Postgres caches and one Airflow
+# worker per part. Everything listens on 127.0.0.1 only (the tracker too: it shows your CV and has no login);
+# reach it over an SSH tunnel: ssh -L 8501:127.0.0.1:8501 -L 8081:127.0.0.1:8081 <vm>
+# Needs Docker Compose 2.24+ (the `!override` tag).
+
+services:
+  warehouse:
+    command: postgres -c jit=off -c shared_buffers=128MB -c max_connections=30 -c work_mem=8MB
+    mem_limit: 512m
+
+  airflow-db:
+    command: postgres -c shared_buffers=64MB -c max_connections=30
+    mem_limit: 256m
+
+  airflow:
+    mem_limit: 3g
+    environment:
+      AIRFLOW__API__WORKERS: "1"
+      AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: "1"
+
+  tracker:
+    mem_limit: 768m
+    ports: !override
+      - "127.0.0.1:8501:8501"
