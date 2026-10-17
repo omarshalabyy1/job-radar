@@ -6,7 +6,9 @@ job whose description gave no years asked (steps.years_required) gets Claude's r
 runs it after embed; the emails, the tracker and the tailor step read the grade, and a job scored 3 or lower, or
 with a restriction (features.eligibility), is hidden (config.hidden_reason, features.auto_hide). It learns from your last 30
 clicks and from the last 30 jobs your mailbox shows answering you (an interview or offer, or a rejection). A job graded
-8+ that names a closing date gets it as an "Apply by" deadline on the Today page. With features.grade false, no ANTHROPIC_API_KEY or no CV it prints why and stops green. When jobs were selected
+8+ that names a closing date gets it as an "Apply by" deadline on the Today page. The free models grade first (llm.py:
+Groq, Gemini, OpenRouter), Claude only when none answers; core.claude_grade.model names who graded each job.
+With features.grade false, no model key at all or no CV it prints why and stops green. When jobs were selected
 and none was graded (every call failed, or the credit ran out) it prints the summary and fails, so the task is red
 and the run log says failed (a refused call costs nothing; the next run tries again)."""
 
@@ -14,11 +16,12 @@ from __future__ import annotations
 
 import os
 import re
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel
 
-from . import claude
+from . import claude, llm
 from .config import FEATURES, WORK_DAYS, SETTINGS
 from .digest import push
 from .sources import time_left
@@ -142,8 +145,9 @@ def grade_claude(conn) -> None:
     if not FEATURES["grade"]:
         print("grade_claude: off in settings.yaml (features.grade)")
         return
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("grade_claude: no ANTHROPIC_API_KEY in .env, skipped")
+    keys = [key for _, key, *_ in llm.PROVIDERS] + ["ANTHROPIC_API_KEY"]
+    if not any(os.environ.get(key) for key in keys):
+        print(f"grade_claude: none of {', '.join(keys)} in .env, skipped")
         return
     cvs = conn.execute("SELECT label, text FROM core.cv ORDER BY label").fetchall()
     if not cvs:
@@ -152,21 +156,29 @@ def grade_claude(conn) -> None:
     jobs = jobs_to_grade(conn)
     eligibility = FEATURES["eligibility"]
     system = system_blocks(cvs, recent_clicks(conn), eligibility, replies(conn))
+    text = "".join(block["text"] for block in system)
+    used = Counter(dict(conn.execute("SELECT model, count(*) FROM core.claude_grade WHERE graded_at >= current_date"
+                                     " GROUP BY model").fetchall()))  # each free model's calls today, for its cap
     import anthropic  # for its errors; the SDK loads only in a run that calls Claude
-    client = claude.client()  # a stuck call gives up well inside the DAG's 600 s
+    client = claude.client() if os.environ.get("ANTHROPIC_API_KEY") else None  # gives up well inside the DAG's 600 s
     out_of_credit = False
 
     def grade(job: tuple) -> tuple | None:
         nonlocal out_of_credit
         job_id, title, company, location, description, years = job
-        if out_of_credit or time_left(GRADE_SECONDS) < 30:
+        if time_left(GRADE_SECONDS) < 30:
+            return None
+        user = (f"{title} at {company} ({location})" + (f"\nYears of experience it asks for: {years}+" if years else "")
+                + f"\n\n{description[:6000]}")
+        if free := llm.ask_json(text, user, Grade, used):
+            model, g = free
+            return row(job_id, g, model)
+        if out_of_credit or client is None:  # no free model answered and Claude cannot: tried again next run
             return None
         try:
             r = client.messages.parse(
                 model=cfg["model"], max_tokens=MAX_TOKENS, system=system, output_format=Grade,
-                output_config={"effort": "low"},
-                messages=[{"role": "user", "content": f"{title} at {company} ({location})"
-                           + (f"\nYears of experience it asks for: {years}+" if years else "") + f"\n\n{description[:6000]}"}])
+                output_config={"effort": "low"}, messages=[{"role": "user", "content": user}])
         except anthropic.BadRequestError as e:
             if claude.out_of_credit(e):  # the balance ran out: every call would be refused
                 out_of_credit = True
@@ -176,11 +188,11 @@ def grade_claude(conn) -> None:
         except anthropic.APIError as e:  # one job down is a warning: the emails still go out
             print(f"WARNING grade_claude: job {job_id}: {e!r}"[:300])
             return None
-        g = r.parsed_output
-        if g is None:
-            return None
+        return row(job_id, r.parsed_output, cfg["model"]) if r.parsed_output else None
+
+    def row(job_id: int, g: Grade, model: str) -> tuple:
         return (job_id, max(0, min(10, g.score)), g.cv, g.reason, (g.restriction.strip() or None) if eligibility else None,
-                cfg["model"], g.years_required if 0 < g.years_required <= 20 else None, g.apply_by.strip())
+                model, g.years_required if 0 < g.years_required <= 20 else None, g.apply_by.strip())
 
     # the first job alone writes the cache; only then do the other calls start, so they all read it
     first = [grade(jobs[0])] if jobs else []
@@ -193,7 +205,10 @@ def grade_claude(conn) -> None:
         cur.executemany("UPDATE core.job SET years_required = %s WHERE job_id = %s AND years_required IS NULL",
                         [(row[6], row[0]) for row in done if row[6]])
     conn.commit()
-    print(f"grade_claude: {len(done)} of {len(jobs)} jobs graded with {cfg['model']}"
+    by_model = Counter(row[5] for row in done)
+    print(f"grade_claude: {len(done)} of {len(jobs)} jobs graded ("
+          + ", ".join(f"{model} {n}" for model, n in by_model.most_common()) + ")"
+          + (f"; free models failed: {', '.join(f'{why} x{n}' for why, n in llm.FAILED.most_common())}" if llm.FAILED else "")
           + (" - WARNING the API credit ran out: no more grades until you buy more" if out_of_credit else ""))
     if jobs and not done:
         raise RuntimeError(f"grade_claude: 0 of {len(jobs)} jobs graded - check the API key, credit and network")

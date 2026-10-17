@@ -43,3 +43,10 @@ def fresh_time_budget(monkeypatch):
     """Each test starts with a whole step's time budget: the sources stop when time_left(EXTRACT_SECONDS) runs low, and
     that clock counts from the process start, so a test late in a long run would otherwise read nothing."""
     monkeypatch.setattr(base, "STARTED", time.monotonic())
+
+
+@pytest.fixture(autouse=True)
+def no_free_model_keys(monkeypatch):
+    """.env holds the free models' keys: no test calls them unless it sets a key itself."""
+    for key in ("GROQ_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(key, raising=False)

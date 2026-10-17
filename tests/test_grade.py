@@ -147,19 +147,19 @@ def run_grade(monkeypatch, titles: list[str]) -> None:
 def test_grade_claude_fails_when_it_selected_jobs_and_graded_none(monkeypatch, capsys):
     with pytest.raises(RuntimeError, match="0 of 2 jobs graded"):
         run_grade(monkeypatch, ["fail one", "fail two"])
-    assert "0 of 2 jobs graded with" in capsys.readouterr().out  # the usual summary line is printed first
+    assert "0 of 2 jobs graded (" in capsys.readouterr().out  # the usual summary line is printed first
 
 
 def test_grade_claude_stays_green_with_nothing_to_grade_or_some_graded(monkeypatch, capsys):
     run_grade(monkeypatch, [])
     run_grade(monkeypatch, ["fail one", "good one"])
-    assert "1 of 2 jobs graded with" in capsys.readouterr().out
+    assert "1 of 2 jobs graded (" in capsys.readouterr().out
 
 
 def test_a_refused_job_is_a_warning_and_the_other_grades_are_kept(monkeypatch, capsys):
     run_grade(monkeypatch, ["refuse one", "good one"])  # a 400 that is not about credit must not lose the paid grade
     out = capsys.readouterr().out
-    assert "WARNING grade_claude: job 0 refused" in out and "1 of 2 jobs graded with" in out
+    assert "WARNING grade_claude: job 0 refused" in out and "1 of 2 jobs graded (" in out
     with pytest.raises(RuntimeError, match="0 of 2 jobs graded"):  # but a run where every job is refused still fails
         run_grade(monkeypatch, ["refuse one", "refuse two"])
 
@@ -235,3 +235,71 @@ def test_a_fresh_job_graded_8_or_more_is_pushed_to_the_phone(conn, monkeypatch):
         conn.execute("INSERT INTO core.claude_grade (job_id, score, cv, reason, model) VALUES (%s, %s, 'cv', 'why', 'm')", (jobs[name], score))
     grade.alert_fresh(conn, list(jobs.values()))
     assert pushed == ["9/10: Data Engineer"]
+
+
+# ---- the free models first (llm.py), Claude last; no network ----
+import json as jsonlib  # noqa: E402
+from collections import Counter  # noqa: E402
+
+import requests  # noqa: E402
+
+from job_radar import llm  # noqa: E402
+
+GOOD = grade.Grade(score=7, cv="Data Analyst", reason="ok", restriction="", years_required=0, apply_by="").model_dump_json()
+KEYS = ("GROQ_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "OPENROUTER_API_KEY")
+
+
+class Post:
+    """requests.post for the free models: each provider's (status, content) by its URL, and the providers asked, in order."""
+
+    def __init__(self, answers: dict):
+        self.answers, self.asked = answers, []
+
+    def __call__(self, url, **kw):
+        name = next(n for n in ("groq", "googleapis", "openrouter") if n in url)
+        self.asked.append(name)
+        status, content = self.answers[name]
+        r = requests.Response()
+        r.status_code, r.url = status, url
+        r._content = jsonlib.dumps({"choices": [{"message": {"content": content}}]}).encode()
+        return r
+
+
+def free_models(monkeypatch, answers: dict, keys=KEYS) -> Post:
+    for key in keys:
+        monkeypatch.setenv(key, "test")
+    monkeypatch.setattr(llm, "FAILED", Counter())
+    post = Post(answers)
+    monkeypatch.setattr(llm.requests, "post", post)
+    return post
+
+
+def test_the_free_models_are_asked_in_order_and_a_429_or_bad_json_moves_on(monkeypatch):
+    post = free_models(monkeypatch, {"groq": (429, ""), "googleapis": (200, "not json"), "openrouter": (200, f"```json\n{GOOD}\n```")})
+    model, g = llm.ask_json("system", "job", grade.Grade, Counter())
+    assert post.asked == ["groq", "googleapis", "openrouter"] and model.endswith(":free") and g.score == 7
+    assert set(llm.FAILED) == {"groq HTTP 429", "gemini ValidationError"}
+    post = free_models(monkeypatch, {"groq": (200, '{"score": 5}'), "googleapis": (500, ""), "openrouter": (200, "{}")})
+    assert llm.ask_json("system", "job", grade.Grade, Counter()) is None  # every one failed: the caller asks Claude
+
+
+def test_a_provider_without_a_key_or_at_its_daily_cap_is_skipped(monkeypatch):
+    post = free_models(monkeypatch, {"googleapis": (200, GOOD), "openrouter": (200, GOOD)}, keys=KEYS[1:])
+    used = Counter({"gemini-2.0-flash": 180})  # Gemini's cap reached today
+    model, _ = llm.ask_json("system", "job", grade.Grade, used)
+    assert post.asked == ["openrouter"] and used[model] == 1
+
+
+def test_grading_uses_a_free_model_first_and_claude_only_when_none_answers(monkeypatch, capsys):
+    free_models(monkeypatch, {"groq": (200, GOOD)}, keys=KEYS[:1])
+    run_grade(monkeypatch, ["good one"])
+    assert "1 of 1 jobs graded (llama-3.3-70b-versatile 1)" in capsys.readouterr().out
+    free_models(monkeypatch, {"groq": (503, "")}, keys=KEYS[:1])
+    run_grade(monkeypatch, ["good one"])  # Groq down: Claude grades it
+    out = capsys.readouterr().out
+    assert f"1 of 1 jobs graded ({grade.SETTINGS['claude']['model']} 1); free models failed: groq HTTP 503 x1" in out
+
+
+def test_tailoring_stays_on_claude():
+    source = (Path(grade.__file__).parent / "tailor.py").read_text(encoding="utf-8")
+    assert "claude.client()" in source and "llm" not in source  # the CV and letter are written by Claude only
