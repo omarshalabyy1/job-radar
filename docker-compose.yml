@@ -31,6 +31,7 @@ x-job-env: &job-env
   NTFY_TOPIC: ${NTFY_TOPIC:-}
   NEON_DATABASE_URL: ${NEON_DATABASE_URL:-}
   OWNER_EMAIL: ${OWNER_EMAIL:-}
+  CRON_SECRET: ${CRON_SECRET:-}  # radar-web's cron token: publish asks /api/cron/push for the Telegram push
   PYTHONUNBUFFERED: "1"
   JOB_RADAR_OUTPUT: /opt/job-radar/output  # the bind mount below; set here so a host path from .env (e.g. E:/) never reaches the container
 

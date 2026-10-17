@@ -49,6 +49,7 @@ import hashlib
 import os
 import re
 import time
+import urllib.request
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 
 import psycopg
@@ -82,6 +83,7 @@ SKILL = ("skill", "track", "pattern")
 JOB_SKILL = ("job_id", "skill")
 GRADE = ("user_id", "job_id", "score", "cv", "reason", "restriction", "graded_at")
 RETRIES = 2  # a deadlock or serialization failure on Neon (a schema apply running at the same time) is retried this often
+PUSH_URL = "https://fennec.omarlabs.dev/api/cron/push"  # radar-web's instant Telegram push, asked for after each publish
 
 
 def nat_id(key: str) -> int:
@@ -178,12 +180,30 @@ def publish(conn) -> None:
     (40001), as when radar-db's schema apply locks jobs.job mid-run. Nothing was committed, so a retry starts clean."""
     for attempt in range(RETRIES + 1):
         try:
-            return publish_once(conn)
+            publish_once(conn)
         except (psycopg.errors.DeadlockDetected, psycopg.errors.SerializationFailure) as e:
             if attempt == RETRIES:
                 raise
             print(f"WARNING publish: Neon rolled back ({type(e).__name__}); retry {attempt + 1} of {RETRIES} in {10 * (attempt + 1)} s")
             time.sleep(10 * (attempt + 1))
+        else:
+            push()
+            return
+
+
+def push() -> None:
+    """Asks the website to send linked users their new matches on Telegram now (radar-web GET /api/cron/push, CRON_SECRET as the
+    bearer token; safe to call any number of times). The data is already on Neon, so a failure is a WARNING line, never a failed step."""
+    secret = os.environ.get("CRON_SECRET", "").strip()
+    if not secret:
+        print("WARNING publish: no CRON_SECRET in .env; the Telegram push was not asked for")
+        return
+    request = urllib.request.Request(PUSH_URL, headers={"Authorization": f"Bearer {secret}"})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            print(f"push: {response.read(300).decode('utf-8', 'replace')}")
+    except OSError as e:  # URLError, HTTPError and timeouts; the message never holds the token
+        print(f"WARNING publish: the Telegram push failed: {e}")
 
 
 def publish_once(conn) -> None:

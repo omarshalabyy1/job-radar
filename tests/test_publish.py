@@ -1,5 +1,7 @@
 """publish retries a Neon deadlock or serialization failure, and gives up after RETRIES; clean_url strips an alert link's tokens."""
 
+import urllib.error
+
 import psycopg
 import pytest
 
@@ -17,8 +19,31 @@ def run(monkeypatch, errors):
 
     monkeypatch.setattr(publish, "publish_once", once)
     monkeypatch.setattr(publish.time, "sleep", lambda s: None)
+    monkeypatch.setattr(publish, "push", lambda: None)
     publish.publish("conn")
     return len(calls)
+
+
+def test_push_once_after_success(monkeypatch):
+    pushes = []
+    monkeypatch.setattr(publish, "publish_once", lambda conn: None)
+    monkeypatch.setattr(publish, "push", lambda: pushes.append(1))
+    publish.publish("conn")
+    assert pushes == [1]
+
+
+def test_push_only_warns(monkeypatch, capsys):
+    monkeypatch.delenv("CRON_SECRET", raising=False)
+    publish.push()
+
+    def down(*args, **kwargs):
+        raise urllib.error.URLError("down")
+
+    monkeypatch.setenv("CRON_SECRET", "token")
+    monkeypatch.setattr(publish.urllib.request, "urlopen", down)
+    publish.push()
+    out = capsys.readouterr().out
+    assert "WARNING publish: no CRON_SECRET" in out and "WARNING publish: the Telegram push failed" in out and "token" not in out
 
 
 def test_retries_deadlock_and_serialization(monkeypatch, capsys):
