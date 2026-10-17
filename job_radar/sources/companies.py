@@ -289,7 +289,8 @@ def career_page(company: str, url: str) -> list[dict]:
         context = a.parent.get_text(" ", strip=True) if a.parent else ""
         if role_of(title) and place_of(context) and job_url not in urls:
             urls.add(job_url)
-            rows.append(row(company.lower(), None, title, company, context[:200], job_url,
+            # the place its text names, not the text: Capgemini's link text is title, city and team in one line
+            rows.append(row(company.lower(), None, title, company, place_of(context), job_url,
                             None, None, {"title": title, "context": context[:500]}))
     return rows
 

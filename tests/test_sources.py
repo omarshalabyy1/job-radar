@@ -269,3 +269,11 @@ def test_a_workday_site_is_read_through_its_search_and_named_by_tenant_and_site(
     assert (job["source"], job["location"], job["job_url"]) == (
         "workday", "Cairo, Egypt", "https://genpact.wd108.myworkdayjobs.com/External_Careers/job/Cairo-Egypt/Data-Engineer_JR1")
     assert len(asked) == len(market.WORKDAY_SEARCHES)  # a search with fewer than 20 hits is one call
+
+
+def test_a_careers_page_link_takes_the_place_its_text_names_not_the_text(monkeypatch):
+    """2026-10-17: Capgemini's link text is title, city and team in one line, and it was stored as the location."""
+    page = ('<div><a href="/jobs/1">Data Engineer Cairo Data &amp; AI Permanent Experienced Professionals</a></div>')
+    monkeypatch.setattr(companies, "rendered", lambda url, click=None: page)
+    rows = companies.career_page("Capgemini", "https://www.capgemini.com/careers/")
+    assert [(r["location"], r["job_url"]) for r in rows] == [("Egypt", "https://www.capgemini.com/jobs/1")]

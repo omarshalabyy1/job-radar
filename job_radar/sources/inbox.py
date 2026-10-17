@@ -11,9 +11,10 @@ from datetime import date, timedelta
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
+import requests
 from bs4 import BeautifulSoup
 
-from ..config import EXTRACT_SECONDS, HOURS_OLD, role_of
+from ..config import EXTRACT_SECONDS, HOURS_OLD, place_of, role_of
 from .base import row, time_left
 
 
@@ -40,6 +41,14 @@ GENERIC_LINK = r"learn more|view job|see job|view details|more details|apply|app
 
 # LinkedIn's job alert senders: every job in their emails is kept, whatever its title
 LINKEDIN_ALERTS = r"(jobalerts-noreply|jobs-listings)@linkedin\.com"
+
+# A job link is stored without anything about you: only the query parameters that name the job are kept; the rest
+# (utm_*, uid, email, userToken, mailerId, alert ids, NaukriGulf's auto-login) are dropped. A tracking redirect is
+# unwrapped to the job page its parameter carries (Himalayas' redirect=, NaukriGulf's redirect= then rUrl=).
+JOB_PARAMS = {"jk", "id", "jobid", "job_id", "gh_jid"}
+WRAPPERS = {"redirect", "rurl", "url", "u", "dest", "target"}
+# click trackers whose path is a per-recipient token: only following the redirect gives the job page
+TRACKERS = r"//links\.wellfound\.com/"
 
 # an email bigger than this carries attachments, not job alerts: skipped, to spare Gmail's daily
 # IMAP download allowance (2,500 MB)
@@ -111,6 +120,8 @@ def read_mailbox(address: str, password: str, host: str, seen: set[str], empty: 
                 meta = {"mailbox": address, "folder": folder, "message_id": message_id, "from": str(h["From"]),
                         "subject": str(h["Subject"])}
                 for title, company, location, url in jobs:
+                    if re.search(TRACKERS, url) and not (url := followed(url)):
+                        continue
                     # the place comes from the location or the title in transform, else "Unknown location"
                     rows.append(row("email", None, title, company, location, url, posted,
                                     None, {**meta, "title": title, "company": company, "location": location, "url": url}))
@@ -155,21 +166,36 @@ def jobs_in_email(page: str, alert: bool = False) -> list[tuple[str, str, str, s
             text_of_next, href_of_next = links[int(next_link.group(1))]
             after = "" if re.search(JOB_PAGE, href_of_next, re.I) else text_of_next.split("\n")[0]
         company, location = (part.strip(" -") for part in (re.split(r"\s+[·•|–-]\s+", after, maxsplit=1) + [""])[:2])
-        if not location and not card and i + 2 < len(lines) and not lines[i + 2].startswith("@@"):
-            location = lines[i + 2]  # the location on a line of its own
+        if not location and not card and i + 2 < len(lines) and not lines[i + 2].startswith("@@") and place_of(lines[i + 2]):
+            location = lines[i + 2]  # the location on a line of its own (a place, never a line of the body text)
         jobs.append((title, company if not role_of(company) else "", location, url))
     return jobs
 
 
 def canonical_url(url: str) -> str:
-    """One link per job: a LinkedIn alert's tracking link as the plain job page, a tracking link
-    that carries the job page's address in its path (Wuzzuf's) as that page, and any link without
-    its utm_ tracking parameters (which differ from one email to the next)."""
+    """One link per job, with nothing about you in it: a LinkedIn alert's tracking link as the plain job page, a
+    tracking redirect as the page it carries (in a parameter, WRAPPERS, or in its path, Wuzzuf's), an Indeed link as
+    its viewjob page, and any other link with only the parameters that name the job (JOB_PARAMS)."""
     m = re.search(r"linkedin\.com/(?:comm/)?jobs/view/(\d+)", url)
     if m:
         return f"https://www.linkedin.com/jobs/view/{m.group(1)}"
+    parts = urlsplit(url)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    if inner := next((v for k, v in query if k.lower() in WRAPPERS and re.match(r"https?://", v, re.I)), None):
+        return canonical_url(inner)
     if inner := re.search(r"/(https?(?::|%3A)%2F%2F[^/&]+)", url, re.I):
         return canonical_url(unquote(inner.group(1)))
-    parts = urlsplit(url)
-    return urlunsplit(parts._replace(query=urlencode(
-        [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if not k.lower().startswith("utm_")])))
+    if "indeed." in parts.netloc and (jk := dict(query).get("jk")):
+        return f"https://{parts.netloc}/viewjob?jk={jk}"
+    return urlunsplit(parts._replace(query=urlencode([(k, v) for k, v in query if k.lower() in JOB_PARAMS]), fragment=""))
+
+
+def followed(url: str) -> str | None:
+    """A click tracker's job page, its redirect followed; None, with a warning, when it cannot be: a tracking link
+    is never stored (it is per recipient)."""
+    try:
+        final = canonical_url(requests.head(url, allow_redirects=True, timeout=15).url)
+    except requests.RequestException as e:
+        print(f"WARNING email: a tracking link could not be followed, its job is skipped: {type(e).__name__}")
+        return None
+    return None if re.search(TRACKERS, final) else final

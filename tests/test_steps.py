@@ -536,8 +536,9 @@ def test_match_skills_sets_work_mode_places_and_the_work_permit_flags(conn, monk
 
 def test_a_job_for_the_website_only_reaches_no_step_of_yours(conn, monkeypatch):
     """in_scope false (features.market): the job is in core.job for the website, but no step that spends Claude, Ollama, a
-    page read or your attention sees it: eligibility, embed, grade, describe, mart.job_status (the emails, the tracker,
-    export_career_ops). Each is checked against a job of yours with the same text, rolled back."""
+    page read or your attention sees it: eligibility, embed, grade, mart.job_status (the emails, the tracker,
+    export_career_ops). describe reads its page too, after yours (a job with no text lists no skills on the website).
+    Each is checked against a job of yours with the same text, rolled back."""
     from job_radar import embed, grade
     text = "Build Spark pipelines in Python and SQL. " * 5
     yours = add_job(conn, "yours_leak", text)
@@ -559,9 +560,10 @@ def test_a_job_for_the_website_only_reaches_no_step_of_yours(conn, monkeypatch):
     assert any("Data Engineer" in t for t in seen) and not any("Website Only" in t for t in seen)
     conn.execute("UPDATE core.job SET description = NULL, described_at = NULL WHERE job_id = ANY(%s)", ([yours, wide],))
     asked = []
-    monkeypatch.setattr(steps.sources, "fetch", lambda method, url, **kw: asked.append(url) or (_ for _ in ()).throw(steps.sources.Held("test")))
+    monkeypatch.setattr(steps.sources, "fetch", lambda method, url, **kw: asked.append(url) or (_ for _ in ()).throw(
+        steps.sources.base.requests.ConnectionError("test")))
     steps.describe(RolledBack(conn))
-    assert "https://test.example/yours_leak" in asked and "https://test.example/website_only_leak" not in asked
+    assert asked.index("https://test.example/yours_leak") < asked.index("https://test.example/website_only_leak")  # yours first
 
 
 def test_a_board_job_closes_only_when_its_board_was_read_since_and_no_longer_lists_it(conn):
@@ -609,14 +611,51 @@ def test_a_copy_title_and_an_arabic_location_are_shown_clean_while_job_key_stays
         assert steps.clean_location(raw) == raw  # an emoji or a dash is not a foreign letter
     assert steps.clean_location("مدينة غير معروفة", "Egypt") == "Egypt"  # no English name: the job's place
     assert steps.clean_location("مدينة غير معروفة") == "مدينة غير معروفة"  # nor a place: as it came, never None
+    assert steps.clean_location("", "Egypt") == "Egypt" and steps.clean_location("") == "n/a"  # an alert that gave none
 
 
-def test_a_remote_job_with_no_known_place_is_placed_remote(conn):
-    """match_skills (rolled back): work_mode Remote and place 'Unknown location' -> place 'Remote'."""
-    job_id = conn.execute(
-        "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
-        " first_seen, in_scope, last_seen) VALUES ('test remote unknown', 'Data Engineer', 'Acme', 'Remote', 'Unknown location',"
-        " 'test', 'https://test.example/remote_unknown', 1, 'Data Engineer', false, current_date, true, current_date)"
-        " RETURNING job_id").fetchone()[0]
+def test_a_job_with_no_known_place_is_placed_by_its_location(conn):
+    """match_skills (rolled back): place 'Unknown location' -> 'Remote' for a remote job, else the one country its
+    location names ('Bengaluru': India, 'New Jersey , U.S.': United States); a location naming none stays unknown."""
+    ids = {}
+    for name, location in (("remote", "Remote"), ("bengaluru", "Bengaluru"), ("us", "New Jersey , U.S."), ("home", "Home")):
+        ids[name] = conn.execute(
+            "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+            " first_seen, in_scope, last_seen) VALUES (%s, 'Data Engineer', 'Acme', %s, 'Unknown location', 'test', %s, 0,"
+            " 'Data Engineer', false, current_date, false, current_date) RETURNING job_id",
+            (f"test unknown {name}", location, f"https://test.example/unknown_{name}")).fetchone()[0]
     steps.match_skills(RolledBack(conn))
-    assert conn.execute("SELECT work_mode, place FROM core.job WHERE job_id = %s", (job_id,)).fetchone() == ("Remote", "Remote")
+    places = {name: conn.execute("SELECT place FROM core.job WHERE job_id = %s", (job_id,)).fetchone()[0] for name, job_id in ids.items()}
+    assert places == {"remote": "Remote", "bengaluru": "India", "us": "United States", "home": "Unknown location"}
+
+
+def test_a_job_you_added_is_kept_past_30_days_and_any_other_is_not(conn):
+    """transform (rolled back): KEEP_DAYS ages out a job first seen over 30 days ago (dubizzle's), but never one you
+    added yourself (source manual), which has no posting to be seen again."""
+    ids = {}
+    for source in ("manual", "dubizzle"):
+        ids[source] = conn.execute(
+            "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+            " first_seen, in_scope) VALUES (%s, 'Data Analyst', 'Acme', 'Cairo', 'Egypt', %s, %s, 1, 'Data Analyst', false,"
+            " current_date - 40, true) RETURNING job_id", (f"test aged {source}", source, f"https://test.example/aged_{source}")).fetchone()[0]
+    conn.execute("INSERT INTO raw.job_posting (run_date, source, title, company, location, searched_for, job_url, payload,"
+                 " last_seen) VALUES (current_date, 'test', 'Data Engineer', 'Zzagedco', 'Cairo', 'Egypt',"
+                 " 'https://test.example/aged_today', '{}', current_date)")
+    steps.transform(RolledBack(conn))
+    left = {s for s, job_id in ids.items() if conn.execute("SELECT 1 FROM core.job WHERE job_id = %s", (job_id,)).fetchone()}
+    assert left == {"manual"}
+
+
+def test_a_short_snippet_is_read_in_full_and_a_page_without_text_keeps_it(conn, monkeypatch):
+    """describe (rolled back): a board's snippet under SNIPPET characters (NaukriGulf's) is replaced by the page's whole
+    text; a page that gives no text keeps the snippet."""
+    full, empty = add_job(conn, "snippet_full", "Data role in Riyadh."), add_job(conn, "snippet_empty", "Data role in Doha.")
+    page = type("Page", (), {"url": "https://test.example/x", "text": "", "content": b""})()
+    monkeypatch.setattr(steps.sources, "fetch", lambda method, url, **kw: page)
+    monkeypatch.setattr(steps, "closed_reason", lambda url, text: None)
+    texts = iter(["Build pipelines in Spark, Airflow and SQL. " * 10, None])
+    monkeypatch.setattr(steps, "page_description", lambda content: next(texts))
+    monkeypatch.setattr(steps.time, "sleep", lambda s: None)
+    steps.describe(RolledBack(conn))
+    got = dict(conn.execute("SELECT job_id, description FROM core.job WHERE job_id = ANY(%s)", ([full, empty],)).fetchall())
+    assert got[full].startswith("Build pipelines") and got[empty] == "Data role in Doha."

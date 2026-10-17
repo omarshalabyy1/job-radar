@@ -436,7 +436,9 @@ def clean_location(location: str, fallback: str | None = None) -> str:
     in English and its bare region codes dropped ('Cairo, Egypt'); 'Daftra · Giza (Hybrid)' keeps the part after the
     company. A part with no English name is dropped; nothing left gives the fallback (the job's place), else the
     location as it came: never None (core.job.location is NOT NULL). Latin letters are left as they are."""
-    if not location or not foreign(location):
+    if not location:
+        return fallback or "n/a"  # an alert that gave none: the job's place
+    if not foreign(location):
         return location
     parts = []
     for part in (p.strip() for p in location.split("·")[-1].split(",")):
@@ -599,7 +601,7 @@ def transform(conn) -> None:
         closed_where = ("j.source LIKE '%%-board' AND j.last_seen < current_date - %s AND EXISTS (SELECT 1 FROM raw.job_posting r"
                         " JOIN core.board b ON b.ats || ':' || b.token = r.payload->>'board' WHERE (r.source, r.job_url) ="
                         " (j.source, j.job_url) AND b.last_ok_at::date > j.last_seen)" + kept)
-        aged_where = "j.first_seen < current_date - %s" + kept
+        aged_where = "j.first_seen < current_date - %s AND j.source <> 'manual'" + kept  # a job you added stays till you remove it
         for where, days in ((closed_where, CLOSED_AFTER_DAYS), (aged_where, KEEP_DAYS)):
             # your jobs' keys only: a website job deleted may come back (reposted, or remote), for you or the site
             cur.execute(f"INSERT INTO core.job_seen SELECT job_key FROM core.job j WHERE j.in_scope AND {where} ON CONFLICT DO NOTHING",
@@ -628,16 +630,21 @@ def closed_reason(url: str, text: str) -> str | None:
     return found.group(0).lower() if found else None
 
 
+SNIPPET = 300  # a description shorter than this is a board's snippet: the job's page is read for the whole text
+
+
 def describe(conn) -> None:
     """Read the page of each new job that came without a description, for its schema.org
     JobPosting (Greenhouse, Lever, Workday, Workable ...); never a NO_FETCH page. Sites side by
     side, each site's pages 1 second apart; a site that answers 429 is left alone for as long as it
     asks (sources.fetch), and every page left when the step's 60 seconds are up waits for the next run. A page that
-    says the job is closed (closed_reason), or is gone (404, 410), hides the job like a restriction does."""
+    says the job is closed (closed_reason), or is gone (404, 410), hides the job like a restriction does.
+    Your jobs first, then the website's (a job with no text lists no skills: 31% of the published on 2026-10-17); a
+    board's short snippet (NaukriGulf's, under SNIPPET characters) is read in full too."""
     todo = conn.execute(
-        "SELECT job_id, job_url FROM core.job WHERE in_scope AND description IS NULL AND described_at IS NULL"
+        "SELECT job_id, job_url FROM core.job WHERE (description IS NULL OR length(description) < %s) AND described_at IS NULL"
         " AND job_url LIKE 'http%%' AND job_url !~ %s AND first_seen >= current_date - %s"
-        " ORDER BY role_rank, job_id LIMIT 300", (NO_FETCH, DAYS)).fetchall()
+        " ORDER BY in_scope DESC, role_rank, job_id LIMIT 300", (SNIPPET, NO_FETCH, DAYS)).fetchall()
     by_site: dict[str, list] = defaultdict(list)
     closed: list[tuple] = []  # (why, job_id)
     for job_id, url in todo:
@@ -667,7 +674,7 @@ def describe(conn) -> None:
     with ThreadPoolExecutor(8) as pool:
         read = [x for site in pool.map(read_site, by_site.values()) for x in site]
     with conn.cursor() as cur:
-        cur.executemany("UPDATE core.job SET description = %s, described_at = now() WHERE job_id = %s", read)
+        cur.executemany("UPDATE core.job SET description = coalesce(%s, description), described_at = now() WHERE job_id = %s", read)
         cur.executemany("UPDATE core.job SET restriction = 'no longer open: ' || %s WHERE job_id = %s AND restriction IS NULL", closed)
     conn.commit()
     found = sum(text is not None for text, _ in read)
@@ -735,7 +742,6 @@ def match_skills(conn) -> None:
     # location is matched with its place ("UAE", "Europe") unless that is Remote; a remote job open anywhere is Worldwide.
     conn.execute(r"""
         UPDATE core.job j SET work_mode = m.work_mode, countries = m.countries, regions = m.regions,
-            place = CASE WHEN m.work_mode = 'Remote' AND j.place = 'Unknown location' THEN 'Remote' ELSE j.place END,
             role_family = core.role_family(j.title), seniority = core.seniority(j.title),
             track = (SELECT t.track FROM core.role_track t WHERE t.role_family = core.role_family(j.title)),
             nationals_only = m.text ~* %(nationals_text)s OR j.title ~* %(nationals_title)s,
@@ -758,6 +764,11 @@ def match_skills(conn) -> None:
         {"nationals_text": NATIONALS_TEXT, "nationals_title": NATIONALS_TITLE, "arabic_text": ARABIC_TEXT,
          "arabic_title": ARABIC_TITLE, "visa": VISA_OFFERED, "refused": VISA_REFUSED, "worldwide": WORLDWIDE,
          "home": HOME, "not_remote": NOT_REMOTE, "days": DAYS})
+    # a job whose place transform could not name: Remote when it is done remotely, else the one country its location
+    # names (Bengaluru: India); every such job, not only the window's (a job transform moves keeps its place)
+    conn.execute("""
+        UPDATE core.job SET place = CASE WHEN work_mode = 'Remote' THEN 'Remote' ELSE countries[1] END
+        WHERE place = 'Unknown location' AND (work_mode = 'Remote' OR cardinality(countries) = 1)""")
     # each day's new jobs and how many ask for each skill, every tech job counted (core.skill_day: the rising skills)
     conn.execute("""
         INSERT INTO core.skill_day AS d (day, skill, jobs, total_jobs)
