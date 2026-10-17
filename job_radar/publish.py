@@ -47,7 +47,9 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import time
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 
 import psycopg
 
@@ -86,6 +88,30 @@ def nat_id(key: str) -> int:
     """A job's id on Neon: the first 13 hex digits of md5(key) as a 52-bit number, the same as radar-web's SQL
     ('x' || substr(md5(job_key), 1, 13))::bit(52)::bigint, so one job has one id whoever writes it."""
     return int(hashlib.md5(key.encode()).hexdigest()[:13], 16)
+
+
+# Query keys that only track the reader of an alert email (LinkedIn's trk/refId/trackingId/midToken, Indeed's tk, utm_*).
+TRACKING = re.compile(r"(utm_.*|trk.*|refid|trackingid|midtoken|midsig|eid|lipi|otptoken|alid|tk|tmtk|conmailer|mailerid)", re.I)
+
+
+def clean_url(url: str) -> str | None:
+    """A Gmail alert job's link without Omar's login or tracking tokens (every user can see these jobs on the site):
+    a NaukriGulf ccs-tracking link becomes the job page inside its redirect's rUrl, without a query; an Indeed /rc/clk link
+    becomes /viewjob?jk=...; any other link loses its TRACKING keys and its fragment. None when the link is an opaque
+    click-tracking redirect (links.wellfound.com, ...) that cannot be unwrapped without following it; the caller then keeps the link."""
+    parts = urlsplit(url.strip())
+    host, query = parts.netloc.lower(), parse_qs(parts.query)
+    if host == "ccs-tracking.naukrigulf.com":
+        inner = urlsplit(parse_qs(urlsplit(query.get("redirect", [""])[0]).query).get("rUrl", [""])[0])
+        ok = inner.netloc.lower().endswith("naukrigulf.com") and len(inner.path) > 1
+        return urlunsplit(("https", inner.netloc, inner.path, "", "")) if ok else None
+    if host.endswith("indeed.com") and parts.path.startswith("/rc/clk"):
+        jk = query.get("jk", [""])[0]
+        return f"https://{parts.netloc}/viewjob?jk={jk}" if re.fullmatch(r"[0-9a-f]+", jk) else None
+    if host.startswith("links.") or "tracking" in host:
+        return None
+    kept = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if not TRACKING.fullmatch(k)]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(kept), ""))
 
 
 def keys_by_id(conn) -> dict:
@@ -175,6 +201,15 @@ def publish_once(conn) -> None:
                         " ORDER BY job_id", (list(TRACKS),)).fetchall()
     if not jobs:
         raise RuntimeError("publish: core.job has 0 rows; Neon is left untouched")
+    # A Gmail alert job (source 'email', owner-only on Neon) goes with clean links (clean_url); a link that cannot be
+    # unwrapped goes as it is, so the job stays (Omar's choice: keep these jobs, never prune them for a link).
+    src, job_url, apply_url = (wide.index(c) for c in ("source", "job_url", "apply_url"))
+    for i, row in enumerate(jobs):
+        if row[src] == "email":
+            row = list(row)
+            row[job_url] = clean_url(row[job_url]) or row[job_url]
+            row[apply_url] = row[apply_url] and (clean_url(row[apply_url]) or row[apply_url])
+            jobs[i] = tuple(row)
     ids = {row[0] for row in jobs}
     skills = conn.execute(f"SELECT {', '.join(SKILL)} FROM core.skill ORDER BY skill").fetchall()
     if not skills:
