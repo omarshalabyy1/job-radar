@@ -50,3 +50,12 @@ def test_the_backup_keeps_the_newest_14_dumps_of_core_and_raw():
     source = DAG.read_text(encoding="utf-8")
     assert 'BACKUPS, KEEP_BACKUPS = "/opt/job-radar/output/backups", 14' in source
     assert "-n core -n raw -Fc" in source and "tail -n +{KEEP_BACKUPS + 1} | xargs -r rm --" in source
+
+
+def test_a_run_is_red_when_any_step_failed():
+    """The steps after the extracts run all_done, so the leaves end green whatever failed: on 2026-10-17 transform failed
+    and the run said success. run_failed (Airflow's watcher) is downstream of every task and runs only when one failed."""
+    source = DAG.read_text(encoding="utf-8")
+    assert 'failed = BashOperator(task_id="run_failed", trigger_rule="one_failed", retries=0, on_failure_callback=None,' in source
+    assert "exit 1" in source.split('task_id="run_failed"')[1].splitlines()[1]
+    assert "[task for task in collect.tasks if task is not failed] >> failed" in source

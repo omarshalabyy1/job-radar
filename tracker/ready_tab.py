@@ -6,7 +6,7 @@ from job_radar.config import BOARD_HOSTS
 from job_radar.db import connect
 from job_radar.tailor import draft_day, draft_folder
 
-FILES = [("cv.md", "CV"), ("cover-letter.md", "Cover letter"), ("notes.md", "Notes")]
+FILES = [("cv.md", "CV"), ("cover-letter.md", "Cover letter"), ("notes.md", "Notes"), ("forms.md", "Form answers")]
 
 
 def mark_applied(query, job_id: int) -> None:
@@ -38,7 +38,8 @@ def render(query) -> None:
         with st.expander(f"{score} · {d.title} @ {d.company}"):
             st.markdown(f"[Apply]({d.apply_link})")
             st.markdown((folder / "cover-letter.md").read_text(encoding="utf-8"))
-            for column, (name, label) in zip(st.columns(len(FILES)), FILES):
+            files = [(name, label) for name, label in FILES if (folder / name).exists()]  # a draft from before forms.md has none
+            for column, (name, label) in zip(st.columns(len(files)), files):
                 column.download_button(label, (folder / name).read_bytes(), file_name=f"{folder.name}-{name}",
                                        mime="text/markdown", key=f"{d.job_id}-{name}")
             st.button("Mark applied", key=f"{d.job_id}-applied", icon=":material/check:", on_click=mark_applied,

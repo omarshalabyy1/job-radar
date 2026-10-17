@@ -23,7 +23,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from . import claude
-from .config import AI_PLACES, BAYT_PLACES, FEATURES, KEEP_DAYS, place_of
+from .config import AI_PLACES, BAYT_PLACES, FEATURES, WORK_DAYS, place_of
 from .sources import time_left
 
 MODEL = "claude-haiku-5-5"
@@ -116,7 +116,7 @@ def eligibility(conn) -> None:
     jobs = conn.execute(
         "SELECT j.job_id, j.title, j.company, j.location, j.place, j.source, j.description, r.payload FROM core.job j"
         " LEFT JOIN raw.job_posting r ON (r.source, r.job_url) = (j.source, j.job_url)"
-        " WHERE j.eligibility_at IS NULL AND j.first_seen >= current_date - %s ORDER BY j.job_id", (KEEP_DAYS,)).fetchall()
+        " WHERE j.in_scope AND j.eligibility_at IS NULL AND j.first_seen >= current_date - %s ORDER BY j.job_id", (WORK_DAYS,)).fetchall()
     judged, ask = [], []  # (restriction, job_id); the jobs for Claude
     for job_id, title, company, location, place, source, description, payload in jobs:
         if who_can_apply(source, location, payload or {}):  # its board said who can apply, and the extract kept it

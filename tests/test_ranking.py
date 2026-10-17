@@ -168,7 +168,8 @@ class Warehouse:
 def posting(n, description):
     return {"run_date": date(2026, 10, 10), "source": "indeed", "searched_for": "Egypt", "title": f"Data Engineer {n}",
             "company": f"Acme {n}", "location": "Cairo, Egypt", "job_url": f"https://example.com/{n}", "date_posted": None,
-            "description": description, "is_remote": False, "sender": None, "payload": {}, "loaded_at": datetime(2026, 10, 10, tzinfo=timezone.utc)}
+            "description": description, "is_remote": False, "sender": None, "payload": {}, "loaded_at": datetime(2026, 10, 10, tzinfo=timezone.utc),
+            "last_seen": date(2026, 10, 10)}
 
 
 @pytest.mark.parametrize("eligibility", [True, False])
@@ -196,11 +197,11 @@ def test_transform_takes_the_text_from_a_kept_posting_older_than_the_window(monk
     alert = {**posting(1, None), "source": "email", "title": "Margin assurance analyst", "job_url": "https://www.linkedin.com/jobs/view/1",
              "sender": "jobs-listings@linkedin.com"}  # today's LinkedIn alert: no text
     indeed = {**posting(1, "Based in Egypt, SQL and Airflow."), "title": "Margin assurance analyst",
-              "run_date": date(2026, 10, 8)}  # the same job's Indeed page of 3 days ago: outside the 1-day window, inside KEEP_DAYS
+              "run_date": date(2026, 10, 8), "last_seen": date(2026, 10, 8)}  # 3 days ago: outside the 1-day window, inside WORK_DAYS
     conn = Warehouse([alert], kept=[alert, indeed])
     steps.transform(conn)
     assert [(job["source"], job["description"]) for job in conn.stored] == [("email", "Based in Egypt, SQL and Airflow.")]
-    assert conn.text_days == config.KEEP_DAYS  # the lookup spans the days raw postings are kept, not the 1-day window
+    assert conn.text_days == config.WORK_DAYS  # the lookup spans the days raw postings are kept, not the 1-day window
 
 
 def test_transform_counts_the_postings_it_leaves_out_by_rule(monkeypatch, capsys):
@@ -209,9 +210,11 @@ def test_transform_counts_the_postings_it_leaves_out_by_rule(monkeypatch, capsys
     no_role = {**posting(2, None), "title": "Barista"}
     abroad = {**posting(3, None), "searched_for": "Germany", "location": "Berlin, Germany"}  # onsite outside home
     barred = posting(4, "You must be a U.S. citizen.")  # kept: hidden later, not left out
+    monkeypatch.setitem(config.FEATURES, "market", True)  # the senior and the Berlin job are tech jobs: kept for the website
     steps.transform(Warehouse([senior, no_role, abroad, barred, posting(5, None)]))
     out = capsys.readouterr().out
-    assert "2 jobs in scope" in out and "postings left out: 1 no role, 1 too senior, 1 not in reach" in out and "restricted" not in out
+    assert "2 jobs yours, 2 website only" in out and "restricted" not in out
+    assert "not yours: 1 no role, 1 too senior, 1 not in reach, 0 barred" in out
     assert len(out.strip()) + 3 * 7 <= runlog.LINE_CHARS  # the run log keeps this line whole, even with four-digit counts (7 of them)
 
 

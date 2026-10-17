@@ -69,8 +69,12 @@ def test_naukrigulf_marks_remote_from_title_or_summary(monkeypatch):
 
 
 def test_gulftalent_keeps_only_your_roles(monkeypatch):
+    from job_radar import config
     monkeypatch.setattr(gulf, "get", lambda url, **params: Saved("gulftalent.json"))
+    monkeypatch.setitem(config.FEATURES, "market", False)
     assert gulf.gulftalent() == []  # Database System Analyst, a technician, a recruiter: none yours
+    monkeypatch.setitem(config.FEATURES, "market", True)  # the website's collection keeps the other tech job too
+    assert [r["title"] for r in gulf.gulftalent()] == ["Database System Analyst"]
 
 
 def test_dubizzle_keeps_your_roles_and_marks_them_remote(monkeypatch):
@@ -173,3 +177,95 @@ def test_a_classic_successfactors_portal_is_read_after_its_search(monkeypatch):
     assert rows[0]["date_posted"] == "2026-10-13" and rows[0]["location"] == "Egypt"
     assert rows[0]["job_url"] == ("https://career2.successfactors.eu/career?career_ns=job_listing&company=egyptiangu"
                                   "&career_job_req_id=4250")
+
+
+def test_smartrecruiters_recruitee_and_personio_read_their_public_apis(monkeypatch):
+    """The three boards Radarak reads that the career sites did not: detected from their address, then read."""
+    assert companies.detect("https://jobs.smartrecruiters.com/BoschGroup") == ("smartrecruiters", "BoschGroup", None)
+    assert companies.detect("https://acme.recruitee.com/") == ("recruitee", "acme", None)
+    assert companies.detect("https://acme.jobs.personio.de/") == ("personio", "acme", None)
+    pages = {
+        "https://api.smartrecruiters.com/v1/companies/BoschGroup/postings": json.dumps({"totalFound": 1, "content": [
+            {"id": "7", "name": "Data Engineer", "releasedDate": "2026-10-15T11:11:44Z",
+             "location": {"fullLocation": "Cairo, Egypt", "remote": False, "hybrid": True}}]}),
+        "https://acme.recruitee.com/api/offers/": json.dumps({"offers": [
+            {"title": "Data Analyst", "location": "Cairo, Egypt", "remote": True, "careers_url": "https://acme.com/o/1",
+             "published_at": "2026-10-16 11:35:00 UTC", "description": "<p>SQL and Python</p>"},
+            {"title": "Data Analyst", "location": "Cairo, Egypt", "careers_url": None}]}),  # no link: left out
+        "https://acme.jobs.personio.de/xml": "<workzag-jobs><position><id>9</id><office>Cairo</office><additionalOffices>"
+            "<office>Giza</office></additionalOffices><name>BI Developer</name><jobDescriptions><jobDescription><name>You</name>"
+            "<value>&lt;p&gt;Power BI&lt;/p&gt;</value></jobDescription></jobDescriptions><createdAt>2026-10-14T10:00:00+00:00"
+            "</createdAt></position></workzag-jobs>"}
+    monkeypatch.setattr(companies, "get", lambda url, **params: Saved(pages[url]))
+    monkeypatch.setattr(companies, "role_of", lambda title: 1)
+    monkeypatch.setattr(companies, "place_of", lambda location: "Egypt")
+    [bosch] = companies.smartrecruiters("Bosch", "BoschGroup")
+    assert (bosch["location"], bosch["job_url"], bosch["date_posted"]) == (
+        "Cairo, Egypt (hybrid)", "https://jobs.smartrecruiters.com/BoschGroup/7", "2026-10-15")
+    [acme] = companies.recruitee("Acme", "acme")
+    assert (acme["location"], acme["description"], acme["date_posted"]) == ("Cairo, Egypt (remote)", "SQL and Python", "2026-10-16")
+    [bi] = companies.personio("Acme", "acme")
+    assert (bi["location"], bi["job_url"], bi["description"]) == ("Cairo, Giza", "https://acme.jobs.personio.de/job/9", "Power BI")
+
+
+def test_board_tokens_are_read_from_links_and_pages_once_each():
+    from job_radar.sources import market
+    text = ("https://boards.greenhouse.io/Stripe/jobs/1 https://job-boards.eu.greenhouse.io/embed/job_board?for=acme "
+            "https://jobs.lever.co/spotify/a https://apply.workable.com/j/ABC https://apply.workable.com/acme-co/ "
+            "https://www.recruitee.com https://channable.recruitee.com/o/x https://jobs.smartrecruiters.com/BoschGroup/1 "
+            "https://boards.greenhouse.io/stripe/jobs/2")
+    assert market.boards_in(text) == [("greenhouse", "stripe"), ("greenhouse", "acme"), ("lever", "spotify"),
+                                      ("smartrecruiters", "BoschGroup"), ("workable", "acme-co"), ("recruitee", "channable")]
+
+
+def test_a_wide_board_read_keeps_tech_jobs_names_its_board_and_leaves_the_text_out_of_the_payload(monkeypatch):
+    from job_radar.sources import market
+    jobs = {"jobs": [{"title": "Backend Engineer", "location": "Berlin", "isRemote": False, "workplaceType": "Hybrid",
+                      "jobUrl": "https://jobs.ashbyhq.com/acme/1", "publishedAt": "2026-10-15T10:00:00Z",
+                      "descriptionPlain": "Go and Postgres. " * 100, "isListed": True},
+                     {"title": "Account Executive", "location": "Berlin", "jobUrl": "https://jobs.ashbyhq.com/acme/2"}]}
+    monkeypatch.setattr(market, "get", lambda url, **params: Saved(json.dumps(jobs)))
+    [job] = market.ashby("acme", "Acme")
+    assert (job["source"], job["location"], job["date_posted"]) == ("ashby-board", "Berlin (hybrid)", "2026-10-15")
+    assert job["description"].startswith("Go and Postgres.") and "descriptionPlain" not in job["payload"]
+    assert job["payload"]["board"] == "ashby:acme"
+
+
+def test_apify_items_become_wide_postings_keyed_by_their_link_and_the_budget_stops_a_run(monkeypatch):
+    from job_radar.sources import apify
+    items = [{"title": "Data Engineer", "companyName": "Acme", "location": "Berlin, Germany", "postedAt": "2026-10-16",
+              "link": "https://www.linkedin.com/jobs/view/1?trk=x", "descriptionText": "Spark and SQL."},
+             {"positionName": "QA Engineer", "company": "Beta", "jobLocation": "Remote", "url": "https://de.indeed.com/viewjob?jk=2",
+              "description": "<p>Cypress</p>"},
+             {"title": "No link"}]
+    rows = apify.normalize("linkedin", items)
+    assert [(r["source"], r["title"], r["job_url"], r["description"]) for r in rows] == [
+        ("apify:linkedin", "Data Engineer", "https://www.linkedin.com/jobs/view/1", "Spark and SQL."),
+        ("apify:linkedin", "QA Engineer", "https://de.indeed.com/viewjob?jk=2", "Cypress")]
+    monkeypatch.setitem(apify.SETTINGS, "apify", {"monthly_budget_usd": 5, "boards": {
+        "linkedin": {"enabled": True, "actor": "a/b", "input": {}, "max_items": 10, "max_charge_usd": 0.5}}})
+    monkeypatch.setenv("APIFY_TOKEN", "test")
+    monkeypatch.setattr(apify, "spent", lambda token: 4.8)  # $4.80 + $0.50 would pass $5: no run
+    monkeypatch.setattr(apify, "run", lambda *a: pytest.fail("a run started over the budget"))
+    assert apify.apify_jobs() == []
+
+
+def test_a_workday_site_is_read_through_its_search_and_named_by_tenant_and_site(monkeypatch):
+    from job_radar.sources import market
+    assert market.boards_in("https://genpact.wd108.myworkdayjobs.com/en-US/External_Careers/job/x") == [
+        ("workday", "genpact.wd108/External_Careers")]
+    asked = []
+
+    def fetch(method, url, **kw):
+        asked.append((url, kw["json"]["searchText"], kw["json"]["offset"]))
+        jobs = [{"title": "Data Engineer", "externalPath": "/job/Cairo-Egypt/Data-Engineer_JR1", "locationsText": "Cairo, Egypt",
+                 "postedOn": "Posted Today"},
+                {"title": "Accountant", "externalPath": "/job/Cairo-Egypt/Accountant_JR2", "locationsText": "2 Locations",
+                 "postedOn": "Posted 3 Days Ago"}]
+        return Saved(json.dumps({"jobPostings": jobs if kw["json"]["searchText"] == "data" else []}))
+    monkeypatch.setattr(market, "fetch", fetch)
+    [job] = market.workday("genpact.wd108/External_Careers", "Genpact")
+    assert asked[0][0] == "https://genpact.wd108.myworkdayjobs.com/wday/cxs/genpact/External_Careers/jobs"
+    assert (job["source"], job["location"], job["job_url"]) == (
+        "workday", "Cairo, Egypt", "https://genpact.wd108.myworkdayjobs.com/External_Careers/job/Cairo-Egypt/Data-Engineer_JR1")
+    assert len(asked) == len(market.WORKDAY_SEARCHES)  # a search with fewer than 20 hits is one call

@@ -126,6 +126,12 @@ ERRORS = (requests.RequestException, chrome_requests.exceptions.RequestException
 CHALLENGE = r"<title>(Just a moment|Access Denied|Attention Required)|cf-chl-"
 
 
+def held(source: str, e: Exception) -> None:
+    """A source stopped by Held: a site that refused us (it "answered" 429, 403 ...) is a WARNING, for the run log and the
+    email; one we hold ourselves (its daily round, its pace) is a plain line, so a quiet day is not a false alarm."""
+    print(f"{'WARNING ' if 'answered' in str(e) else ''}{source}: {e}")
+
+
 def changed(source: str, what: str) -> None:
     """A page or API that gave no items at all, before any filter: most likely the site changed (its
     layout, its API), not a quiet day. A warning in the task's log, for /job-radar to report."""

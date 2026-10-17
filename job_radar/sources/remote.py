@@ -12,8 +12,8 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from ..config import EXTRACT_SECONDS, KEYWORDS, RELOMOTE_PAGES, REMOTE_OPEN_TO, place_of, role_of
-from .base import Held, changed, get, hold, relative_date, row, since, time_left, week
+from ..config import EXTRACT_SECONDS, KEYWORDS, RELOMOTE_PAGES, REMOTE_OPEN_TO, kept, place_of, role_of
+from .base import Held, changed, get, held, hold, relative_date, row, since, time_left, week
 
 
 def himalayas() -> list[dict]:
@@ -26,7 +26,7 @@ def himalayas() -> list[dict]:
                            offset=offset).json()["jobs"]
                 read += len(jobs)
             except Held as e:  # keep what the searches before it found
-                print(f"himalayas: {e}")
+                held("himalayas", e)
                 return rows
             for j in jobs:
                 posted = str(datetime.fromtimestamp(int(j["pubDate"]), timezone.utc).date())
@@ -51,7 +51,7 @@ def weworkremotely() -> list[dict]:
         f = {child.tag: child.text or "" for child in item}
         company, _, title = f["title"].partition(": ")
         posted = str(parsedate_to_datetime(f["pubDate"]).date())
-        if posted >= since() and role_of(title) and re.search(REMOTE_OPEN_TO, f.get("region", ""), re.I):
+        if posted >= since() and kept(title) and re.search(REMOTE_OPEN_TO, f.get("region", ""), re.I):
             rows.append(row("weworkremotely", "Remote", title, company, f["region"], f["link"], posted,
                             f["description"], f))
     return rows
@@ -78,7 +78,7 @@ def remotive() -> list[dict]:
     try:
         jobs = get("https://remotive.com/api/remote-jobs").json()["jobs"]
     except Held as e:
-        print(f"remotive: {e}")
+        held("remotive", e)
         return []
     hold("remotive.com", 6 * 3600)
     return remote_board("remotive", jobs, "title", "company_name", "candidate_required_location", "url",
@@ -127,7 +127,7 @@ def remoteco(seen: set[str]) -> list[dict]:
         try:
             page = BeautifulSoup(get(url).text, "html.parser").find("script", id="__NEXT_DATA__")
         except Held as e:  # keep what the pages before it found
-            print(f"remoteco: {e}")
+            held("remoteco", e)
             break
         if not page:
             changed("remoteco", f"no job data (__NEXT_DATA__) on {url}")
@@ -143,7 +143,8 @@ def remoteco(seen: set[str]) -> list[dict]:
 
 def dailyremote() -> list[dict]:
     """DailyRemote: its newest remote jobs in your fields, 30 a page, until a page reaches past the
-    window (about 2 pages a run). It hides the company behind its paid plan, so none is stored."""
+    window (about 2 pages a run). It hides the company behind its paid plan, on the list and on the job's own page
+    ("[Hidden Company]"), and its Apply button leads to that plan too (checked 2026-10-17), so none is stored."""
     roles = ("data-engineer,data-scientist,data-analyst,ai-engineer,machine-learning-engineer,analytics-engineer,"
              "business-intelligence-developer,llm-engineer")
     rows = []
@@ -152,7 +153,7 @@ def dailyremote() -> list[dict]:
             soup = BeautifulSoup(get("https://dailyremote.com/remote-jobs", roles=roles, sort_by="time", page=n).text,
                                  "html.parser")
         except Held as e:  # keep what the pages before it found
-            print(f"dailyremote: {e}")
+            held("dailyremote", e)
             break
         cards, past_window = soup.select("article.lst-card"), False
         if not cards and n == 1:
@@ -166,7 +167,7 @@ def dailyremote() -> list[dict]:
                 continue
             where = (pill.get("title") or pill.get_text(strip=True)) if pill else "Worldwide"
             title = link.get_text(strip=True)
-            if role_of(title) and place_of(f"{where} (remote)"):
+            if kept(title) and place_of(f"{where} (remote)"):
                 rows.append(row("dailyremote", None, title, "", f"{where} (remote)",
                                 urljoin("https://dailyremote.com", link["href"]), str(posted), None,
                                 {"card": card.get_text(" | ", strip=True)}))
@@ -186,7 +187,7 @@ def relomote() -> list[dict]:
             try:
                 page = get(f"https://relomote.com/remote-jobs/{name}", **({"page": n} if n > 1 else {})).text
             except Held as e:  # keep what the pages before it found
-                print(f"relomote: {e}")
+                held("relomote", e)
                 return rows
             cards, past_window = BeautifulSoup(page, "html.parser").find_all("article"), False
             if not cards and n == 1:
@@ -206,7 +207,7 @@ def relomote() -> list[dict]:
                 companies = card.find_all("a", href=re.compile(r"^/companies/"))  # its logo, then its name
                 company = next((a.get_text(" ", strip=True) for a in companies if a.get_text(strip=True)), "")
                 title = words[0]  # the job link is an empty layer over the whole card
-                if role_of(title):
+                if kept(title):
                     rows.append(row("relomote", "Remote" if mode == "Remote" else None, title, company,
                                     f"{where} ({mode})" if mode else where, f"https://relomote.com{link['href']}",
                                     posted, None, {"card": card.get_text(" | ", strip=True)}))

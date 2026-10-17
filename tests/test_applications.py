@@ -425,7 +425,7 @@ def test_the_email_lists_the_follow_ups_the_drafts_are_written_for(conn, monkeyp
                      (f"<zz-email-{n}>", datetime.combine(today - timedelta(days=days), time(10), applications.CAIRO), company, title, kind))
     add_job(conn, "email follow-ups")  # the email is written only when a job is new
     sent = []
-    monkeypatch.setattr(steps, "digest", lambda jobs, name, follow_ups=(): sent.append(list(follow_ups)) or "body")
+    monkeypatch.setattr(steps, "digest", lambda jobs, name, follow_ups=(), problems=(): sent.append(list(follow_ups)) or "body")
     monkeypatch.setattr(steps, "send", lambda body, title, name: False)  # nothing is sent, so nothing is marked emailed
     monkeypatch.setattr(smtplib, "SMTP_SSL", lambda *a, **k: pytest.fail("an email was sent"))
     steps.email(conn, home=True)

@@ -9,7 +9,13 @@ import yaml
 from dotenv import load_dotenv
 
 HOURS_OLD = 24  # every run looks back this far: a run after the laptop was asleep or off backfills the last day
-KEEP_DAYS = 5  # a job first seen longer ago is deleted (transform), unless you noted or applied to it
+KEEP_DAYS = 30  # a job first seen longer ago is deleted (transform), unless you noted or applied to it (Omar, 2026-10-17)
+# the AI steps (eligibility, embed, grade), the descriptions shared between postings and the raw postings look back
+# this far: a job is judged once, in its first days; raw postings not seen again for this long are deleted
+WORK_DAYS = 5
+# a job read from a company board's full list of open jobs (source '<ats>-board') that the board stopped listing this
+# many days ago is closed: transform deletes it before KEEP_DAYS
+CLOSED_AFTER_DAYS = 2
 # Each extract step (Airflow runs them one by one) gets 150 seconds and describe 60; what does not
 # fit waits for the next run.
 EXTRACT_SECONDS = 150
@@ -112,6 +118,13 @@ def role_of(title: str, alert: bool = False) -> int | None:
         if all(re.search(p, title, re.I) for p in patterns):
             return rank
     return ALERT_RANK if alert else None
+
+
+def kept(title: str) -> bool:
+    """A title one of your roles, or (features.market) any tech job, for the website: the readers of Egypt's, the Gulf's,
+    the startups' and the remote boards keep these; transform then marks which are yours (in_scope)."""
+    from .tech import is_tech_role
+    return role_of(title) is not None or bool(FEATURES.get("market") and is_tech_role(title))
 
 
 def too_senior(title: str) -> bool:

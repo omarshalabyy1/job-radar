@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlencode
 
 from ..config import BAYT_PLACES, SETTINGS, EXTRACT_SECONDS, HOURS_OLD, KEYWORDS, ONSITE_PLACES, PLACES, ROLES, place_of, role_of
-from .base import ERRORS, Held, duration, fetch, get, hold, row, since, time_left, waiting
+from .base import ERRORS, Held, duration, fetch, get, held, hold, row, since, time_left, waiting
 
 
 class Blocked(logging.Handler):
@@ -103,7 +103,7 @@ def freehire() -> list[dict]:
                            semantic_ratio=0, include_description="true", description_format="text",
                            **where).json().get("data", [])
             except Held as e:  # keep what the searches before it found
-                print(f"freehire: {e}")
+                held("freehire", e)
                 return rows
             for j in jobs:
                 reality, mode = j.get("reality") or {}, j.get("work_mode") or ""

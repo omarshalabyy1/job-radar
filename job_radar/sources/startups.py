@@ -10,8 +10,8 @@ from datetime import date, datetime, timedelta, timezone
 
 from bs4 import BeautifulSoup
 
-from ..config import EXTRACT_SECONDS, KEYWORDS, role_of
-from .base import Held, changed, fetch, get, row, since, time_left
+from ..config import EXTRACT_SECONDS, KEYWORDS, kept
+from .base import Held, changed, fetch, get, held, row, since, time_left
 
 WELLFOUND_ROLES = ["data-engineer", "data-analyst", "data-scientist", "machine-learning-engineer",
                    "artificial-intelligence-engineer", "business-intelligence-analyst"]
@@ -42,7 +42,7 @@ def wellfound() -> list[dict]:
             try:
                 page = get(url).text
             except Held as e:  # keep what the pages before it found
-                print(f"wellfound: {e}")
+                held("wellfound", e)
                 return rows
             blob = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', page, re.S)
             if not blob:
@@ -57,7 +57,7 @@ def wellfound() -> list[dict]:
                         continue
                     seen.add(job["id"])
                     posted = str(datetime.fromtimestamp(job["liveStartAt"], timezone.utc).date())
-                    if posted < since() or not role_of(job["title"]):
+                    if posted < since() or not kept(job["title"]):
                         continue
                     where = ", ".join(job.get("acceptedRemoteLocationNames") or job.get("locationNames") or [])
                     # no countries named is not "worldwide": such a job stays an Unknown location, kept as remote
@@ -82,14 +82,14 @@ def welcometothejungle() -> list[dict]:
                      "restrictSearchableAttributes": ["name"]}
             hits = fetch("POST", WTTJ_SEARCH, headers=WTTJ_ALGOLIA, data=json.dumps(query)).json()["hits"]
         except Held as e:
-            print(f"welcometothejungle: {e}")
+            held("welcometothejungle", e)
             return rows
         read += len(hits)
         for h in hits:
             posted = h["published_at"][:10]
             if posted < since():
                 break  # newest first: the rest is older
-            if role_of(h["name"]):
+            if kept(h["name"]):
                 org = h["organization"]
                 countries = ", ".join(o["country"] for o in h.get("offices") or [] if o.get("country"))
                 rows.append(row("welcometothejungle", None, h["name"], org["name"], f"Remote: {countries or 'Worldwide'}",
@@ -112,14 +112,14 @@ def startup_jobs() -> list[dict]:
             try:
                 page = get(f"https://startup.jobs/roles/{role}", **({"page": n} if n > 1 else {})).text
             except Held as e:
-                print(f"startup_jobs: {e}")
+                held("startup_jobs", e)
                 return rows
             stamps = BeautifulSoup(page, "html.parser").select('time[data-post-template-target="timestamp"]')
             read += len(stamps)
             for stamp in stamps:
                 card = stamp.find_parent(attrs={"data-mark-visited-links-target": "container"})
                 title = card and card.select_one('[data-post-template-target="title"]')
-                if not title or stamp["datetime"][:10] < since() or not role_of(title.get_text(strip=True)):
+                if not title or stamp["datetime"][:10] < since() or not kept(title.get_text(strip=True)):
                     continue
                 company = card.select_one('[data-post-template-target="companyName"]')
                 location = card.select_one('[data-post-template-target="location"]')
@@ -153,7 +153,7 @@ def builtin() -> list[dict]:
             cards = BeautifulSoup(get("https://builtin.com/jobs/remote/data-analytics", page=n).text,
                                   "html.parser").select('[data-id="job-card"]')
         except Held as e:
-            print(f"builtin: {e}")
+            held("builtin", e)
             return rows
         if not cards and n == 1:
             changed("builtin", "no job cards on jobs/remote/data-analytics")
@@ -163,7 +163,7 @@ def builtin() -> list[dict]:
             age = card_age(next((w for w in words if re.search(r"ago|yesterday|today", w, re.I)), ""))
             ages.append(age)
             title, company = card.select_one('[data-id="job-card-title"]'), card.select_one('[data-id="company-title"]')
-            if not (title and age) or str(age) < since() or not role_of(title.get_text(strip=True)):
+            if not (title and age) or str(age) < since() or not kept(title.get_text(strip=True)):
                 continue
             mode = next((w for w in words if re.fullmatch(r"(Remote|Hybrid|In-Office)( or \w+(-\w+)?)?", w)), "")
             where = words[words.index(mode) + 1] if mode and words.index(mode) + 1 < len(words) else ""
@@ -183,14 +183,14 @@ def ycombinator() -> list[dict]:
         try:
             page = get(f"https://www.ycombinator.com/jobs/role/{name}").text
         except Held as e:
-            print(f"ycombinator: {e}")
+            held("ycombinator", e)
             return rows
         blob = re.search(r'data-page="([^"]+)"', page)
         jobs = json.loads(html.unescape(blob.group(1)))["props"].get("jobPostings", []) if blob else []
         read += len(jobs)
         for j in jobs:
             age = card_age(j.get("createdAt") or "")
-            if age and str(age) >= since() and role_of(j["title"]):
+            if age and str(age) >= since() and kept(j["title"]):
                 rows.append(row("ycombinator", None, j["title"], j["companyName"], j.get("location"),
                                 "https://www.ycombinator.com" + j["url"], str(age), None,
                                 {**j, "is_remote": "remote" in (j.get("location") or "").lower()}))

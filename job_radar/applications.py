@@ -437,7 +437,7 @@ def follow_up_drafts(conn, today: date | None = None) -> tuple[int, int]:
         return 0, 0
     today = today or cairo_today()
     due = due_now(conn, today)
-    jobs = conn.execute("SELECT job_id, title, company, first_seen FROM core.job").fetchall()
+    jobs = conn.execute("SELECT job_id, title, company, first_seen FROM core.job WHERE in_scope").fetchall()
     written = 0
     for company, title, applied_on, days in due:
         path = OUTPUT / "followups" / str(today) / f"{slug(company, title) or 'follow-up'}.md"
@@ -619,7 +619,7 @@ def track_applications(conn) -> None:
     stored = {message_id for (message_id,) in conn.execute("SELECT message_id FROM core.application_email")}
     known = dict(conn.execute("SELECT mailbox, count(*) FROM core.application_email GROUP BY mailbox").fetchall())
     cfg = SETTINGS.get("claude") or {}
-    jobs = conn.execute("SELECT job_id, title, company, first_seen FROM core.job").fetchall()
+    jobs = conn.execute("SELECT job_id, title, company, first_seen FROM core.job WHERE in_scope").fetchall()
     emails, leftover, asked, added, matched, moved, kinds, failed = 0, 0, 0, 0, 0, 0, {}, 0
     for n, (address, password) in enumerate(boxes.items(), 1):
         days = DAILY_DAYS if known.get(address) else BACKFILL_DAYS  # a mailbox with nothing stored yet is read from the start

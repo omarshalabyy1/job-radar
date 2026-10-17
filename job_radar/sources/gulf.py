@@ -6,8 +6,8 @@ import re
 import time
 from datetime import date, datetime, timezone
 
-from ..config import EXTRACT_SECONDS, KEYWORDS, REMOTE, place_of, role_of
-from .base import Held, changed, fetch, get, row, time_left, week
+from ..config import EXTRACT_SECONDS, KEYWORDS, REMOTE, kept, place_of
+from .base import Held, changed, fetch, get, held, row, time_left, week
 
 
 def naukrigulf() -> list[dict]:
@@ -26,12 +26,12 @@ def naukrigulf() -> list[dict]:
                 "Keywords": keyword, "Limit": 30, "Offset": 0, "SortPreference": "date", "pageNo": 1}).json()["Jobs"]
             read += len(jobs)
         except Held as e:  # keep what the searches before it found
-            print(f"naukrigulf: {e}")
+            held("naukrigulf", e)
             break
         for job in (j["Job"] for j in jobs):
             title, info, url = job.get("Designation") or "", job.get("jobInfo") or "", job.get("JdURL")
             posted = str(datetime.fromtimestamp(int(job["LatestPostedDate"]), timezone.utc).date())
-            if posted >= week() and url and url not in urls and role_of(title) and place_of(job.get("Location") or ""):
+            if posted >= week() and url and url not in urls and kept(title) and place_of(job.get("Location") or ""):
                 urls.add(url)
                 remote = re.search(REMOTE, f"{title} {info}", re.I) is not None
                 rows.append(row("naukrigulf", None, title, (job.get("Company") or {}).get("Name", "").strip(),
@@ -56,12 +56,12 @@ def gulftalent() -> list[dict]:
                        limit=25, offset=0, include_scraped=1).json()["results"]["data"]
             read += len(jobs)
         except Held as e:  # keep what the searches before it found
-            print(f"gulftalent: {e}")
+            held("gulftalent", e)
             break
         for j in jobs:
             url, posted = f"https://www.gulftalent.com{j['link']}", str(date.fromtimestamp(int(j["posted_date_ts"])))
             company = j.get("jb_company_name") if str(j.get("is_job_board")) == "1" else j.get("company_name")
-            if posted >= week() and url not in urls and role_of(j["title"]) and place_of(j.get("location") or ""):
+            if posted >= week() and url not in urls and kept(j["title"]) and place_of(j.get("location") or ""):
                 urls.add(url)
                 rows.append(row("gulftalent", None, j["title"], company, j["location"], url, posted, None,
                                 {**j, "is_remote": str(j.get("is_remote")) == "1"}))
@@ -84,7 +84,7 @@ def dubizzle() -> list[dict]:
     for h in hits:
         title = (h.get("name") or {}).get("en") or ""
         location = ", ".join(reversed((h.get("location_list") or {}).get("en") or ["UAE"])) + " (remote)"
-        if role_of(title) and place_of(location):
+        if kept(title) and place_of(location):
             company = (((h.get("details") or {}).get("Company Name") or {}).get("en") or {}).get("value")
             rows.append(row("dubizzle", None, title, company, location, h["absolute_url"]["en"],
                             str(date.fromtimestamp(int(h["created_at"]))), None, h))

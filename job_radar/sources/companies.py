@@ -129,6 +129,9 @@ ATS_PATTERNS = [
     ("lever", r"jobs\.lever\.co/([\w-]+)"),
     ("ashby", r"jobs\.ashbyhq\.com/([\w.-]+)"),
     ("successfactors_classic", r"(https://career\d*\.successfactors\.\w+/career\?company=[\w-]+)"),
+    ("smartrecruiters", r"(?:jobs|careers)\.smartrecruiters\.com/([\w-]+)"),
+    ("recruitee", r"\b(?!www\.|app\.|api\.)([\w-]+)\.recruitee\.com"),
+    ("personio", r"\b([\w-]+)\.jobs\.personio\.(?:de|com)"),
 ]
 
 
@@ -224,6 +227,57 @@ def ashby(company: str, slug: str) -> list[dict]:
     return rows
 
 
+def smartrecruiters(company: str, slug: str) -> list[dict]:
+    """A company's open jobs in Egypt on SmartRecruiters, through its public postings API (it filters by country, so a
+    company with thousands of jobs elsewhere is a page or two), 100 a page. Its list has no description: describe reads
+    the job page."""
+    rows = []
+    for offset in range(0, 1000, 100):
+        page = get(f"https://api.smartrecruiters.com/v1/companies/{slug}/postings", country="eg", limit=100,
+                   offset=offset).json()
+        for j in page.get("content") or []:
+            where = j.get("location") or {}
+            location = (where.get("fullLocation") or ", ".join(filter(None, [where.get("city"), where.get("country")]))) \
+                + (" (remote)" if where.get("remote") else " (hybrid)" if where.get("hybrid") else "")
+            if role_of(j.get("name") or "") and place_of(location):
+                rows.append(row(company.lower(), None, j["name"], company, location,
+                                f"https://jobs.smartrecruiters.com/{slug}/{j['id']}", (j.get("releasedDate") or "")[:10] or None,
+                                None, j))
+        if offset + 100 >= (page.get("totalFound") or 0):
+            break
+    return rows
+
+
+def recruitee(company: str, slug: str) -> list[dict]:
+    """Every open job of a company on Recruitee, through its public offers API."""
+    rows = []
+    for j in get(f"https://{slug}.recruitee.com/api/offers/").json().get("offers") or []:
+        location = (j.get("location") or ", ".join(filter(None, [j.get("city"), j.get("country")]))) \
+            + (" (remote)" if j.get("remote") else " (hybrid)" if j.get("hybrid") else "")
+        if j.get("careers_url") and role_of(j.get("title") or "") and place_of(location):
+            text = BeautifulSoup(j.get("description") or "", "html.parser").get_text(" ", strip=True) or None
+            rows.append(row(company.lower(), None, j["title"], company, location, j.get("careers_url"),
+                            (j.get("published_at") or "")[:10] or None, text, j))
+    return rows
+
+
+def personio(company: str, slug: str) -> list[dict]:
+    """Every open job of a company on Personio, through its public XML feed (its main office and the others it names)."""
+    rows = []
+    for position in ET.fromstring(get(f"https://{slug}.jobs.personio.de/xml").content).iter("position"):
+        title = position.findtext("name", "").strip()
+        offices = [o.text or "" for o in position.iter("office")]  # its main office, then the others
+        location = ", ".join(dict.fromkeys(o.strip() for o in offices if o and o.strip()))
+        text = " ".join(BeautifulSoup(d.findtext("value", ""), "html.parser").get_text(" ", strip=True)
+                        for d in position.iter("jobDescription")) or None
+        if role_of(title) and place_of(location):
+            rows.append(row(company.lower(), None, title, company, location,
+                            f"https://{slug}.jobs.personio.de/job/{position.findtext('id')}",
+                            position.findtext("createdAt", "")[:10] or None, text,
+                            {child.tag: child.text for child in position if len(child) == 0}))
+    return rows
+
+
 def career_page(company: str, url: str) -> list[dict]:
     """A careers page on no known platform, rendered with Playwright: every link on it whose words
     are one of the roles, in a place its title or the text around it names (a job naming no place
@@ -312,4 +366,5 @@ def rss(company: str, feed: str) -> list[dict]:
 
 
 READERS = {"workable": workable, "greenhouse": greenhouse, "lever": lever, "ashby": ashby, "phenom": phenom,
+           "smartrecruiters": smartrecruiters, "recruitee": recruitee, "personio": personio,
            "successfactors": successfactors, "successfactors_classic": successfactors_classic, "rss": rss, "page": career_page}

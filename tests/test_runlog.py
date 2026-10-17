@@ -28,7 +28,7 @@ def rows(monkeypatch):
     out: list[dict] = []
     monkeypatch.setattr(runlog, "save", out.append)
     monkeypatch.setattr(runlog, "connect", lambda: nullcontext())  # run() closes stale rows of its step: not here
-    monkeypatch.setattr(runlog, "close_stale", lambda log, step: 0)
+    monkeypatch.setattr(runlog, "close_stale", lambda log, step: [])
     runlog.watch_claude()
     yield out
     Messages.create, Messages.parse = create, parse

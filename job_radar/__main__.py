@@ -1,9 +1,9 @@
 """python -m job_radar <step> [<step> ...] | all
 
 Steps, in order: schema extract_boards extract_bayt extract_remote extract_startups extract_egypt extract_gulf
-extract_workable extract_freehire extract_linkedin extract_companies extract_portals extract_email transform describe
+extract_workable extract_freehire extract_linkedin extract_companies extract_portals extract_market extract_apify extract_email transform describe
 match_skills eligibility embed grade_claude tailor outreach_drafts export_career_ops
-email_egypt email_abroad
+email_egypt email_abroad publish run_report
 track_applications (its own hourly DAG: your mailbox, read-only)
 eligibility, embed, grade_claude, tailor, outreach_drafts and track_applications each have a switch in settings.yaml (features).
 Each step is recorded in core.step_run (runlog.py): running when it starts, then ok, warn, failed or off.
@@ -25,9 +25,10 @@ from . import runlog, steps
 from .db import connect
 
 STEPS = ["schema", "extract_boards", "extract_bayt", "extract_remote", "extract_startups", "extract_egypt",
-         "extract_gulf", "extract_workable", "extract_freehire", "extract_linkedin", "extract_companies", "extract_portals", "extract_email",
+         "extract_gulf", "extract_workable", "extract_freehire", "extract_linkedin", "extract_companies", "extract_portals", "extract_market", "extract_apify",
+         "extract_email",
          "transform", "describe", "match_skills", "eligibility", "embed", "grade_claude", "tailor", "outreach_drafts", "export_career_ops", "email_egypt",
-         "email_abroad", "track_applications"]
+         "email_abroad", "track_applications", "publish", "run_report"]
 
 WATCHDOG_SECONDS = 210  # under the 240 s execution_timeout of the extract tasks in dags/job_radar.py
 
@@ -37,8 +38,8 @@ def main() -> None:
     names = STEPS if sys.argv[1:] == ["all"] else sys.argv[1:]
     if not names or any(name not in STEPS for name in names):
         raise SystemExit(__doc__)
-    # a lone extract step; not "all" (it runs for minutes), nor linkedin (one Apify run of up to 280 s, under a 300 s timeout)
-    if len(names) == 1 and names[0].startswith("extract_") and names[0] != "extract_linkedin":
+    # a lone extract step; not "all" (it runs for minutes), nor linkedin or apify (Apify runs of minutes, under their own timeouts)
+    if len(names) == 1 and names[0].startswith("extract_") and names[0] not in ("extract_linkedin", "extract_apify"):
         timer = threading.Timer(WATCHDOG_SECONDS, watchdog, (names[0], datetime.now(timezone.utc)))
         timer.daemon = True
         timer.start()

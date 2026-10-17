@@ -32,6 +32,12 @@ features:
   embeddings: true          # local Ollama vectors: how close each job is to your CV (CV match); a CV is embedded again only when it changed
   follow_up_drafts: true    # draft a follow-up email (never sent) when an application is 7 or 14 days old with no answer
   interview_prep: true      # draft interview notes when your mailbox shows an interview invite
+  market: true              # the website (Fennec): also keep every other tech job (any role, level and country) the sources
+                            # bring, with in_scope false; your emails, grades, embeddings and tracker see only in_scope jobs
+  market_harvest: true      # the website: also read every company board the other sources' postings link to (grows the
+                            # boards waiting to be read, 40 a run; on since 2026-10-17)
+  market_more: false        # the website: also every tech job of the remote boards' feeds (Jobicy, Arbeitnow, Remote OK,
+                            # Working Nomads) and Germany's job agency (Bundesagentur); the last step of the growth
   outreach_drafts: true     # draft a cold email (never sent) to a startup's founder for its roles scored 7+, when data/contacts.csv
                             # has their email (output/outreach/); find them with python -m job_radar.research founders
 # The AI features (grade, tailor, embeddings) run on jobs in these places only. Egypt = Cairo/Giza
@@ -107,6 +113,60 @@ linkedin:
   every_hours: 20
   words: [data engineer, AI engineer, BI developer, data analyst]
   places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
+
+# The website's hard boards through Apify Actors (sources/apify.py, the extract_apify step; APIFY_TOKEN in .env), every tech
+# job, for the website only. Each is off (enabled: false) until Omar subscribes; check the Actor's input page on Apify
+# before turning one on. A run stops at max_items jobs and at max_charge_usd; no run starts once this month's Apify spend
+# (your LinkedIn leg above included) plus its cap would pass monthly_budget_usd. Price: dollars per 1,000 jobs (Apify
+# Store, 2026-10-17). At max_items a day for 30 days: linkedin ~$6, indeed ~$0.30, glassdoor ~$1.20, wellfound ~$9,
+# stepstone ~$3, xing ~$3, seek ~$7.50 a month (~$30 for all seven; the cheap four fit in $5).
+apify:
+  monthly_budget_usd: 5
+  boards:
+    linkedin:    # curious_coder/linkedin-jobs-scraper: $2.00 / 1k, 4.5 stars, 170k users (the Actor your LinkedIn leg uses)
+      enabled: false
+      actor: curious_coder/linkedin-jobs-scraper
+      max_items: 100
+      max_charge_usd: 0.25
+      input: {scrapeCompany: false, limitPerSource: 50, urls: [
+        "https://www.linkedin.com/jobs/search/?keywords=software%20OR%20data%20OR%20developer&location=European%20Union&f_TPR=r86400&f_WT=2",
+        "https://www.linkedin.com/jobs/search/?keywords=software%20OR%20data%20OR%20developer&location=Egypt&f_TPR=r86400"]}
+    indeed:      # valig/indeed-jobs-scraper: $0.10 / 1k, 4.7 stars, 35k users
+      enabled: false
+      actor: valig/indeed-jobs-scraper
+      max_items: 100
+      max_charge_usd: 0.05
+      input: {country: de, title: software engineer, location: "", limit: 100, datePosted: "1"}
+    glassdoor:   # bebity/glassdoor-jobs-scraper: $0.40 / 1k, 4.4 stars
+      enabled: false
+      actor: bebity/glassdoor-jobs-scraper
+      max_items: 100
+      max_charge_usd: 0.10
+      input: {keyword: software engineer, location: United Kingdom, maxItems: 100, postedWithinDays: "1", scrapeDetails: true}
+    wellfound:   # blackfalcondata/wellfound-scraper: $3.00 / 1k (+$0.005 a run), 5 stars
+      enabled: false
+      actor: blackfalcondata/wellfound-scraper
+      max_items: 100
+      max_charge_usd: 0.35
+      input: {query: engineer, remote: true, maxAgeMinutes: 1440}
+    stepstone:   # memo23/stepstone-search-cheerio-ppr: $1.00 / 1k (+$0.005 a run), 5 stars
+      enabled: false
+      actor: memo23/stepstone-search-cheerio-ppr
+      max_items: 100
+      max_charge_usd: 0.15
+      input: {keyword: Software Engineer, country: de, postedWithin: "1", maxItems: 100}
+    xing:        # shahidirfan/Xing-Jobs-Scraper: $1.00 / 1k, 4.6 stars
+      enabled: false
+      actor: shahidirfan/Xing-Jobs-Scraper
+      max_items: 100
+      max_charge_usd: 0.15
+      input: {keyword: software engineer, location: "", date_posted: "1", results_wanted: 100}
+    seek:        # websift/seek-job-scraper: $2.50 / 1k, 4.8 stars (Australia and New Zealand)
+      enabled: false
+      actor: websift/seek-job-scraper
+      max_items: 100
+      max_charge_usd: 0.30
+      input: {searchTerm: software engineer, maxResults: 100, dateRange: 1, country: AU}
 
 # Claude grading, in the job_radar DAG after embed (ANTHROPIC_API_KEY in .env): the jobs of every place with a
 # description, closest to your CV first (embed's free cv_similarity), with no cap, scored 0-10 against your CVs, with the CV to send, one line why and what keeps someone living in

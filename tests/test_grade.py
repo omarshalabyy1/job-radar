@@ -12,7 +12,7 @@ import pytest
 from dotenv import load_dotenv
 
 from job_radar import claude, db, grade
-from job_radar.config import AI_PLACES, KEEP_DAYS
+from job_radar.config import AI_PLACES, WORK_DAYS
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -56,10 +56,10 @@ def test_a_job_is_graded_when_it_has_no_fresh_grade_and_nothing_bars_it(conn):
     conn.execute("INSERT INTO core.cv (label, filename, text, uploaded_at) VALUES ('zz test', 'zz.pdf', 'sql', now() + interval '1 day')")
     cv = "(SELECT max(uploaded_at) FROM core.cv)"
     mine = {name: add_job(conn, name, **kw) for name, kw in {
-        "new": {}, "age_at_the_window_edge": {"age": KEEP_DAYS}, "saved": {},
+        "new": {}, "age_at_the_window_edge": {"age": WORK_DAYS}, "saved": {},
         "stale": {}, "graded_exactly_at_the_cv": {}, "graded_after_the_cv": {},
         "no_description": {"description": None}, "other_place": {"place": "Atlantis"},
-        "too_old": {"age": KEEP_DAYS + 1}, "restricted": {"restriction": "US citizens only"},
+        "too_old": {"age": WORK_DAYS + 1}, "restricted": {"restriction": "US citizens only"},
         "ignored": {}, "rejected": {}}.items()}
     add_grade(conn, mine["stale"], f"{cv} - {HOUR}")
     add_grade(conn, mine["graded_exactly_at_the_cv"], cv)

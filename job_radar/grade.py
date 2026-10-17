@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pydantic import BaseModel
 
 from . import claude
-from .config import FEATURES, KEEP_DAYS, SETTINGS
+from .config import FEATURES, WORK_DAYS, SETTINGS
 from .digest import push
 from .sources import time_left
 
@@ -45,14 +45,14 @@ def jobs_to_grade(conn) -> list[tuple]:
     the rest for the next run."""
     return conn.execute(
         "SELECT j.job_id, j.title, j.company, j.location, j.description, j.years_required FROM core.job j"
-        " WHERE j.first_seen >= current_date - %s AND j.description IS NOT NULL"
+        " WHERE j.in_scope AND j.first_seen >= current_date - %s AND j.description IS NOT NULL"
         " AND (j.restriction IS NULL OR NOT %s)"
         " AND NOT EXISTS (SELECT 1 FROM core.claude_grade g WHERE g.job_id = j.job_id"
         " AND g.graded_at >= (SELECT max(uploaded_at) FROM core.cv))"
         " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id AND a.status IN ('ignored', 'rejected'))"
         " ORDER BY j.cv_similarity DESC NULLS LAST, (SELECT count(*) FROM core.job_skill k WHERE k.job_id = j.job_id) DESC,"
         " j.posted_at DESC NULLS LAST, j.job_id",
-        (KEEP_DAYS, FEATURES["eligibility"])).fetchall()
+        (WORK_DAYS, FEATURES["eligibility"])).fetchall()
 
 
 def recent_clicks(conn) -> list[tuple]:

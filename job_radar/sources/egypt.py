@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 
 from bs4 import BeautifulSoup
 
-from ..config import EXTRACT_SECONDS, HOURS_OLD, TANQEEB_PAGES, TANQEEB_SITES, place_of, role_of
-from .base import BROWSER, Held, changed, fetch, get, relative_date, row, since, time_left
+from ..config import EXTRACT_SECONDS, HOURS_OLD, TANQEEB_PAGES, TANQEEB_SITES, kept, place_of
+from .base import BROWSER, Held, changed, fetch, get, held, relative_date, row, since, time_left
 
 
 def wuzzuf() -> list[dict]:
@@ -40,7 +40,7 @@ def wuzzuf() -> list[dict]:
                 jobs += fetch("GET", "https://wuzzuf.net/api/job", params={"filter[other][ids]": ",".join(ids[i:i + 20])},
                               headers=api, timeout=30).json().get("data", [])
         except Held as e:  # keep what the pages before it found
-            print(f"wuzzuf: {e}")
+            held("wuzzuf", e)
             break
         posted_at = {job["id"]: datetime.strptime(job["attributes"]["postedAt"], "%m/%d/%Y %H:%M:%S")
                      for job in jobs if job["attributes"].get("postedAt")}
@@ -51,7 +51,7 @@ def wuzzuf() -> list[dict]:
         for job in recent:
             a, where = job["attributes"], job["attributes"].get("location") or {}
             location = ", ".join(filter(None, [(where.get("city") or {}).get("name"), (where.get("country") or {}).get("name")]))
-            if role_of(a["title"]) and place_of(location):
+            if kept(a["title"]) and place_of(location):
                 text = BeautifulSoup(f"{a.get('description') or ''} {a.get('requirements') or ''}", "html.parser")
                 rows.append(row("wuzzuf", None, a["title"], companies[job["id"]], location, f"https://wuzzuf.net/{a['uri']}",
                                 str(posted_at[job["id"]].date()), text.get_text(" ", strip=True), job))
@@ -80,7 +80,7 @@ def tanqeeb() -> list[dict]:
             for link in links:
                 card = link.find_parent("div", class_="search-job-card-top").parent
                 title, posted = link.get_text(" ", strip=True), relative_date(text(card, ".search-job-date"))
-                if posted and str(posted) >= since() and role_of(title):
+                if posted and str(posted) >= since() and kept(title):
                     rows.append(row("tanqeeb", place, title, text(card, ".search-job-company-name"),
                                     text(card, ".search-job-workplace-location"),
                                     f"https://{site}.tanqeeb.com{link['href']}", str(posted), None,

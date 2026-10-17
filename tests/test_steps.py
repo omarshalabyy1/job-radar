@@ -224,7 +224,7 @@ def test_eligibility_off_judges_nothing(conn, monkeypatch, capsys):
 
 def test_the_email_leaves_out_ignored_rejected_and_hidden_jobs(conn, monkeypatch):
     sent = []
-    monkeypatch.setattr(steps, "digest", lambda jobs, name, follow_ups=(): sent.append({j["job_id"] for j in jobs}) or "body")
+    monkeypatch.setattr(steps, "digest", lambda jobs, name, follow_ups=(), problems=(): sent.append({j["job_id"] for j in jobs}) or "body")
     monkeypatch.setattr(steps, "send", lambda body, title, name: False)  # nothing is sent and, as the email is not sent, nothing is marked emailed
     monkeypatch.setattr(smtplib, "SMTP_SSL", lambda *a, **k: pytest.fail("an email was sent"))  # belt and braces
     for switch in ("auto_hide", "eligibility", "grade"):
@@ -255,7 +255,7 @@ def test_the_email_leaves_out_ignored_rejected_and_hidden_jobs(conn, monkeypatch
 
 def test_the_email_hides_a_restriction_by_eligibility_alone_and_a_low_score_by_auto_hide_and_grade(conn, monkeypatch):
     sent = []
-    monkeypatch.setattr(steps, "digest", lambda jobs, name, follow_ups=(): sent.append({j["job_id"] for j in jobs}) or "body")
+    monkeypatch.setattr(steps, "digest", lambda jobs, name, follow_ups=(), problems=(): sent.append({j["job_id"] for j in jobs}) or "body")
     monkeypatch.setattr(steps, "send", lambda body, title, name: False)
     monkeypatch.setattr(smtplib, "SMTP_SSL", lambda *a, **k: pytest.fail("an email was sent"))
     jobs = {"restricted": add_job(conn, "restricted", restriction="US citizens only"), "low_score": add_job(conn, "low_score")}
@@ -282,7 +282,7 @@ def test_export_career_ops_leaves_out_ignored_and_hidden_jobs(conn, monkeypatch,
     conn.execute("INSERT INTO core.application (job_id, status) VALUES (%s, 'ignored')", (jobs["ignored"],))
     conn.execute("INSERT INTO core.claude_grade (job_id, score, cv, reason, model) VALUES (%s, 1, 'cv', 'why', 'm')", (jobs["low_score"],))
     conn.execute("UPDATE core.job SET role_rank = -1, target_company = true WHERE job_id = ANY(%s)", (list(jobs.values()),))  # best first
-    skills = [s for (s,) in conn.execute("SELECT skill FROM core.skill ORDER BY skill LIMIT 3").fetchall()]
+    skills = [s for (s,) in conn.execute("SELECT skill FROM core.skill WHERE track IS NOT NULL ORDER BY skill LIMIT 3").fetchall()]
     for job_id in jobs.values():
         conn.execute("INSERT INTO core.job_skill (job_id, skill) SELECT %s, unnest(%s::text[])", (job_id, skills))
 
@@ -357,12 +357,14 @@ def test_a_step_that_starts_again_marks_its_killed_runs_failed_and_leaves_the_re
     for age, step, status in [(11, "zz_step", "running"), (1, "zz_step", "running"), (11, "zz_other", "running"), (30, "zz_step", "ok")]:
         conn.execute("INSERT INTO core.step_run (step, started_at, status) VALUES (%s, now() - make_interval(mins => %s), %s)",
                      (step, age, status))
-    assert runlog.close_stale(conn, "zz_step") == 1
+    assert runlog.close_stale(conn, "zz_step") == ["zz_step"]
     rows = conn.execute("SELECT step, (extract(epoch FROM now() - started_at) / 60)::int, status, summary FROM core.step_run"
                         " WHERE step LIKE 'zz%' ORDER BY 1, 2").fetchall()
     assert rows == [("zz_other", 11, "running", None), ("zz_step", 1, "running", None),
-                    ("zz_step", 11, "failed", "killed (timeout or Airflow restart)"), ("zz_step", 30, "ok", None)]
-    assert runlog.close_stale(conn, "zz_step") == 0  # a second start finds nothing more to close
+                    ("zz_step", 11, "failed", "abandoned: still running from an earlier run (killed, or its end could not be written)"),
+                    ("zz_step", 30, "ok", None)]
+    assert runlog.close_stale(conn, "zz_step") == []  # a second start finds nothing more to close
+    assert "zz_other" in runlog.close_stale(conn, None)  # the collect's first step closes every step's
 
 
 def test_descendants_are_every_child_and_grandchild_of_the_process_whatever_its_name(tmp_path):
@@ -444,11 +446,15 @@ def test_years_required_reads_the_most_years_a_posting_asks_for():
 
 def test_transform_twice_keeps_one_history_line_per_job(conn):
     """core.job_history: one line per job_key, however often transform runs (rolled back)."""
+    conn.execute("INSERT INTO raw.job_posting (run_date, source, title, company, location, searched_for, job_url, payload,"
+                 " last_seen) VALUES (current_date, 'test', 'Data Engineer', 'Zzhistoryco', 'Cairo', 'Egypt',"
+                 " 'https://test.example/history', '{}', current_date)")  # its own posting: the test database starts empty
     steps.transform(RolledBack(conn))
     first = conn.execute("SELECT count(*), count(DISTINCT job_key) FROM core.job_history").fetchone()
     steps.transform(RolledBack(conn))
     assert conn.execute("SELECT count(*), count(DISTINCT job_key) FROM core.job_history").fetchone() == first
-    assert first[0] == first[1] and first[0] >= conn.execute("SELECT count(*) FROM core.job").fetchone()[0]
+    # your jobs each have a line; a website-only job has none (its trends are core.skill_day)
+    assert first[0] == first[1] and first[0] >= conn.execute("SELECT count(*) FROM core.job WHERE in_scope").fetchone()[0]
 
 
 def test_a_job_is_archived_whole_before_it_is_deleted(conn):
@@ -480,3 +486,137 @@ def test_a_board_that_drops_all_or_suddenly_none_is_a_warning(conn):
                      (days_ago,))
     assert steps.drop_warning(rolled, "zz_us_only", 13, 13) is None
     assert steps.drop_warning(rolled, board, 3, 3) is None             # too few to judge
+    # nothing at all from a board that gave postings in the last 7 days: a warning, judged for Egypt or not
+    assert "0 postings today, 60 in the last 7 days" in steps.drop_warning(rolled, board, 0, 0, judged=False)
+    assert steps.drop_warning(rolled, "zz_never_any", 0, 0) is None    # no postings before either
+
+
+def test_salary_reads_each_boards_own_fields_and_skips_no_amount_or_no_currency():
+    assert steps.salary({"min_amount": "2000.0", "max_amount": 2500, "currency": "AED", "interval": "monthly"}) == {
+        "salary_min": 2000.0, "salary_max": 2500.0, "salary_currency": "AED", "salary_period": "monthly"}
+    assert steps.salary({"minSalary": 65000, "maxSalary": None, "currency": "usd", "salaryPeriod": "annual"})["salary_currency"] == "USD"
+    assert steps.salary({"salaryMin": 0, "salaryMax": 0, "salaryCurrency": "USD"}) is None  # no amount above 0
+    assert steps.salary({"min_amount": 100, "currency": "$"}) is None                      # not a currency code
+    assert steps.salary({"salary": "$20.00/hr - $100.00/hr"}) is None                      # free text is not read
+
+
+def test_a_salary_becomes_a_year_in_dollars_and_euros_at_the_rate_of_its_day():
+    from datetime import date
+    from job_radar import fx
+    rates = {date(2026, 10, 1): {"EUR": 1.0, "USD": 1.1, "PLN": 4.4}, date(2026, 10, 5): {"EUR": 1.0, "USD": 1.2, "PLN": 4.8}}
+    assert fx.yearly(4400, 8800, "PLN", "monthly", date(2026, 10, 3), rates) == {  # the rate of Oct 1, the last day before
+        "eur_min": 12000, "eur_max": 24000, "usd_min": 13200, "usd_max": 26400, "plausible": True}
+    assert fx.yearly(11000, None, "AED", None, date(2026, 10, 9), rates)["usd_max"] == round(11000 / 3.6725)  # a Gulf peg
+    assert fx.yearly(10000, 13000, "EGP", "monthly", date(2026, 10, 9), rates) is None  # no ECB rate, no peg
+    assert fx.yearly(9, 9, "USD", "hourly", date(2026, 10, 9), rates)["plausible"] is True  # 18,720 a year
+    assert fx.yearly(500, 500, "USD", "yearly", date(2026, 10, 9), rates)["plausible"] is False
+    assert fx.parse_ecb('<E><Cube><Cube time="2026-10-16"><Cube currency="USD" rate="1.1"/></Cube></Cube></E>') == [
+        ("2026-10-16", "EUR", 1.0), ("2026-10-16", "USD", 1.1)]
+
+
+def test_match_skills_sets_work_mode_places_and_the_work_permit_flags(conn, monkeypatch):
+    """match_skills (rolled back, the ECB not asked): an Egypt job asking for Arabic, a remote job open anywhere offering
+    relocation, a UAE job for nationals only, and a job refusing sponsorship."""
+    monkeypatch.setattr(steps.fx, "load_rates", lambda conn: 0)
+    cairo = add_job(conn, "cairo", "Fluent in Arabic and English is required.")
+    anywhere = add_job(conn, "anywhere", "We offer relocation support and visa sponsorship.", place="Remote")
+    conn.execute("UPDATE core.job SET location = 'Worldwide (remote)' WHERE job_id = %s", (anywhere,))
+    dubai = add_job(conn, "dubai", "This role is open to UAE nationals only.", place="UAE")
+    conn.execute("UPDATE core.job SET location = 'Dubai (remote)' WHERE job_id = %s", (dubai,))
+    refused = add_job(conn, "refused", "Relocation support is offered, but we do not provide visa sponsorship.", place="Remote")
+    steps.match_skills(RolledBack(conn))
+    got = {job_id: row for job_id, *row in conn.execute(
+        "SELECT job_id, work_mode, countries, regions, visa_relocation, nationals_only, arabic_required FROM core.job"
+        " WHERE job_id = ANY(%s)", ([cairo, anywhere, dubai, refused],))}
+    assert got[cairo] == ["Onsite", ["Egypt"], ["MENA"], False, False, True]
+    assert got[anywhere] == ["Remote", [], ["Worldwide"], True, False, False]
+    assert got[dubai] == ["Remote", ["United Arab Emirates"], ["MENA"], False, True, False]
+    assert got[refused][3] is False
+
+
+def test_a_job_for_the_website_only_reaches_no_step_of_yours(conn, monkeypatch):
+    """in_scope false (features.market): the job is in core.job for the website, but no step that spends Claude, Ollama, a
+    page read or your attention sees it: eligibility, embed, grade, describe, mart.job_status (the emails, the tracker,
+    export_career_ops). Each is checked against a job of yours with the same text, rolled back."""
+    from job_radar import embed, grade
+    text = "Build Spark pipelines in Python and SQL. " * 5
+    yours = add_job(conn, "yours_leak", text)
+    wide = add_job(conn, "website_only_leak", text)
+    conn.execute("UPDATE core.job SET in_scope = false, title = 'Website Only Engineer' WHERE job_id = %s", (wide,))
+    status = {job_id for (job_id,) in conn.execute("SELECT job_id FROM mart.job_status WHERE job_id = ANY(%s)", ([yours, wide],))}
+    assert status == {yours}
+    assert yours in {row[0] for row in grade.jobs_to_grade(conn)} and wide not in {row[0] for row in grade.jobs_to_grade(conn)}
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # both are in Egypt: judged without Claude, when selected
+    monkeypatch.setitem(config.FEATURES, "eligibility", True)
+    eligibility.eligibility(RolledBack(conn))
+    judged = dict(conn.execute("SELECT job_id, eligibility_at IS NOT NULL FROM core.job WHERE job_id = ANY(%s)", ([yours, wide],)))
+    assert judged == {yours: True, wide: False}
+    seen = []
+    monkeypatch.setitem(config.FEATURES, "embeddings", True)
+    size = conn.execute("SELECT coalesce(max(cardinality(vector)), 2) FROM core.cv_vector").fetchone()[0]  # as the CVs'
+    monkeypatch.setattr(embed, "vectors_of", lambda texts: seen.extend(texts) or [[1.0] * size] * len(texts))
+    embed.embed(RolledBack(conn))
+    assert any("Data Engineer" in t for t in seen) and not any("Website Only" in t for t in seen)
+    conn.execute("UPDATE core.job SET description = NULL, described_at = NULL WHERE job_id = ANY(%s)", ([yours, wide],))
+    asked = []
+    monkeypatch.setattr(steps.sources, "fetch", lambda method, url, **kw: asked.append(url) or (_ for _ in ()).throw(steps.sources.Held("test")))
+    steps.describe(RolledBack(conn))
+    assert "https://test.example/yours_leak" in asked and "https://test.example/website_only_leak" not in asked
+
+
+def test_a_board_job_closes_only_when_its_board_was_read_since_and_no_longer_lists_it(conn):
+    """transform (rolled back): a company board's job last listed 3 days ago is deleted when its board was read since, kept
+    when the board was not read (no sign)."""
+    conn.execute("INSERT INTO core.board (ats, token, origin, last_ok_at) VALUES ('ashby', 'zz-read', 'test', now()),"
+                 " ('ashby', 'zz-unread', 'test', now() - interval '4 days')")
+    ids = {}
+    for name, board in (("closed", "zz-read"), ("not_read", "zz-unread")):
+        url = f"https://test.example/board/{name}"
+        ids[name] = conn.execute(
+            "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+            " first_seen, in_scope, last_seen) VALUES (%s, 'Engineer', 'Acme', 'Berlin', 'Unknown location', 'ashby-board', %s,"
+            " 0, 'Software Engineer', false, current_date - 10, false, current_date - 3) RETURNING job_id",
+            (f"test board {name}", url)).fetchone()[0]
+        conn.execute("INSERT INTO raw.job_posting (run_date, last_seen, source, title, company, location, job_url, payload)"
+                     " VALUES (current_date - 3, current_date - 3, 'ashby-board', 'Engineer', 'Acme', 'Berlin', %s, %s)",
+                     (url, f'{{"board": "ashby:{board}"}}'))
+    conn.execute("INSERT INTO raw.job_posting (run_date, source, title, company, location, job_url, payload, last_seen)"
+                 " VALUES (current_date, 'test', 'Data Engineer', 'Acme', 'Cairo', 'https://test.example/today', '{}', current_date)")
+    steps.transform(RolledBack(conn))
+    left = {name for name, job_id in ids.items() if conn.execute("SELECT 1 FROM core.job WHERE job_id = %s", (job_id,)).fetchone()}
+    assert left == {"not_read"}
+    # a website job's key is not kept as never-again (it may be reposted), and not in your history
+    assert not conn.execute("SELECT 1 FROM core.job_seen WHERE job_key = 'test board closed'").fetchone()
+    assert not conn.execute("SELECT 1 FROM core.job_history WHERE job_key LIKE 'test board %%'").fetchone()
+
+
+def test_a_copy_title_and_an_arabic_location_are_shown_clean_while_job_key_stays_the_raw_ones(conn):
+    """transform (rolled back): 'Data Engineer - Copy' in 'القاهرة, C, EG' is stored as 'Data Engineer' in 'Cairo, Egypt';
+    its job_key is still the raw title's, so its published id (md5 of job_key) does not move."""
+    url = "https://test.example/copy_title"
+    conn.execute("INSERT INTO raw.job_posting (run_date, source, title, company, location, searched_for, job_url, payload, last_seen)"
+                 " VALUES (current_date, 'test', 'Data Engineer - Copy', 'Zzcopyco', 'القاهرة, C, EG', 'Egypt', %s, '{}',"
+                 " current_date)", (url,))
+    steps.transform(RolledBack(conn))
+    assert conn.execute("SELECT job_key, title, location FROM core.job WHERE job_url = %s", (url,)).fetchone() == (
+        steps.job_key("Data Engineer - Copy", "Zzcopyco", url), "Data Engineer", "Cairo, Egypt")
+    assert steps.clean_title("Copy Editor") == "Copy Editor" and steps.clean_title("BI Analyst (copy 2)") == "BI Analyst"
+    assert steps.clean_title("SENIOR AI ENGINEER FOR LLM APPS") == "Senior AI Engineer for LLM Apps"
+    assert steps.clean_location("San Francisco, CA") == "San Francisco, CA"  # Latin letters: left as it is
+    assert steps.clean_location("دفترة · Giza (Hybrid)") == "Giza (Hybrid)"
+    # 2026-10-17: these came back None and transform failed on core.job.location NOT NULL; never None now
+    for raw in ("🇲🇽 Mexico City / 🌎 Remote (remote)", "Senior AI Engineer – SAI25001 Services Cairo"):
+        assert steps.clean_location(raw) == raw  # an emoji or a dash is not a foreign letter
+    assert steps.clean_location("مدينة غير معروفة", "Egypt") == "Egypt"  # no English name: the job's place
+    assert steps.clean_location("مدينة غير معروفة") == "مدينة غير معروفة"  # nor a place: as it came, never None
+
+
+def test_a_remote_job_with_no_known_place_is_placed_remote(conn):
+    """match_skills (rolled back): work_mode Remote and place 'Unknown location' -> place 'Remote'."""
+    job_id = conn.execute(
+        "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+        " first_seen, in_scope, last_seen) VALUES ('test remote unknown', 'Data Engineer', 'Acme', 'Remote', 'Unknown location',"
+        " 'test', 'https://test.example/remote_unknown', 1, 'Data Engineer', false, current_date, true, current_date)"
+        " RETURNING job_id").fetchone()[0]
+    steps.match_skills(RolledBack(conn))
+    assert conn.execute("SELECT work_mode, place FROM core.job WHERE job_id = %s", (job_id,)).fetchone() == ("Remote", "Remote")

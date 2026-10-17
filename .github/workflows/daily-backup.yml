@@ -1,0 +1,96 @@
+# The fallback for days the laptop is off. Airflow on the laptop collects at 12pm Cairo and publishes right after to
+# Neon (the website's database). This runs at 12:17 UTC (15:17 Cairo in summer, 14:17 in winter; off the hour, as
+# GitHub delays top-of-hour schedules).
+#   check   a job first seen today on Neon means a collect ran today (the laptop's, or this one's): nothing else runs.
+#           That is the day's marker, so a re-run or a manual run the same day changes nothing.
+#   backup  only when check finds none: the same steps as dags/job_radar.py on a fresh Postgres, seeded from Neon first
+#           (job_radar/seed.py: every Neon job with its own job_key, marked emailed), so a job Neon already
+#           has is matched by its job_key, never added twice, and published under the same id (made from job_key). Every extract_ step in
+#           job_radar/__main__.py's STEPS runs, so a new collector needs no change here; one without its secret here
+#           (LinkedIn's Apify, your mailboxes) skips itself. Each source keeps its own limits, and this collects only on
+#           a day the laptop did not. No Claude step and no email runs. publish runs with PUBLISH_PRUNE=0: it deletes
+#           nothing on Neon; the laptop's next publish prunes as usual.
+# Two runs never overlap (concurrency). Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL;
+# JOOBLE_API_KEY, optional. GitHub runs a schedule only from the default branch (main): it starts once this file is
+# merged there. Run it by hand from the Actions tab (Run workflow).
+
+name: daily-backup
+
+on:
+  schedule:
+    - cron: "17 12 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: daily-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      collected: ${{ steps.neon.outputs.collected }}
+    steps:
+      - name: Did today's collect reach Neon?
+        id: neon
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          # stderr is dropped: a connection error can quote the url
+          today=$(psql "$NEON_DATABASE_URL" -tAc "SELECT coalesce(max(first_seen) >= current_date, false) FROM jobs.job" 2>/dev/null) \
+            || { echo "::error::cannot reach Neon (check the NEON_DATABASE_URL secret)"; exit 1; }
+          echo "collected=$today" >> "$GITHUB_OUTPUT"
+          if [ "$today" = "t" ]; then echo "today's collect is on Neon: nothing to do"; else echo "no job first seen today on Neon: collecting here"; fi
+
+  backup:
+    needs: check
+    if: needs.check.outputs.collected == 'f'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75  # 12 extracts of up to 150 s each (210 s watchdog), describe, install: about 45 minutes
+    services:
+      warehouse:
+        image: postgres:17
+        env:
+          POSTGRES_USER: jobradar
+          POSTGRES_PASSWORD: jobradar  # a throwaway database that ends with the run: not a secret
+          POSTGRES_DB: jobradar
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U jobradar -d jobradar" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      WAREHOUSE_HOST: 127.0.0.1
+      WAREHOUSE_PORT: "5433"
+      WAREHOUSE_PASSWORD: jobradar
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
+      PUBLISH_PRUNE: "0"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"  # the Dockerfile's
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Schema and seed from Neon
+        run: |
+          python -m job_radar schema
+          python -m job_radar.seed
+      - name: Collect
+        # as the DAG runs them: one at a time; a step that fails is a warning and the next still runs (all_done)
+        run: |
+          extracts=$(python -c "from job_radar.__main__ import STEPS; print(' '.join(s for s in STEPS if s.startswith('extract_')))")
+          for step in $extracts transform describe match_skills eligibility; do
+            timeout 600 python -m job_radar "$step" || echo "::warning::$step ended with exit code $?"
+          done
+      - name: Publish to Neon
+        run: python -m job_radar publish

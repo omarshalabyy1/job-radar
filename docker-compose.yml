@@ -26,6 +26,8 @@ x-job-env: &job-env
   MAILBOXES: ${MAILBOXES:-}
   APPLICATION_SENDERS: ${APPLICATION_SENDERS:-}
   NTFY_TOPIC: ${NTFY_TOPIC:-}
+  NEON_DATABASE_URL: ${NEON_DATABASE_URL:-}
+  OWNER_EMAIL: ${OWNER_EMAIL:-}
   PYTHONUNBUFFERED: "1"
   JOB_RADAR_OUTPUT: /opt/job-radar/output  # the bind mount below; set here so a host path from .env (e.g. E:/) never reaches the container
 
@@ -44,7 +46,7 @@ services:
       - warehouse-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U jobradar -d jobradar"]
-      interval: 5s
+      interval: 30s  # each check forks a backend; fewer forks while the VM is short of memory (docs/warehouse-resets.md)
       timeout: 5s
       retries: 20
 

@@ -57,6 +57,7 @@ searched in one collect a day. A manual Trigger keeps to the same limits.
 from __future__ import annotations
 
 import re
+import subprocess
 from datetime import timedelta
 from pathlib import Path
 
@@ -81,6 +82,17 @@ def cron(times: list) -> str:
     return f"{int(found[0][2] or 0)} {','.join(map(str, hours))} * * *"
 
 
+def alert(context) -> None:
+    """A task that failed for good (its retries spent) emails Omar at once (job_radar/alert.py, in job-radar's Python):
+    no silent failures."""
+    ti = context["task_instance"]
+    subprocess.run(["/opt/job-radar-venv/bin/python", "-m", "job_radar.alert", "task", ti.dag_id, ti.run_id, ti.task_id,
+                    str(ti.try_number)], cwd="/opt/job-radar", timeout=120, check=False)
+
+
+DEFAULTS = {"retries": 0, "execution_timeout": timedelta(seconds=240), "on_failure_callback": alert}
+
+
 def step(name: str, **kwargs) -> BashOperator:
     return BashOperator(task_id=name, cwd="/opt/job-radar",
                         bash_command=f"/opt/job-radar-venv/bin/python -m job_radar {name}", **kwargs)
@@ -93,12 +105,17 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False,
-    default_args={"retries": 0, "execution_timeout": timedelta(seconds=240)},
-):
-    extracts = [step(name) for name in ("extract_boards", "extract_bayt", "extract_remote", "extract_startups",
-                                        "extract_egypt", "extract_gulf", "extract_workable", "extract_freehire",
-                                        "extract_companies", "extract_portals", "extract_email")]
+    default_args=DEFAULTS,
+) as collect:
+    # a free extract is retried twice, 2 minutes apart: a warehouse that drops the connection once (it restarted under
+    # extract_companies on 2026-10-17) does not fail the run, and a retry adds nothing twice (load skips what is stored).
+    # The paid ones (LinkedIn, Apify) are never retried: a retry would start a second paid run.
+    extracts = [step(name, retries=2, retry_delay=timedelta(minutes=2))
+                for name in ("extract_boards", "extract_bayt", "extract_remote", "extract_startups", "extract_egypt",
+                             "extract_gulf", "extract_workable", "extract_freehire", "extract_companies", "extract_portals",
+                             "extract_market", "extract_email")]
     extracts.append(step("extract_linkedin", execution_timeout=timedelta(seconds=300)))  # one Apify run, up to 280 s
+    extracts.append(step("extract_apify", execution_timeout=timedelta(seconds=1800)))  # the website's Apify boards, a run each
     step("schema", retries=2, retry_delay=timedelta(seconds=60)) >> extracts
     matched = step("match_skills", trigger_rule="all_done")
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=150)) >> matched
@@ -115,20 +132,30 @@ with DAG(
     extracts >> EmptyOperator(task_id="check_extracts")
     checked = step("eligibility", trigger_rule="all_done")
     matched >> checked >> embedded >> graded >> ranked >> step("tailor", trigger_rule="all_done", execution_timeout=timedelta(seconds=300))
+    published = step("publish", trigger_rule="all_done")
+    ranked >> published
     ranked >> step("outreach_drafts", trigger_rule="all_done", execution_timeout=timedelta(seconds=300))  # cold emails to founders, never sent
+    # last: one alert when a step failed, saying whether the website was still published (steps.run_report)
+    published >> step("run_report", trigger_rule="all_done")
     matched >> step("export_career_ops")
+    # last of all, Airflow's watcher: the steps after the extracts run all_done, so the run's leaves end green whatever
+    # failed (transform failed on 2026-10-17 and the run said success). This task runs only when a step failed, and
+    # fails, so the run is red; else it is skipped. The failed step has already sent its own alert.
+    failed = BashOperator(task_id="run_failed", trigger_rule="one_failed", retries=0, on_failure_callback=None,
+                          bash_command='echo "a step failed: this run is red (its alert said which)"; exit 1')
+    [task for task in collect.tasks if task is not failed] >> failed
 
 # your two emails, right after each collect (a manual one too: they hold only jobs not emailed yet)
 for dag_id, name in (("job_radar_email_egypt", "email_egypt"), ("job_radar_email_abroad", "email_abroad")):
     with DAG(dag_id=dag_id, schedule=[COLLECTED], start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
              catchup=False, max_active_runs=1, is_paused_upon_creation=False,
-             default_args={"retries": 0, "execution_timeout": timedelta(seconds=240)}):
+             default_args=DEFAULTS):
         step(name)
 
 # your applications as your mailbox tells them, every hour (read-only)
 with DAG(dag_id="job_radar_applications", schedule="0 * * * *", start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
          catchup=False, max_active_runs=1, is_paused_upon_creation=False,
-         default_args={"retries": 0, "execution_timeout": timedelta(seconds=300)}):
+         default_args={**DEFAULTS, "execution_timeout": timedelta(seconds=300)}):
     step("track_applications")
 
 # the warehouse's own data (core and raw; the mart views are made again by schema), every night, in pg_dump's custom
@@ -136,7 +163,7 @@ with DAG(dag_id="job_radar_applications", schedule="0 * * * *", start_date=pendu
 BACKUPS, KEEP_BACKUPS = "/opt/job-radar/output/backups", 14
 with DAG(dag_id="job_radar_backup", schedule=cron(["3am"]), start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
          catchup=False, max_active_runs=1, is_paused_upon_creation=False,
-         default_args={"retries": 1, "retry_delay": timedelta(minutes=5), "execution_timeout": timedelta(minutes=10)}):
+         default_args={**DEFAULTS, "retries": 1, "retry_delay": timedelta(minutes=5), "execution_timeout": timedelta(minutes=10)}):
     BashOperator(task_id="pg_dump", bash_command=(
         f"set -euo pipefail; mkdir -p {BACKUPS}; file={BACKUPS}/nightly-$(date +%Y-%m-%d).dump; "
         'PGPASSWORD="$WAREHOUSE_PASSWORD" pg_dump -h "$WAREHOUSE_HOST" -p "$WAREHOUSE_PORT" -U jobradar -d jobradar'

@@ -1,0 +1,36 @@
+Third-party code in job-radar
+
+Parts of job-radar are copied or adapted from Job Market Radar ("Radarak"),
+https://github.com/moamenmoussa172/job-market-radar, under the MIT License below. Each copied part says so where it starts:
+
+- job_radar/fx.py: the ECB rates reader and the currency pegs (from dags/jobradar/fx.py and dbt/seeds/currency_pegs.csv)
+- sql/schema.sql: the skills added in 2026-10 (dbt/seeds/skills.csv) and core.geo_pattern (dbt/seeds/geo_patterns.csv)
+- job_radar/steps.py: the work-permit signal patterns (dbt/models/intermediate/int_job_signals.sql)
+- job_radar/tech.py: the tech-job title filter (dags/jobradar/filters.py)
+- sql/schema.sql: core.role_family, core.seniority and core.role_track (dbt/models/intermediate/int_postings_classified.sql,
+  dbt/seeds/role_tracks.csv)
+- job_radar/sources/boards.csv: the first company boards (dags/jobradar/company_boards.csv)
+
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2026 Moamen Moussa
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

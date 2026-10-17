@@ -123,14 +123,16 @@ def block(title: str, lines: list[str]) -> str:
                       for line in lines) + '</td></tr>')
 
 
-def digest(jobs: list[dict], name: str, follow_ups: list[dict] = ()) -> str:
+def digest(jobs: list[dict], name: str, follow_ups: list[dict] = (), problems: list[str] = ()) -> str:
     """One column at most 640 px wide, so it reads the same on a phone and on a laptop: a deep blue
     header with one summary line and a chip per place, then a band per place (home first), in it
     a section per experience level (entry and junior, mid, senior: the further you scroll, the more
     a job asks for), a heading per role, a job-type line only when a role mixes types, and the cards.
     Under the header, "Top 5 today" (the five best scores of 7 or more in this email, linked; features.top5)
     and, when follow_ups has rows, "Follow up" (an application sent 7 or 14 days ago and still unanswered;
-    features.follow_up). With no job at all (a day with none new), only the header and "Follow up"."""
+    features.follow_up). With no job at all (a day with none new), only the header and "Follow up". `problems`, when
+    given (the Egypt email: steps.problems), is "Problems in this run" right under the header: each step that failed or
+    warned, with its last line."""
     for j in jobs:
         j["employment"] = employment(j)
         j["level"], j["years"] = experience(j)
@@ -192,6 +194,7 @@ def digest(jobs: list[dict], name: str, follow_ups: list[dict] = ()) -> str:
                                  for j in best]) if best else ""
     chase = block("Follow up", [f'{html.escape(f["title"] or "")} at <b>{html.escape(f["company"])}</b>, applied '
                                 f'{f["applied_at"]:%d %b}' for f in follow_ups]) if follow_ups and FEATURES["follow_up"] else ""
+    trouble = block("Problems in this run", [html.escape(p) for p in problems]) if problems else ""
     head = (f'<div style="margin:0;padding:16px 8px;background:{PLANE};{FONT}">'
             f'<div style="display:none;max-height:0;overflow:hidden;opacity:0">{html.escape(preheader)}</div>'
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;'
@@ -200,7 +203,7 @@ def digest(jobs: list[dict], name: str, follow_ups: list[dict] = ()) -> str:
             f'<div style="font-size:24px;line-height:30px;font-weight:700;color:#ffffff">Job radar · {html.escape(name)}</div>'
             f'<div style="margin-top:2px;font-size:13px;line-height:18px;color:#9ec5f4">{date.today():%A %d %B %Y}</div>'
             f'<div style="margin:14px 0 12px;font-size:16px;line-height:22px;font-weight:600;color:#ffffff">'
-            f'{html.escape(summary)}</div>{chips}</td></tr>{top5}{chase}')
+            f'{html.escape(summary)}</div>{chips}</td></tr>{trouble}{top5}{chase}')
     foot = (f'<tr><td style="padding:18px 20px 22px;border-top:1px solid {LINE};font-size:12px;line-height:18px;'
             f'color:{INK2}">Entry and junior jobs first, senior last; in each, your companies first, then the best matches. '
             f'Each job is sent once.<br>On your laptop: the <a href="http://127.0.0.1:8501" style="color:{LINK}">'

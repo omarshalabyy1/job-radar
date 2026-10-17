@@ -12,6 +12,7 @@ and every response's usage is added to the step running now.
 import re
 import sys
 import threading
+import time
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -21,6 +22,9 @@ from .db import connect
 # USD per million tokens: input, output, cache write, cache read. A dated model id prices as its prefix.
 PRICES = {"claude-sonnet-5-5": ("2", "10", "2.50", "0.20"), "claude-haiku-5-5": ("0.10", "0.50", "0.125", "0.01")}
 
+# A warehouse that restarts takes up to a minute or two to take connections again (2026-10-17: 85 s, "the database system
+# is in recovery mode"): a row's end is tried again for this long before it is given up, so a step is never left 'running'
+SAVE_SECONDS, SAVE_PAUSE = 150, 5
 STALE_SECONDS = 600  # the longest execution_timeout in dags/job_radar.py (grade_claude): a row 'running' longer was killed
 
 _lock = threading.Lock()  # grade_claude calls Claude from 4 threads
@@ -111,29 +115,58 @@ class Tee:
 
 
 def save(row: dict) -> None:
-    """On its own connection: a failed step leaves the step's connection aborted, or gone. A log that
-    cannot be written is a warning in the Airflow log, never the reason a step fails. The row of a step
-    that started is updated when it ends (one row per step and start time)."""
+    """On its own connection: a failed step leaves the step's connection aborted, or gone. A warehouse that is restarting
+    is asked again every SAVE_PAUSE seconds for SAVE_SECONDS; a log that still cannot be written is a warning in the
+    Airflow log, never the reason a step fails. The row of a step that started is updated when it ends (one row per step
+    and start time)."""
+    deadline = time.monotonic() + SAVE_SECONDS
+    while True:
+        try:
+            write(row)
+            return
+        except Exception as e:
+            if time.monotonic() + SAVE_PAUSE > deadline:
+                print(f"WARNING run log: {row['step']} not recorded: {e!r}"[:300])
+                unrecorded(row, e)
+                return
+            time.sleep(SAVE_PAUSE)
+
+
+def unrecorded(row: dict, e: Exception) -> None:
+    """The run log could not be written: Omar is told (email, else a phone push), as the runs page now shows the step
+    stale. The next collect's schema step closes a row left 'running' (close_stale)."""
+    from .alert import fallback, send
+    subject = f"job-radar: run log not recorded for {row['step']}"
+    lines = [f"status {row.get('status', 'running')}, started {row.get('started_at')}", f"{e!r}"[:300]]
     try:
-        with connect() as log:
-            log.execute("INSERT INTO core.step_run (step, started_at, finished_at, status, summary, model, input_tokens,"
-                        " output_tokens, cache_write_tokens, cache_read_tokens, cost_usd) VALUES (%(step)s, %(started_at)s,"
-                        " %(finished_at)s, %(status)s, %(summary)s, %(model)s, %(input)s, %(output)s, %(write)s, %(read)s,"
-                        " %(cost)s) ON CONFLICT (step, started_at) DO UPDATE SET finished_at = EXCLUDED.finished_at,"
-                        " status = EXCLUDED.status, summary = EXCLUDED.summary, model = EXCLUDED.model,"
-                        " input_tokens = EXCLUDED.input_tokens, output_tokens = EXCLUDED.output_tokens,"
-                        " cache_write_tokens = EXCLUDED.cache_write_tokens, cache_read_tokens = EXCLUDED.cache_read_tokens,"
-                        " cost_usd = EXCLUDED.cost_usd", row)
-    except Exception as e:
-        print(f"WARNING run log: {row['step']} not recorded: {e!r}"[:300])
+        if send(subject, lines):
+            return
+    except Exception as mail_error:
+        lines.append(f"alert email failed: {mail_error!r}"[:300])
+    fallback(subject, " | ".join(lines))
 
 
-def close_stale(log, step: str) -> int:
-    """Mark failed each 'running' row of `step` older than STALE_SECONDS: Airflow killed that run (its timeout, or a
-    restart) before it could write its end. The row stays, with its start; finished_at stays empty, as it is not known."""
-    return log.execute("UPDATE core.step_run SET status = 'failed', summary = 'killed (timeout or Airflow restart)'"
-                       " WHERE step = %s AND status = 'running' AND started_at < now() - make_interval(secs => %s)",
-                       (step, STALE_SECONDS)).rowcount
+def write(row: dict) -> None:
+    """One try at writing the row."""
+    with connect() as log:
+        log.execute("INSERT INTO core.step_run (step, started_at, finished_at, status, summary, model, input_tokens,"
+                    " output_tokens, cache_write_tokens, cache_read_tokens, cost_usd) VALUES (%(step)s, %(started_at)s,"
+                    " %(finished_at)s, %(status)s, %(summary)s, %(model)s, %(input)s, %(output)s, %(write)s, %(read)s,"
+                    " %(cost)s) ON CONFLICT (step, started_at) DO UPDATE SET finished_at = EXCLUDED.finished_at,"
+                    " status = EXCLUDED.status, summary = EXCLUDED.summary, model = EXCLUDED.model,"
+                    " input_tokens = EXCLUDED.input_tokens, output_tokens = EXCLUDED.output_tokens,"
+                    " cache_write_tokens = EXCLUDED.cache_write_tokens, cache_read_tokens = EXCLUDED.cache_read_tokens,"
+                    " cost_usd = EXCLUDED.cost_usd", row)
+
+
+def close_stale(log, step: str | None) -> list[str]:
+    """Mark failed each 'running' row of `step` (every step's when None: the collect's first step does it) older than
+    STALE_SECONDS: that run was killed (its timeout, a restart) or could not write its end. The row stays, with its start;
+    finished_at stays empty, as it is not known. Returns the steps of the rows it closed."""
+    return [step for (step,) in log.execute(
+        "UPDATE core.step_run SET status = 'failed', summary = 'abandoned: still running from an earlier run (killed, or'"
+        " || ' its end could not be written)' WHERE (%s::text IS NULL OR step = %s) AND status = 'running'"
+        " AND started_at < now() - make_interval(secs => %s) RETURNING step", (step, step, STALE_SECONDS)).fetchall()]
 
 
 def stop_running(log, step: str, since: datetime, summary: str) -> int:
@@ -150,7 +183,13 @@ def run(conn, name: str, step) -> None:
     out, started, error = Tee(sys.stdout), datetime.now(timezone.utc), None
     try:
         with connect() as log:
-            close_stale(log, name)
+            abandoned = close_stale(log, None if name == "schema" else name)  # schema starts a collect: every step's
+        if abandoned:
+            print(f"WARNING run log: {len(abandoned)} step(s) left running by an earlier run marked failed: {', '.join(abandoned)}")
+            if name == "schema":
+                from .alert import send
+                send(f"job-radar: {len(abandoned)} step(s) of an earlier run never ended", [
+                    f"{step}: marked failed (abandoned: killed, or its end could not be written)" for step in abandoned])
     except Exception as e:  # like save(): a log that cannot be written is never the reason a step fails
         print(f"WARNING run log: stale {name} rows not closed: {e!r}"[:300])
     save({"step": name, "started_at": started, "finished_at": None, "status": "running", "summary": None,

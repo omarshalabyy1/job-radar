@@ -1,6 +1,6 @@
 """embed: local Ollama vectors for the jobs and your CVs: how close each job is to your CV.
 
-Each job still in the window (config.KEEP_DAYS), in any place, with a description (a title alone is a
+Each job still in the window (config.WORK_DAYS), in any place, with a description (a title alone is a
 weak signal) and no vector yet from settings.yaml embeddings.model gets one from its title, company and the
 start of its description, into core.job_vector. Your CVs in core.cv are embedded when they have no vector from that model
 yet or were uploaded after their vector was made (core.cv_vector.embedded_at; a CV uploaded again keeps its label), into
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from .config import FEATURES, KEEP_DAYS, SETTINGS
+from .config import FEATURES, WORK_DAYS, SETTINGS
 from .sources import time_left
 
 EMBED_SECONDS = 200  # the DAG gives the task 240 s; the jobs left are embedded next run
@@ -101,9 +101,9 @@ def embed(conn) -> None:
     cvs = stale_cvs(conn, model)
     jobs = conn.execute(
         "SELECT j.job_id, j.title || ' at ' || j.company || E'\\n\\n' || left(j.description, 2000) FROM core.job j"
-        " WHERE j.first_seen >= current_date - %s AND j.description IS NOT NULL"
+        " WHERE j.in_scope AND j.first_seen >= current_date - %s AND j.description IS NOT NULL"
         " AND NOT EXISTS (SELECT 1 FROM core.job_vector v WHERE v.job_id = j.job_id AND v.model = %s)"
-        " ORDER BY j.job_id", (KEEP_DAYS, model)).fetchall()
+        " ORDER BY j.job_id", (WORK_DAYS, model)).fetchall()
     embedded = 0
     try:
         if cvs:

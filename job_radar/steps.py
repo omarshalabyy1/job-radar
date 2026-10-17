@@ -29,15 +29,18 @@ from dateutil.parser import isoparse
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from . import sources
+from . import fx, sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
-from .config import (BOARD_HOSTS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT, ROLE_LABEL, ROOT,
-                     SETTINGS, hidden_reason, in_reach, is_target, place_of, role_of, too_senior)
+from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
+                     ROLE_LABEL, ROOT, WORK_DAYS,
+                     NOT_REMOTE, SETTINGS, hidden_reason, in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
 from .eligibility import eligibility, not_for_egypt  # noqa: F401  (python -m job_radar eligibility)
 from .embed import embed  # noqa: F401  (python -m job_radar embed)
 from .grade import grade_claude  # noqa: F401  (python -m job_radar grade_claude)
 from .outreach import outreach_drafts  # noqa: F401  (python -m job_radar outreach_drafts)
+from .publish import publish  # noqa: F401  (python -m job_radar publish)
+from .tech import is_tech_role
 from .tailor import tailor  # noqa: F401  (python -m job_radar tailor)
 
 DAYS = HOURS_OLD // 24
@@ -65,12 +68,13 @@ def schema(conn) -> None:
     conn.commit()
 
 
-def load(conn, name: str, rows: list[dict]) -> None:
+def load(conn, name: str, rows: list[dict], wide: bool = False) -> None:
     """Add one source's new postings to raw.job_posting: a posting already there (same source and
-    link) is skipped, so re-running a step adds nothing twice. With features.eligibility, a posting someone living
-    in Egypt cannot take (eligibility.not_for_egypt) is never stored. NUL characters, which Postgres refuses, are dropped."""
+    link) only has its last_seen moved to today, so re-running a step adds nothing twice. With features.eligibility, a
+    posting someone living in Egypt cannot take (eligibility.not_for_egypt) is never stored, unless the source is `wide`
+    (the website's collection: transform then keeps it out of your scope). NUL characters, which Postgres refuses, are dropped."""
     barred = 0
-    if FEATURES["eligibility"]:
+    if FEATURES["eligibility"] and not wide:
         kept = [r for r in rows if not not_for_egypt(
             r["source"], r["location"] or "",
             r["searched_for"] or place_of(r["location"] or "") or place_of(r["title"] or "") or "Unknown location", r["payload"])]
@@ -86,26 +90,28 @@ def load(conn, name: str, rows: list[dict]) -> None:
     before = conn.execute(count, (names,)).fetchone()[0]
     with conn.cursor() as cur:
         cur.executemany(
-            "INSERT INTO raw.job_posting (run_date, source, searched_for, title, company, location, job_url,"
-            " date_posted, description, payload) VALUES (current_date, %(source)s, %(searched_for)s, %(title)s,"
+            "INSERT INTO raw.job_posting AS r (run_date, last_seen, source, searched_for, title, company, location, job_url,"
+            " date_posted, description, payload) VALUES (current_date, current_date, %(source)s, %(searched_for)s, %(title)s,"
             " %(company)s, %(location)s, %(job_url)s, %(date_posted)s, %(description)s, %(payload)s)"
-            " ON CONFLICT (source, job_url) DO NOTHING", clean)
+            " ON CONFLICT (source, job_url) DO UPDATE SET last_seen = current_date"
+            " WHERE r.last_seen IS DISTINCT FROM current_date", clean)
     conn.commit()
     new = conn.execute(count, (names,)).fetchone()[0] - before
     print(f"{name}: {rows_in} postings, {new} new" + (f", {barred} not for Egypt dropped" if barred else ""))
-    if FEATURES["eligibility"] and rows_in:
-        if warning := drop_warning(conn, name, rows_in, barred):
-            print(f"WARNING {warning}")
+    if warning := drop_warning(conn, name, rows_in, barred, judged=FEATURES["eligibility"] and not wide):
+        print(f"WARNING {warning}")
 
 
 DROP_MIN = 10  # postings a day before a board's drop rate is judged
 
 
-def drop_warning(conn, board: str, postings: int, dropped: int) -> str | None:
+def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
     """Record today's postings and drops of a board (core.extract_count) and say when they look like a silent failure:
-    every posting dropped from a board whose last 7 days kept some (the board changed its "who can apply" field or its
-    locations), or none dropped from a board whose last 7 days dropped half or more (the rule broke). A board that always
-    drops everything (Remote.co: its data jobs are US and Canada only) is not a change. None when they look normal."""
+    no posting at all from a board whose last 7 days gave some (the board changed, or blocks us); and, for a board whose
+    postings are judged for Egypt (`judged`), every posting dropped from a board whose last 7 days kept some (the board
+    changed its "who can apply" field or its locations), or none dropped from a board whose last 7 days dropped half or
+    more (the rule broke). A board that always drops everything (Remote.co: its data jobs are US and Canada only) is not a
+    change. None when they look normal."""
     conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date, %s, %s, %s)"
                  " ON CONFLICT (day, board) DO UPDATE SET postings = EXCLUDED.postings, dropped = EXCLUDED.dropped",
                  (board, postings, dropped))
@@ -113,6 +119,10 @@ def drop_warning(conn, board: str, postings: int, dropped: int) -> str | None:
         "SELECT coalesce(sum(postings), 0), coalesce(sum(dropped), 0) FROM core.extract_count"
         " WHERE board = %s AND day BETWEEN current_date - 7 AND current_date - 1", (board,)).fetchone()
     conn.commit()
+    if postings == 0 and before > 0:
+        return f"{board}: 0 postings today, {before} in the last 7 days - has the board changed, or does it block us?"
+    if not judged:
+        return None
     if postings >= DROP_MIN and dropped == postings and before >= DROP_MIN and before_dropped < before:
         return f"{board}: all {postings} postings dropped as not for Egypt - has the board changed its locations?"
     if postings >= DROP_MIN and dropped == 0 and before >= DROP_MIN and before_dropped * 2 >= before:
@@ -217,6 +227,77 @@ def extract_companies(conn) -> None:
         conn.commit()
 
 
+MARKET_BOARDS = 40  # boards read a run, oldest read first: grown step by step (Omar, 2026-10-17: 20, then 40; watch time and RAM)
+
+
+def extract_market(conn) -> None:
+    """The website's collection (features.market): company boards from core.board (sources/boards.csv is added first, once;
+    with features.market_harvest, every board the last WORK_DAYS' postings link to is added too), each read whole at most
+    once in 20 hours, inside the step's time budget: active boards due first, oldest read first, then new candidates. A
+    board read becomes active; one gone (404) or failing 3 runs in a row is dead. Its tech jobs are stored as wide postings
+    (load: not dropped for Egypt; transform keeps them out of your scope unless one is yours)."""
+    if not FEATURES.get("market"):
+        print("extract_market: off in settings.yaml (features.market)")
+        return
+    if not online():
+        raise RuntimeError("no network: host names do not resolve")
+    import csv
+    seed = [r for r in csv.reader((ROOT / "job_radar" / "sources" / "boards.csv").read_text(encoding="utf-8").splitlines())
+            if r and not r[0].startswith("#") and r[0] != "ats"]
+    with conn.cursor() as cur:
+        cur.executemany("INSERT INTO core.board (ats, token, origin) VALUES (%s, %s, 'radarak') ON CONFLICT DO NOTHING", seed)
+        if FEATURES.get("market_harvest"):  # the boards other sources' postings link to (a company's own board)
+            links = conn.execute("SELECT job_url || ' ' || payload::text FROM raw.job_posting WHERE source NOT LIKE '%%-board'"
+                                 " AND last_seen >= current_date - %s", (WORK_DAYS,)).fetchall()
+            found = list(dict.fromkeys(board for (text,) in links for board in sources.market.boards_in(text)))
+            cur.executemany("INSERT INTO core.board (ats, token, origin) VALUES (%s, %s, 'harvested') ON CONFLICT DO NOTHING", found)
+            print(f"extract_market: {len(found)} boards linked from the last {WORK_DAYS} days' postings, {cur.rowcount} new")
+    if FEATURES.get("market_more"):  # the remote boards' whole feeds and Germany's job agency, a minute at most
+        for source in (sources.market.remote_apis, sources.market.bundesagentur):
+            try:
+                load(conn, source.__name__, source(), wide=True)
+            except Exception as e:  # one source down is a short day
+                print(f"WARNING extract_market {source.__name__}: {e!r}"[:300])
+    boards = conn.execute(
+        "SELECT ats, token, coalesce(company, initcap(replace(token, '-', ' '))) FROM core.board WHERE status <> 'dead'"
+        " AND (checked_at IS NULL OR checked_at < now() - interval '20 hours')"
+        " ORDER BY status = 'active' DESC, checked_at NULLS FIRST, ats, token LIMIT %s", (MARKET_BOARDS,)).fetchall()
+    conn.commit()
+    read = failed = 0
+    for ats, token, company in boards:
+        if sources.time_left(EXTRACT_SECONDS) < 20:
+            print(f"extract_market: time budget reached, {len(boards) - read - failed} boards wait for the next run")
+            break
+        try:
+            rows = sources.market.READERS[ats](token, company)
+        except Exception as e:  # one board down is a short day; gone (404) is dead at once, else after 3 runs in a row
+            failed += 1
+            gone = getattr(getattr(e, "response", None), "status_code", None) == 404
+            conn.execute("UPDATE core.board SET failures = failures + 1, checked_at = now(), note = %s,"
+                         " status = CASE WHEN %s OR failures + 1 >= 3 THEN 'dead' ELSE status END WHERE (ats, token) = (%s, %s)",
+                         (f"{e!r}"[:200], gone, ats, token))
+            conn.commit()
+            print(f"WARNING extract_market {ats}:{token}: {e!r}"[:300])
+            continue
+        read += 1
+        load(conn, f"{ats}:{token}", rows, wide=True)
+        conn.execute("UPDATE core.board SET status = 'active', failures = 0, jobs = %s, checked_at = now(), last_ok_at = now(),"
+                     " note = NULL WHERE (ats, token) = (%s, %s)", (len(rows), ats, token))
+        conn.commit()
+    print(f"extract_market: {read} of {len(boards)} boards read, {failed} failed")
+
+
+def extract_apify(conn) -> None:
+    """The website's hard boards through Apify (sources/apify.py, settings.yaml apify): every enabled board's Actor run
+    inside the month's budget, as wide postings. Off until a board is enabled."""
+    if not FEATURES.get("market"):
+        print("extract_apify: off in settings.yaml (features.market)")
+        return
+    rows = sources.apify.apify_jobs()
+    for board in sorted({r["source"] for r in rows}):
+        load(conn, board, [r for r in rows if r["source"] == board], wide=True)
+
+
 def extract_portals(conn) -> None:
     extract(conn, sources.company_portals)
 
@@ -278,6 +359,29 @@ def company_size(payload: dict) -> str | None:
     return re.sub(r"(\d)(\d{3})\b", r"\1,\2", re.sub(r"\s+to\s+", "-", size.strip()))
 
 
+# (lowest, highest, currency, period) as each board names them: Indeed and Bayt (JobSpy), Himalayas, Jobicy
+SALARY_FIELDS = [("min_amount", "max_amount", "currency", "interval"), ("minSalary", "maxSalary", "currency", "salaryPeriod"),
+                 ("salaryMin", "salaryMax", "salaryCurrency", "salaryPeriod")]
+
+
+def salary(payload: dict) -> dict | None:
+    """The pay the board gives for the job, as given: {salary_min, salary_max, salary_currency, salary_period}, or None
+    when it gives no amount above 0 or no currency. fx.py turns it into a year's pay in dollars and euros."""
+    for low, high, currency, period in SALARY_FIELDS:
+        amounts = []
+        for field in (low, high):
+            try:
+                amounts.append(float(payload.get(field)) if payload.get(field) not in (None, "") else None)
+            except (TypeError, ValueError):
+                amounts.append(None)
+        amounts = [a if a and a > 0 else None for a in amounts]
+        code = payload.get(currency)
+        if any(amounts) and isinstance(code, str) and re.fullmatch(r"[A-Za-z]{3}", code.strip()):
+            return {"salary_min": amounts[0], "salary_max": amounts[1], "salary_currency": code.strip().upper(),
+                    "salary_period": (payload.get(period) or None) if isinstance(payload.get(period), str) else None}
+    return None
+
+
 def apply_url(source: str, payload: dict) -> str | None:
     """The employer's or original board's own page for a job, when the source's payload gives one (Indeed's
     job_url_direct, freehire's url when its own source is not himalayas or adzuna): else None, and the job's
@@ -301,35 +405,76 @@ def job_key(title: str, company: str, job_url: str) -> str:
     return f"{words(title)} | {words(company).replace(' ', '') or job_url}"
 
 
+COPY_SUFFIX = re.compile(r"\s*(?:[-–—:|]\s*copy(?:\s*\d+)?|\(\s*copy(?:\s*\d+)?\s*\))\s*$", re.I)  # a recruiter's leftover
+ARABIC_PLACES = {"القاهرة": "Cairo", "القاهرة الجديدة": "New Cairo", "الجيزة": "Giza", "مدينة نصر": "Nasr City",
+                 "السادس من أكتوبر": "6th of October", "الإسكندرية": "Alexandria", "الرياض": "Riyadh", "جدة": "Jeddah",
+                 "دبي": "Dubai", "أبو ظبي": "Abu Dhabi", "الدوحة": "Doha", "الكويت": "Kuwait", "عمان": "Amman", "مصر الجديدة": "Heliopolis",
+                 "مدينة العبور": "Obour City", "المعادي": "Maadi"}
+COUNTRY_CODES = {"EG": "Egypt", "SA": "Saudi Arabia", "AE": "UAE", "QA": "Qatar", "KW": "Kuwait", "BH": "Bahrain",
+                 "OM": "Oman", "JO": "Jordan"}
+
+
+SMALL_WORDS = {"and", "or", "for", "of", "the", "to", "in", "at", "with"}
+
+
+def clean_title(title: str) -> str:
+    """The title as shown: without a trailing ' - Copy' / '(copy 2)' ('Copy Editor' stays), and one in capitals in title
+    case, short words kept as acronyms ('AI ENGINEER' -> 'AI Engineer', DailyRemote's). job_key reads the raw title."""
+    title = COPY_SUFFIX.sub("", title.strip()) or title.strip()
+    if title.isupper():
+        title = " ".join(w.lower() if w.lower() in SMALL_WORDS else w if len(w) <= 3 else w.capitalize() for w in title.split())
+    return title
+
+
+def foreign(text: str) -> bool:
+    """Has a letter outside the Latin alphabets (Arabic, ...); an emoji or a dash is not a letter."""
+    return any(ch.isalpha() and ord(ch) > 0x24F for ch in text)
+
+
+def clean_location(location: str, fallback: str | None = None) -> str:
+    """A location in Latin letters, as shown. One with letters of another script ('القاهرة, C, EG') has its city named
+    in English and its bare region codes dropped ('Cairo, Egypt'); 'Daftra · Giza (Hybrid)' keeps the part after the
+    company. A part with no English name is dropped; nothing left gives the fallback (the job's place), else the
+    location as it came: never None (core.job.location is NOT NULL). Latin letters are left as they are."""
+    if not location or not foreign(location):
+        return location
+    parts = []
+    for part in (p.strip() for p in location.split("·")[-1].split(",")):
+        part = ARABIC_PLACES.get(part) or COUNTRY_CODES.get(part) or part
+        if part and not re.fullmatch(r"[A-Z]{1,2}", part) and not foreign(part) and part not in parts:
+            parts.append(part)
+    return ", ".join(parts) or fallback or location
+
+
 def archive_and_delete(cur, where: str, args: tuple, why: str) -> int:
-    """Copy the jobs matching `where` (on core.job j) to core.job_archive with Claude's grade, then delete them from
-    core.job; returns how many. A job already archived keeps its first row."""
+    """Copy your jobs (in_scope) matching `where` (on core.job j) to core.job_archive with Claude's grade, then delete
+    every job matching it from core.job; returns how many. A job already archived keeps its first row."""
     cur.execute(
         "INSERT INTO core.job_archive (job_id, job_key, title, company, location, place, source, job_url, role, date_posted,"
         " posted_at, description, company_size, first_seen, score, reason, why)"
         " SELECT j.job_id, j.job_key, j.title, j.company, j.location, j.place, j.source, j.job_url, j.role, j.date_posted,"
         " j.posted_at, j.description, j.company_size, j.first_seen, g.score, g.reason, %s"
-        f" FROM core.job j LEFT JOIN core.claude_grade g USING (job_id) WHERE {where} ON CONFLICT (job_id) DO NOTHING",
+        f" FROM core.job j LEFT JOIN core.claude_grade g USING (job_id) WHERE j.in_scope AND {where} ON CONFLICT (job_id) DO NOTHING",
         (why, *args))
     cur.execute(f"DELETE FROM core.job j WHERE {where}", args)
     return cur.rowcount
 
 
 def transform(conn) -> None:
-    """raw -> core.job: the window's postings with a role, not above senior, in a place in scope and
-    in reach (remote, or onsite/hybrid in Cairo or Giza), one row per job (job_key: the same job on
-    several boards, or reposted, is one job). A posting someone in Egypt cannot take never reaches raw.job_posting
-    (load drops it); one only its description bars is stored, and the eligibility step sets its restriction and the
-    email and the tracker hide it (config.hidden_reason). A job of the
-    window not emailed yet that no longer passes the rules (they changed) is removed, and so is a job first seen over
-    KEEP_DAYS ago (with the raw postings of then) unless you noted or applied to it; each removed job is copied to
-    core.job_archive first. With no posting in the window at
-    all it fails before deleting anything (every extract failed, or the raw table was emptied). Re-running it
-    changes nothing."""
+    """raw -> core.job: the postings a source listed in the window, one row per job (job_key: the same job on several
+    boards, or reposted, is one job). Yours (in_scope): a role, not above senior, in a place in scope and in reach
+    (remote, or onsite/hybrid in Cairo or Giza), and not barred to someone in Egypt (eligibility.not_for_egypt). With
+    features.market, every other tech job (tech.is_tech_role) is kept too, in_scope false, for the website only. One only
+    its description bars is stored, and the eligibility step sets its restriction and the email and the tracker hide it
+    (config.hidden_reason). A job of the window not emailed yet that no longer passes the rules (they changed) is
+    removed; so is a job first seen over KEEP_DAYS ago, and a company board's job the board stopped listing
+    CLOSED_AFTER_DAYS ago, unless you noted or applied to it; each removed job of yours is copied to core.job_archive
+    first. Raw postings not seen for WORK_DAYS are deleted. With no posting in the window at all it fails before
+    deleting anything (every extract failed, or the raw table was emptied). Re-running it changes nothing."""
     postings = conn.cursor(row_factory=dict_row).execute(
-        "SELECT run_date, source, searched_for, title, company, location, job_url, date_posted, description,"
+        "SELECT run_date, last_seen, source, searched_for, title, company, location, job_url, date_posted, description,"
         " payload->>'is_remote' = 'true' AS is_remote, payload->>'from' AS sender, payload, loaded_at"
-        " FROM raw.job_posting WHERE run_date >= current_date - %s"
+        " FROM raw.job_posting WHERE last_seen >= current_date - %s"
         " ORDER BY posting_id", (DAYS,)).fetchall()
     if not postings:  # nothing to rank: going on would delete every job of the window that was not emailed yet
         raise RuntimeError(f"transform: 0 raw postings in the last {DAYS} day(s): nothing to rank, nothing deleted")
@@ -341,21 +486,24 @@ def transform(conn) -> None:
     short = {letters(n) for n in names if len(letters(n)) <= 3}
     yours = re.compile("|".join(rf"\b{re.escape(n)}\b" for n in names if len(letters(n)) > 3) or r"(?!)", re.I)
     # a job whose own posting has no text takes the text of the same job_key from another source, from any posting
-    # still kept (KEEP_DAYS): the Indeed page of 3 days ago describes the same job's LinkedIn alert of today
+    # still kept (WORK_DAYS): the Indeed page of 3 days ago describes the same job's LinkedIn alert of today
     described = {job_key(title, company, job_url): description for title, company, job_url, description in conn.execute(
-        "SELECT title, company, job_url, description FROM raw.job_posting WHERE run_date >= current_date - %s"
-        " AND description <> '' AND title <> '' AND company <> '' ORDER BY posting_id", (KEEP_DAYS,))}
+        "SELECT title, company, job_url, description FROM raw.job_posting WHERE last_seen >= current_date - %s"
+        " AND description <> '' AND title <> '' AND company <> '' ORDER BY posting_id", (WORK_DAYS,))}
     jobs: dict[str, dict] = {}
-    skipped: Counter = Counter()  # postings left out, by the first rule that left them out
+    skipped: Counter = Counter()  # postings out of your scope, by the first rule that left them out
+    market = FEATURES.get("market", False)
 
     def left_out(p: dict, rank: int | None, place: str) -> str | None:
-        """Why this posting is not a job in scope (the first rule it fails), or None."""
+        """Why this posting is not a job in your scope (the first rule it fails), or None."""
         if not (rank and place and p["job_url"]):
             return "no role"
         if too_senior(p["title"]):
             return "too senior"
         if not in_reach(place, p["location"] or "", p["title"], bool(p["is_remote"]), p["description"] or ""):
             return "not in reach"
+        if FEATURES["eligibility"] and not_for_egypt(p["source"], p["location"] or "", place, p["payload"]):
+            return "barred"
         return None
 
     for p in postings:
@@ -366,21 +514,32 @@ def transform(conn) -> None:
         place = p["searched_for"] or place_of(p["location"] or "") or place_of(p["title"] or "") or "Unknown location"
         if reason := left_out(p, rank, place):
             skipped[reason] += 1
-            continue
+            if not (market and p["job_url"] and p["title"] and is_tech_role(p["title"])):
+                continue
         key = job_key(p["title"], p["company"], p["job_url"])
+        # a job not yours has rank 0 and your role's name when its title has one, else its tech role family (SQL)
         job = jobs.setdefault(key, {
-            "key": key, "title": p["title"].strip(), "company": p["company"], "location": p["location"],
-            "place": place, "source": p["source"], "job_url": p["job_url"], "rank": rank,
-            "role": ROLE_LABEL[rank], "date_posted": p["date_posted"], "apply_url": apply_url(p["source"], p["payload"]),
+            "key": key, "title": clean_title(p["title"]), "company": p["company"], "location": clean_location(p["location"], place),
+            "place": place, "source": p["source"], "job_url": p["job_url"], "rank": 0 if reason else rank,
+            "role": ROLE_LABEL[rank] if rank else None, "in_scope": not reason, "last_seen": p["last_seen"],
+            "date_posted": p["date_posted"], "apply_url": apply_url(p["source"], p["payload"]),
             "target": (is_target(p["company"]) or yours.search(p["company"]) is not None
                        or letters(p["company"]) in short),
-            "description": p["description"], "first_seen": p["run_date"],
+            # first seen: the day it becomes a job (a posting stored days ago, out of scope then, can become one today)
+            "description": p["description"], "first_seen": p["last_seen"],
             "posted_at": posted_at(p["payload"], p["date_posted"], p["loaded_at"])})
         job["description"] = job["description"] or p["description"] or described.get(key)
         job["apply_url"] = job["apply_url"] or apply_url(p["source"], p["payload"])
+        job["salary"] = job.get("salary") or salary(p["payload"])  # from any of its postings that gives one
+        job["last_seen"] = max(job["last_seen"], p["last_seen"])
+        if reason:
+            continue
+        if not job["in_scope"]:  # a posting of it is yours: the job is yours, with this posting's role and place
+            job.update(in_scope=True, rank=rank, role=ROLE_LABEL[rank], place=place, location=clean_location(p["location"], place),
+                       source=p["source"], job_url=p["job_url"])
         if place == "Remote" and job["place"] != "Remote":  # found by a remote search too: a remote
             # job, shown with that remote listing's location and link
-            job.update(place="Remote", location=p["location"], source=p["source"], job_url=p["job_url"])
+            job.update(place="Remote", location=clean_location(p["location"], "Remote"), source=p["source"], job_url=p["job_url"])
     # a company's size from any of its postings that gives one, so its jobs from other sources show it too
     sizes: dict[str, str] = {}
     for p in postings:
@@ -388,32 +547,45 @@ def transform(conn) -> None:
             sizes.setdefault(letters(p["company"]), size)
     for job in jobs.values():
         job["company_size"] = sizes.get(letters(job["company"]))
+        job.update(job.pop("salary") or dict.fromkeys(("salary_min", "salary_max", "salary_currency", "salary_period")))
     deleted = {key for (key,) in conn.execute("SELECT job_key FROM core.job_seen")}  # never stored again
     jobs = {key: job for key, job in jobs.items() if key not in deleted}
     with conn.cursor() as cur:
         cur.executemany("""
             INSERT INTO core.job AS j (job_key, title, company, location, place, source, job_url, role_rank, role,
-                                       target_company, date_posted, description, first_seen, posted_at, company_size, apply_url)
+                                       target_company, date_posted, description, first_seen, posted_at, company_size, apply_url,
+                                       salary_min, salary_max, salary_currency, salary_period, in_scope, last_seen)
             VALUES (%(key)s, %(title)s, %(company)s, %(location)s, %(place)s, %(source)s, %(job_url)s, %(rank)s,
-                    %(role)s, %(target)s, %(date_posted)s, %(description)s, %(first_seen)s, %(posted_at)s,
-                    %(company_size)s, %(apply_url)s)
+                    coalesce(%(role)s, core.role_family(%(title)s)), %(target)s, %(date_posted)s, %(description)s,
+                    %(first_seen)s, %(posted_at)s, %(company_size)s, %(apply_url)s, %(salary_min)s, %(salary_max)s,
+                    %(salary_currency)s, %(salary_period)s, %(in_scope)s, %(last_seen)s)
             ON CONFLICT (job_key) DO UPDATE SET
+                in_scope = j.in_scope OR EXCLUDED.in_scope,
+                role_rank = CASE WHEN EXCLUDED.in_scope AND NOT j.in_scope THEN EXCLUDED.role_rank ELSE j.role_rank END,
+                role = CASE WHEN EXCLUDED.in_scope AND NOT j.in_scope THEN EXCLUDED.role ELSE j.role END,
+                last_seen = greatest(j.last_seen, EXCLUDED.last_seen),
                 apply_url = coalesce(j.apply_url, EXCLUDED.apply_url),
+                salary_min = CASE WHEN j.salary_currency IS NULL THEN EXCLUDED.salary_min ELSE j.salary_min END,
+                salary_max = CASE WHEN j.salary_currency IS NULL THEN EXCLUDED.salary_max ELSE j.salary_max END,
+                salary_period = CASE WHEN j.salary_currency IS NULL THEN EXCLUDED.salary_period ELSE j.salary_period END,
+                salary_currency = coalesce(j.salary_currency, EXCLUDED.salary_currency),
                 posted_at = coalesce(j.posted_at, EXCLUDED.posted_at),
                 company_size = coalesce(EXCLUDED.company_size, j.company_size),
                 description = coalesce(j.description, EXCLUDED.description),
                 target_company = j.target_company OR EXCLUDED.target_company,
-                place = CASE WHEN EXCLUDED.place = 'Remote' THEN 'Remote' ELSE j.place END,
-                location = CASE WHEN EXCLUDED.place = 'Remote' THEN EXCLUDED.location ELSE j.location END,
-                source = CASE WHEN EXCLUDED.place = 'Remote' THEN EXCLUDED.source ELSE j.source END,
-                job_url = CASE WHEN EXCLUDED.place = 'Remote' THEN EXCLUDED.job_url ELSE j.job_url END""",
+                place = CASE WHEN {moved} THEN EXCLUDED.place ELSE j.place END,
+                location = CASE WHEN {moved} THEN EXCLUDED.location ELSE j.location END,
+                source = CASE WHEN {moved} THEN EXCLUDED.source ELSE j.source END,
+                job_url = CASE WHEN {moved} THEN EXCLUDED.job_url ELSE j.job_url END""".format(
+                # a remote listing of it (yours), or the first posting of it that is yours: the job takes its place and link
+                moved="EXCLUDED.in_scope AND (EXCLUDED.place = 'Remote' OR NOT j.in_scope)"),
             list(jobs.values()))
         # the slim history first, so a job deleted below keeps its line (seen today: a posting of it came in this window)
         cur.execute(
             "INSERT INTO core.job_history AS h (job_key, first_seen, last_seen, source, role, place, score, closed_on)"
             " SELECT j.job_key, j.first_seen, CASE WHEN j.job_key = ANY(%s) THEN current_date ELSE j.first_seen END,"
             " j.source, j.role, j.place, g.score, CASE WHEN j.restriction LIKE 'no longer open%%' THEN current_date END"
-            " FROM core.job j LEFT JOIN core.claude_grade g USING (job_id)"
+            " FROM core.job j LEFT JOIN core.claude_grade g USING (job_id) WHERE j.in_scope"
             " ON CONFLICT (job_key) DO UPDATE SET last_seen = greatest(h.last_seen, EXCLUDED.last_seen),"
             " score = coalesce(EXCLUDED.score, h.score), place = EXCLUDED.place, closed_on = coalesce(h.closed_on, EXCLUDED.closed_on)",
             (list(jobs),))
@@ -421,15 +593,25 @@ def transform(conn) -> None:
             cur, "first_seen >= current_date - %s AND emailed_at IS NULL AND job_key <> ALL(%s)"
                  " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
             (DAYS, list(jobs)), "out of scope")
-        old = ("first_seen < current_date - %s"
-               " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)")
-        cur.execute(f"INSERT INTO core.job_seen SELECT job_key FROM core.job j WHERE {old} ON CONFLICT DO NOTHING", (KEEP_DAYS,))
-        aged = archive_and_delete(cur, old, (KEEP_DAYS,), "aged")
-        cur.execute("DELETE FROM raw.job_posting WHERE run_date < current_date - %s", (KEEP_DAYS,))
+        kept = " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)"
+        # a board's job it has not listed for CLOSED_AFTER_DAYS although the board was read since (a board not read is no
+        # sign; one whose posting is already gone from raw keeps the job until KEEP_DAYS)
+        closed_where = ("j.source LIKE '%%-board' AND j.last_seen < current_date - %s AND EXISTS (SELECT 1 FROM raw.job_posting r"
+                        " JOIN core.board b ON b.ats || ':' || b.token = r.payload->>'board' WHERE (r.source, r.job_url) ="
+                        " (j.source, j.job_url) AND b.last_ok_at::date > j.last_seen)" + kept)
+        aged_where = "j.first_seen < current_date - %s" + kept
+        for where, days in ((closed_where, CLOSED_AFTER_DAYS), (aged_where, KEEP_DAYS)):
+            # your jobs' keys only: a website job deleted may come back (reposted, or remote), for you or the site
+            cur.execute(f"INSERT INTO core.job_seen SELECT job_key FROM core.job j WHERE j.in_scope AND {where} ON CONFLICT DO NOTHING",
+                        (days,))
+        closed = archive_and_delete(cur, closed_where, (CLOSED_AFTER_DAYS,), "closed")
+        aged = archive_and_delete(cur, aged_where, (KEEP_DAYS,), "aged")
+        cur.execute("DELETE FROM raw.job_posting WHERE last_seen < current_date - %s", (WORK_DAYS,))
     conn.commit()
-    print(f"transform: {len(postings)} postings -> {len(jobs)} jobs in scope, {dropped} no longer in scope removed,"
-          f" {aged} first seen over {KEEP_DAYS} days ago deleted; postings left out: "
-          + ", ".join(f"{skipped[reason]} {reason}" for reason in ("no role", "too senior", "not in reach")))
+    yours = sum(job["in_scope"] for job in jobs.values())
+    print(f"transform: {len(postings)} postings -> {yours} jobs yours, {len(jobs) - yours} website only; removed: {dropped} out"
+          f" of scope, {closed} closed, {aged} over {KEEP_DAYS} days; not yours: "
+          + ", ".join(f"{skipped[reason]} {reason}" for reason in ("no role", "too senior", "not in reach", "barred")))
 
 
 # a job page that says the job is gone: Greenhouse sends a closed job to its board with ?error=true; others say it in words
@@ -453,7 +635,7 @@ def describe(conn) -> None:
     asks (sources.fetch), and every page left when the step's 60 seconds are up waits for the next run. A page that
     says the job is closed (closed_reason), or is gone (404, 410), hides the job like a restriction does."""
     todo = conn.execute(
-        "SELECT job_id, job_url FROM core.job WHERE description IS NULL AND described_at IS NULL"
+        "SELECT job_id, job_url FROM core.job WHERE in_scope AND description IS NULL AND described_at IS NULL"
         " AND job_url LIKE 'http%%' AND job_url !~ %s AND first_seen >= current_date - %s"
         " ORDER BY role_rank, job_id LIMIT 300", (NO_FETCH, DAYS)).fetchall()
     by_site: dict[str, list] = defaultdict(list)
@@ -507,10 +689,34 @@ def years_required(text: str | None) -> int | None:
     return max(found) if found else None
 
 
+# What a posting says about applying from abroad, matched against its title and description, any case. From Radarak's
+# int_job_signals (MIT, Copyright (c) 2026 Moamen Moussa; see LICENSE-THIRD-PARTY).
+GULF = r"(saudi|emirati|uae|qatari|kuwaiti|omani|bahraini)"
+NATIONALS_TITLE = (r"\m(emirati|uae\s+nationals?|saudi\s+nationals?|qatari\s+nationals?|kuwaiti\s+nationals?|omani\s+nationals?"
+                   r"|bahraini\s+nationals?)\M|\m(saudis?|emiratis?|qataris?|kuwaitis?|omanis?|bahrainis?)\s+only\M")
+NATIONALS_TEXT = (GULF + r"\s+nationals?\s+(only|are\s+required|is\s+required|required)|only\s+(open\s+to\s+)?" + GULF
+                  + r"\s+(nationals?|citizens)|nationals?\s+only|(saudi[sz]ation|emirati[sz]ation|qatari[sz]ation|omani[sz]ation)"
+                  r"|must\s+be\s+(a\s+)?" + GULF + r"\s+(national|citizen)")
+ARABIC_TITLE = r"\marabic\M"
+ARABIC_TEXT = (r"(fluent|fluency|proficien\w*|native|bilingual|speak\w*|written\s+and\s+(spoken|verbal)|verbal\s+and\s+written"
+               r"|excellent|strong|good\s+command\s+of)\W+(\w+\W+){0,4}arabic|arabic\W+(\w+\W+){0,3}(speaker|speaking|language"
+               r"|required|is\s+a\s+must|essential|is\s+mandatory|fluency|proficiency|skills)|arabic\s+(and|&|/)\s+english"
+               r"|english\s+(and|&|/)\s+arabic")
+VISA_OFFERED = (r"visa\s+sponsor|sponsor(ship)?\s+(of\s+)?(your\s+|a\s+)?(work\s+)?(visa|permit)|relocation\s+(support|package"
+                r"|assistance|bonus|allowance|budget|help|is\s+(provided|offered|available|supported))|(help|support|assist)\s+"
+                r"(you\s+)?(with\s+)?(your\s+)?relocat|visa\s+(support|assistance|and\s+relocation)|work\s+permit\s+(support"
+                r"|assistance)|blue\s+card|we\s+(offer|provide)\s+relocation")
+VISA_REFUSED = (r"(no|not|unable\s+to|cannot|can't|do\s+not|don't|won't|will\s+not|without)\s+(\w+\s+){0,3}(visa\s+)?sponsor"
+                r"|sponsorship\s+(is\s+)?not\s+(available|provided|offered|possible)|no\s+relocation"
+                r"|relocation\s+(is\s+)?not\s+(available|provided|offered)")
+WORLDWIDE = r"\m(anywhere|worldwide|global|international)\M|^\s*(fully\s+|100%\s+)?remote\s*(\(remote\))?\s*$|^\s*\(remote\)\s*$"
+
+
 def match_skills(conn) -> None:
     """Store which of your skills each job of the window asks for (core.job_skill), so the email
-    and the tracker read a small table instead of matching every job's text each time. Re-running it gives the
-    same rows."""
+    and the tracker read a small table instead of matching every job's text each time; then, for the same jobs, how the
+    job is done (work_mode), the countries and regions it names (core.geo_pattern), what it says about visas, nationals
+    and Arabic, and its pay as a year in dollars and euros (fx.py). Re-running it gives the same rows."""
     window = "SELECT job_id FROM core.job WHERE first_seen >= current_date - %s"
     conn.execute(f"DELETE FROM core.job_skill WHERE job_id IN ({window})", (DAYS,))
     matched = conn.execute(
@@ -522,11 +728,49 @@ def match_skills(conn) -> None:
                  " JOIN core.skill s ON c.text ~* s.pattern")
     asked = [(years_required(description), job_id) for job_id, description in conn.execute(
         "SELECT job_id, description FROM core.job WHERE first_seen >= current_date - %s AND description IS NOT NULL"
-        " AND years_required IS NULL", (KEEP_DAYS,))]
+        " AND years_required IS NULL", (WORK_DAYS,))]
     with conn.cursor() as cur:
         cur.executemany("UPDATE core.job SET years_required = %s WHERE job_id = %s", [a for a in asked if a[0]])
+    # Outside home only remote jobs of yours are kept (config.in_reach), so one there is Remote; else its words decide. Its
+    # location is matched with its place ("UAE", "Europe") unless that is Remote; a remote job open anywhere is Worldwide.
+    conn.execute(r"""
+        UPDATE core.job j SET work_mode = m.work_mode, countries = m.countries, regions = m.regions,
+            place = CASE WHEN m.work_mode = 'Remote' AND j.place = 'Unknown location' THEN 'Remote' ELSE j.place END,
+            role_family = core.role_family(j.title), seniority = core.seniority(j.title),
+            track = (SELECT t.track FROM core.role_track t WHERE t.role_family = core.role_family(j.title)),
+            nationals_only = m.text ~* %(nationals_text)s OR j.title ~* %(nationals_title)s,
+            arabic_required = m.text ~* %(arabic_text)s OR j.title ~* %(arabic_title)s,
+            visa_relocation = m.text ~* %(visa)s AND m.text !~* %(refused)s OR j.source = 'relocateme'  -- its every job
+        FROM (SELECT x.job_id, w.work_mode, x.title || ' ' || coalesce(x.description, '') AS text,
+                     CASE WHEN w.work_mode = 'Remote' AND x.location ~* %(worldwide)s THEN '{}'::text[]
+                          ELSE coalesce(array_agg(DISTINCT g.country) FILTER (WHERE g.country IS NOT NULL), '{}') END AS countries,
+                     CASE WHEN w.work_mode = 'Remote' AND x.location ~* %(worldwide)s THEN '{Worldwide}'::text[]
+                          ELSE coalesce(array_agg(DISTINCT g.region) FILTER (WHERE g.region IS NOT NULL), '{}') END AS regions
+              FROM core.job x
+              CROSS JOIN LATERAL (SELECT CASE WHEN x.in_scope AND x.place <> %(home)s OR x.location || ' ' || x.title ~* '\mremote|work from home|\mwfh\M'
+                                                   AND x.location || ' ' || x.title !~* %(not_remote)s THEN 'Remote'
+                                              WHEN x.location || ' ' || x.title ~* '\mhybrid' THEN 'Hybrid' ELSE 'Onsite' END AS work_mode) w
+              LEFT JOIN core.geo_pattern g
+                ON x.location || CASE WHEN x.place IN ('Remote', 'Unknown location') THEN '' ELSE ' ' || x.place END ~* g.pattern
+              WHERE x.first_seen >= current_date - %(days)s
+              GROUP BY x.job_id, w.work_mode) m
+        WHERE j.job_id = m.job_id""",
+        {"nationals_text": NATIONALS_TEXT, "nationals_title": NATIONALS_TITLE, "arabic_text": ARABIC_TEXT,
+         "arabic_title": ARABIC_TITLE, "visa": VISA_OFFERED, "refused": VISA_REFUSED, "worldwide": WORLDWIDE,
+         "home": HOME, "not_remote": NOT_REMOTE, "days": DAYS})
+    # each day's new jobs and how many ask for each skill, every tech job counted (core.skill_day: the rising skills)
+    conn.execute("""
+        INSERT INTO core.skill_day AS d (day, skill, jobs, total_jobs)
+        SELECT j.first_seen, k.skill, count(*), t.jobs FROM core.job j JOIN core.job_skill k USING (job_id)
+        JOIN (SELECT first_seen, count(*) AS jobs FROM core.job GROUP BY first_seen) t USING (first_seen)
+        WHERE j.first_seen >= current_date - %s GROUP BY j.first_seen, k.skill, t.jobs
+        ON CONFLICT (day, skill) DO UPDATE SET jobs = EXCLUDED.jobs, total_jobs = EXCLUDED.total_jobs
+        WHERE (d.jobs, d.total_jobs) IS DISTINCT FROM (EXCLUDED.jobs, EXCLUDED.total_jobs)""", (DAYS,))
+    rates = fx.load_rates(conn)
+    paid = fx.convert(conn, DAYS)
     conn.commit()
-    print(f"match_skills: {matched} skill matches, years asked found in {sum(1 for a in asked if a[0])} of {len(asked)} descriptions")
+    print(f"match_skills: {matched} skill matches, years asked found in {sum(1 for a in asked if a[0])} of {len(asked)} descriptions;"
+          f" {rates} ECB rates read, {paid} salaries converted to a year in USD and EUR")
 
 
 def export_career_ops(conn) -> None:
@@ -583,6 +827,48 @@ EMAIL_JOBS = """
              s.date_posted DESC NULLS LAST"""
 
 
+def problems(conn) -> list[tuple[str, str, str]]:
+    """This run's steps that did not end clean: (step, status, summary) for each step of the latest collect (since its
+    schema step started) that failed, warned (it printed a WARNING: a source down, 0 rows where it had some, a board gone)
+    or is still marked running though it ended (killed at its timeout). The run's own report is not one of them."""
+    return conn.execute(
+        "SELECT step, status, coalesce(summary, '') FROM core.step_run WHERE started_at >= coalesce("
+        "(SELECT max(started_at) FROM core.step_run WHERE step = 'schema'), now() - interval '1 day')"
+        " AND step NOT IN ('run_report', 'email_egypt', 'email_abroad')"
+        " AND (status IN ('failed', 'warn') OR (status = 'running' AND started_at < now() - interval '1 minute'))"
+        " ORDER BY started_at").fetchall()
+
+
+SILENT = re.compile(r"0 postings today|answered \d{3}|has the site changed|has the board changed")  # a source silent or refusing
+SILENT_SOURCES = 3  # this many in one run is an alert, not only a line in the email
+
+
+def run_report(conn) -> None:
+    """The collect's last step (after publish): when a step failed, or was killed and left 'running', email Omar one alert
+    that says so, and whether the website was still published ("published with 2 steps failing"); warnings alone go to
+    the Egypt email's "Problems in this run", not here. Each failed task has already sent its own alert (alert.py)."""
+    from .alert import send
+    rows = problems(conn)
+    failing = [(step, status, summary) for step, status, summary in rows if status != "warn"]
+    # sources gone quiet or refusing us, inside extract steps that still ended (warn): many at once is a run that failed
+    silent = [line for step, status, summary in rows if step.startswith("extract_") and status == "warn"
+              for line in summary.split(" | ") if SILENT.search(line)]
+    if len(silent) >= SILENT_SOURCES:
+        send(f"job-radar: {len(silent)} sources silent or refusing in this run", silent)
+        print(f"WARNING run_report: {len(silent)} sources silent or refusing")
+    if not failing:
+        print(f"run_report: no step failed ({len(rows)} with warnings, in today's Egypt email)")
+        return
+    published = conn.execute("SELECT status FROM core.step_run WHERE step = 'publish' AND started_at >= (SELECT max(started_at)"
+                             " FROM core.step_run WHERE step = 'schema') ORDER BY started_at DESC LIMIT 1").fetchone()
+    published = published and published[0] in ("ok", "warn")
+    subject = (f"job-radar: published with {len(failing)} step{'s' * (len(failing) != 1)} failing" if published
+               else f"job-radar FAILED: {len(failing)} step{'s' * (len(failing) != 1)}, the website was not published")
+    send(subject, [f"{step} ({status}): {summary.splitlines()[-1] if summary else 'no output (killed?)'}"[:400]
+                   for step, status, summary in failing])
+    print(f"WARNING run_report: {subject}")
+
+
 def email(conn, home: bool) -> None:
     """Email the window's jobs at home (or outside it) not emailed yet, by place, experience, role
     and employment type, best first in each: target companies, then Claude's score, then how many of
@@ -601,10 +887,13 @@ def email(conn, home: bool) -> None:
     follow_ups = [{"company": company, "title": title, "applied_at": day}
                   for company, title, day, _ in due_now(conn)[:10]] if home and FEATURES["follow_up"] else []
     sent_marker = OUTPUT / f"followups-emailed-{cairo_today()}"  # the Cairo day the follow-ups went out: a second collect that day has none to add
-    if not jobs and (not follow_ups or sent_marker.exists()):
+    issues = [f"{step} ({status}): {summary.splitlines()[-1] if summary else 'no output (killed?)'}"[:300]
+              for step, status, summary in problems(conn)] if home else []
+    if not jobs and not issues and (not follow_ups or sent_marker.exists()):
         print(f"email {name}: no new jobs, nothing sent")
         return
-    if send(digest(jobs, name, follow_ups), subject(jobs, name, follow_ups), name):
+    title = subject(jobs, name, follow_ups) + (f" · {len(issues)} problem{'s' * (len(issues) != 1)}" if issues else "")
+    if send(digest(jobs, name, follow_ups, issues), title, name):
         conn.execute("UPDATE core.job SET emailed_at = now() WHERE job_id = ANY(%s)", ([j["job_id"] for j in jobs],))
         conn.commit()
         if follow_ups:
