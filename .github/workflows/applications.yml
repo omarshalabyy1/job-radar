@@ -1,0 +1,71 @@
+# Your applications, as your Gmail tells them, on Fennec within minutes, with no laptop running. Every 15 minutes (GitHub
+# may start a run late, and drops a run when it is busy):
+#   - the same steps as the laptop's job_radar_applications DAG (dags/job_radar.py): track_applications reads each Gmail
+#     account's All Mail over IMAP, read-only (nothing is marked read, moved or deleted), into core.application_email of a
+#     fresh Postgres, seeded from Neon first (job_radar/seed.py) so an email already published is not read again;
+#   - then publish_applications (job_radar/publish_applications.py) copies the emails to tracker.application_email on
+#     Neon and moves each matched job's status in app.job_status up (applied, interview, rejected, offer), never down.
+# No ANTHROPIC_API_KEY here: the emails no pattern fits are not sent to Claude (Neon keeps no row for them, so they would
+# be asked again on every run); the laptop's own run still classifies them. No draft or interview notes are written.
+# Separate from the collect (daily-backup.yml): its own concurrency group, so a slow collect never holds this back.
+# Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL, MAILBOXES, GMAIL_USER, GMAIL_APP_PASSWORD,
+# APPLICATION_SENDERS, OWNER_EMAIL: the same values as job-radar's .env. GitHub runs a schedule only from the default
+# branch (main). Run it by hand from the Actions tab (Run workflow).
+
+name: applications
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: applications
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      warehouse:
+        image: postgres:17
+        env:
+          POSTGRES_USER: jobradar
+          POSTGRES_PASSWORD: jobradar  # a throwaway database that ends with the run: not a secret
+          POSTGRES_DB: jobradar
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U jobradar -d jobradar" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      WAREHOUSE_HOST: 127.0.0.1
+      WAREHOUSE_PORT: "5433"
+      WAREHOUSE_PASSWORD: jobradar
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      MAILBOXES: ${{ secrets.MAILBOXES }}
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      APPLICATION_SENDERS: ${{ secrets.APPLICATION_SENDERS }}
+      OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"  # the Dockerfile's
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Schema and seed from Neon
+        run: |
+          python -m job_radar schema
+          python -m job_radar.seed
+      - name: Read Gmail
+        run: python -m job_radar track_applications
+      - name: Publish to Neon
+        run: python -m job_radar publish_applications

@@ -12,9 +12,11 @@ Run it once, right after `python -m job_radar schema`, never on the laptop. NEON
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 
 import psycopg
 
+from .applications import accounts
 from .config import ALERT_RANK, ROLE_LABEL
 from .db import connect
 
@@ -29,6 +31,8 @@ def main() -> None:
         raise SystemExit("seed: cannot connect to Neon; check NEON_DATABASE_URL") from None  # the error can quote the url
     with neon:
         jobs = neon.execute(f"SELECT {', '.join(COLUMNS)} FROM jobs.job ORDER BY job_key").fetchall()
+        mails = neon.execute("SELECT e.message_id, e.received_at, e.sender, e.subject, e.company, e.title, e.kind, j.job_key"
+                             " FROM tracker.application_email e LEFT JOIN jobs.job j USING (job_id)").fetchall()
     if any(j[0] is None for j in jobs):
         raise SystemExit("seed: jobs.job.job_key is not filled on Neon yet (the laptop's next publish fills it); nothing seeded")
     rank = {label: r for r, label in ROLE_LABEL.items()}
@@ -42,7 +46,19 @@ def main() -> None:
             " %(years_required)s, %(restriction)s, %(posted_at)s, %(first_seen)s, %(description)s, now(), now(), now())"
             " ON CONFLICT DO NOTHING", rows)
         seeded = conn.execute("SELECT count(*) FROM core.job").fetchone()[0]
-    print(f"seed: {len(jobs)} Neon jobs read, {seeded} in core.job")
+        # The application emails read already (track_applications reads only the emails not stored), their job found by job_key.
+        # Neon does not hold the mailbox, so each Gmail account gets one placeholder (kind 'other', which publish_applications
+        # leaves out): an account with something stored is read 3 days back, not 400.
+        cur.executemany(
+            "INSERT INTO core.application_email (message_id, received_at, sender, subject, company, title, kind, job_id)"
+            " SELECT %(m)s, %(r)s, %(s)s, %(u)s, %(c)s, %(t)s, %(k)s, (SELECT job_id FROM core.job WHERE job_key = %(j)s)"
+            " ON CONFLICT DO NOTHING",
+            [dict(zip("mrsuctkj", mail)) for mail in mails]
+            + [dict(m=f"seed/{address}", r=datetime.now(timezone.utc), s=address, u="seed", c=None, t=None, k="other", j=None)
+               for address in accounts()])
+        cur.executemany("UPDATE core.application_email SET mailbox = %s WHERE message_id = %s",
+                        [(address, f"seed/{address}") for address in accounts()])
+    print(f"seed: {len(jobs)} Neon jobs read, {seeded} in core.job, {len(mails)} application emails")
 
 
 if __name__ == "__main__":

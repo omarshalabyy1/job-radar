@@ -40,6 +40,7 @@ from .embed import embed  # noqa: F401  (python -m job_radar embed)
 from .grade import grade_claude  # noqa: F401  (python -m job_radar grade_claude)
 from .outreach import outreach_drafts  # noqa: F401  (python -m job_radar outreach_drafts)
 from .publish import publish  # noqa: F401  (python -m job_radar publish)
+from .publish_applications import publish_applications  # noqa: F401  (python -m job_radar publish_applications)
 from .tech import is_tech_role
 from .tailor import tailor  # noqa: F401  (python -m job_radar tailor)
 

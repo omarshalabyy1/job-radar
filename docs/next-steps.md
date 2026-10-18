@@ -32,3 +32,12 @@ they reach the website (Omar, 2026-10-17: one place is enough, as the warehouse 
 
 See `warehouse-resets.md`. The main trigger was a run watcher that left hung `airflow` CLI processes. Never poll
 Airflow's CLI with `docker exec` in a loop.
+
+## GitHub Actions as the collector (2026-10-18)
+
+- `daily-backup.yml` collects at 17 past 3, 11 and 19 UTC and skips a slot when a publish landed on Neon in the last 6
+  hours (the `publish` row in `tracker.step_run`). The laptop's Airflow image must be rebuilt before its publishes write
+  that row; until then the gate sees only Actions' own.
+- `applications.yml` reads Gmail every 15 minutes and publishes the emails and each job's stage (`publish_applications`).
+- Both need the repo's Actions secrets (names in the workflow headers). A private repo has 2,000 free Actions minutes a
+  month: a 15-minute reader and a 45-minute collect three times a day do not fit; see the decision with Omar.

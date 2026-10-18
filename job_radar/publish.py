@@ -50,6 +50,7 @@ import os
 import re
 import time
 import urllib.request
+from datetime import datetime, timezone
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 
 import psycopg
@@ -207,6 +208,7 @@ def push() -> None:
 
 
 def publish_once(conn) -> None:
+    started = datetime.now(timezone.utc)
     url = os.environ.get("NEON_DATABASE_URL", "").strip()
     if not url:  # a publish that cannot run fails the step (and the DAG's failure email), it is never a quiet skip
         raise RuntimeError("publish: no NEON_DATABASE_URL in .env; nothing was published")
@@ -331,6 +333,10 @@ def publish_once(conn) -> None:
                 cur.execute("DELETE FROM jobs.source_count WHERE source <> ALL(%s)", ([c[0] for c in counts],))
                 counts_deleted = cur.rowcount
         cur.execute("SELECT app.refresh_scores()")
+        # The last-publish marker the GitHub workflow's gate reads (daily-backup.yml): a collect that publishes nothing new
+        # still moves it, which jobs.job.first_seen (a date) does not.
+        cur.execute("INSERT INTO tracker.step_run (step, started_at, finished_at, status, summary) VALUES ('publish', %s, now(), 'ok', %s)",
+                    (started, "github-actions" if os.environ.get("GITHUB_ACTIONS") else "airflow"))
     print(f"publish: {len(jobs)} jobs read, {changed} upserted (changed), {graded} grades upserted (changed), {deleted} deleted;"
           f" {len(skills)} skills read, {skilled} skills upserted (changed), {skills_deleted} skills deleted;"
           f" {len(job_skills)} job skills read, {job_skilled} job skills upserted (changed), {job_skills_deleted} job skills deleted;"

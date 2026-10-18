@@ -1,20 +1,26 @@
-# The main collect for the website (Fennec): Airflow on the laptop is stopped, so GitHub collects and publishes to Neon
-# (the website's database) every 4 hours, at 17 minutes past 3, 7, 11, 15, 19 and 23 UTC (off the hour, as GitHub delays
-# top-of-hour schedules). Each run does the same steps as dags/job_radar.py on a fresh Postgres, seeded from Neon first
-# (job_radar/seed.py: every Neon job with its own job_key, marked emailed), so a job Neon already has is matched by its
-# job_key, never added twice, and published under the same id (made from job_key). Every extract_ step in
-# job_radar/__main__.py's STEPS runs, so a new collector needs no change here; one without its secret here (LinkedIn's
-# Apify, your mailboxes) skips itself. No Claude step and no email runs. publish runs with PUBLISH_PRUNE=0: it deletes
-# nothing on Neon. After each publish, publish.py asks the website for the instant Telegram push (CRON_SECRET).
+# The main collect for the website (Fennec). GitHub collects and publishes to Neon (the website's database) three times a
+# day, at 17 minutes past 3, 11 and 19 UTC (off the hour, as GitHub delays top-of-hour schedules). Airflow on the laptop may
+# collect too; when it has, this waits:
+#   gate    a run skips when a publish landed on Neon in the last 6 hours, from Airflow or from this workflow. The marker is
+#           the 'publish' row in tracker.step_run that publish.py writes (job_radar/publish.py): jobs.job.first_seen is a
+#           date and does not move when a collect finds nothing new. 6 hours, not 8: this workflow publishes about 45
+#           minutes into its run, and a gate of 7 or more would make its own next slot, 8 hours later, skip on a slow day.
+#           A run started by hand always collects.
+#   backup  the same steps as dags/job_radar.py on a fresh Postgres, seeded from Neon first (job_radar/seed.py: every Neon
+#           job with its own job_key, marked emailed), so a job Neon already has is matched by its job_key, never added
+#           twice, and published under the same id (made from job_key). Every extract_ step in job_radar/__main__.py's STEPS
+#           runs, so a new collector needs no change here; one without its secret here (LinkedIn's Apify, your mailboxes)
+#           skips itself. No Claude step and no email runs. publish runs with PUBLISH_PRUNE=0: it deletes nothing on Neon.
+#           After the publish, publish.py asks the website for the instant Telegram push (CRON_SECRET).
 # Two runs never overlap (concurrency). Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL,
-# CRON_SECRET (the website's, same value as radar-web's); JOOBLE_API_KEY, optional. GitHub runs a schedule only from the
-# default branch (main). Run it by hand from the Actions tab (Run workflow).
+# CRON_SECRET (the website's, the same value as radar-web's); JOOBLE_API_KEY, optional. GitHub runs a schedule only from
+# the default branch (main). Run it by hand from the Actions tab (Run workflow).
 
 name: daily-backup
 
 on:
   schedule:
-    - cron: "17 3,7,11,15,19,23 * * *"
+    - cron: "17 3,11,19 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -25,7 +31,25 @@ permissions:
   contents: read
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.neon.outputs.run }}
+    steps:
+      - name: Did a publish reach Neon in the last 6 hours?
+        id: neon
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          # stderr is dropped: a connection error can quote the url
+          recent=$(psql "$NEON_DATABASE_URL" -tAc "SELECT coalesce(max(finished_at) > now() - interval '6 hours', false) FROM tracker.step_run WHERE step = 'publish' AND status = 'ok'" 2>/dev/null)             || { echo "::error::cannot reach Neon (check the NEON_DATABASE_URL secret)"; exit 1; }
+          if [ "$recent" = "t" ]; then echo "run=false" >> "$GITHUB_OUTPUT"; echo "a publish is less than 6 hours old: skipping this slot"
+          else echo "run=true" >> "$GITHUB_OUTPUT"; echo "no publish in the last 6 hours: collecting"; fi
+
   backup:
+    needs: gate
+    if: github.event_name == 'workflow_dispatch' || needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75  # 12 extracts of up to 150 s each (210 s watchdog), describe, install: about 45 minutes
     services:
