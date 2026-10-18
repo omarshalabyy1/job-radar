@@ -1,0 +1,10 @@
+# Stub so GitHub lists the workflow and it can be started by hand from a branch; the real one, with its schedule, is
+# merged once its test run is green.
+name: applications
+on:
+  workflow_dispatch:
+jobs:
+  stub:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "not the real workflow"
