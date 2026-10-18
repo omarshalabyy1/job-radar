@@ -42,8 +42,8 @@ jobs:
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
         run: |
-          # stderr is dropped: a connection error can quote the url
-          recent=$(psql "$NEON_DATABASE_URL" -tAc "SELECT coalesce(max(finished_at) > now() - interval '6 hours', false) FROM tracker.step_run WHERE step = 'publish' AND status = 'ok'" 2>/dev/null)             || { echo "::error::cannot reach Neon (check the NEON_DATABASE_URL secret)"; exit 1; }
+          # the error is shown with any url in it replaced: a connection error can quote the url
+          recent=$(psql "$NEON_DATABASE_URL" -tAc "SELECT coalesce(max(finished_at) > now() - interval '6 hours', false) FROM tracker.step_run WHERE step = 'publish' AND status = 'ok'" 2>gate.err)             || { echo "::error::cannot reach Neon: $(sed -E 's#postgres(ql)?://[^ ]*#<url>#g' gate.err | head -3)"; exit 1; }
           if [ "$recent" = "t" ]; then echo "run=false" >> "$GITHUB_OUTPUT"; echo "a publish is less than 6 hours old: skipping this slot"
           else echo "run=true" >> "$GITHUB_OUTPUT"; echo "no publish in the last 6 hours: collecting"; fi
 
