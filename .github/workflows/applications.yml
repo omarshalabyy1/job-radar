@@ -1,4 +1,4 @@
-# Your applications, as your Gmail tells them, on Fennec within minutes, with no laptop running. Every 15 minutes (GitHub
+# Your applications, as your Gmail tells them, on Fennec within the hour, with no laptop running. Every hour, to fit the 2,000 free Actions minutes (GitHub
 # may start a run late, and drops a run when it is busy):
 #   - the same steps as the laptop's job_radar_applications DAG (dags/job_radar.py): track_applications reads each Gmail
 #     account's All Mail over IMAP, read-only (nothing is marked read, moved or deleted), into core.application_email of a
@@ -16,7 +16,7 @@ name: applications
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
 
 concurrency:
