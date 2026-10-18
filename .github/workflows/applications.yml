@@ -1,5 +1,5 @@
-# Your applications, as your Gmail tells them, on Fennec within the hour, with no laptop running. Every hour from 05:07 to
-# 22:07 UTC (8am to 1am in Cairo in summer; GitHub may start a run late and drops one when it is busy):
+# Your applications, as your Gmail tells them, on Fennec within two hours, with no laptop running. Every 2 hours, at 7
+# minutes past (GitHub may start a run late and drops one when it is busy):
 #   - the same steps as the laptop's job_radar_applications DAG (dags/job_radar.py): track_applications reads each Gmail
 #     account's All Mail over IMAP, read-only (nothing is marked read, moved or deleted), into core.application_email of a
 #     fresh Postgres, seeded from Neon first (job_radar/seed.py) so an email already published is not read again;
@@ -8,7 +8,7 @@
 # No ANTHROPIC_API_KEY here: the emails no pattern fits are not sent to Claude (Neon keeps no row for them, so they would
 # be asked again on every run); the laptop's own run still classifies them. No draft or interview notes are written.
 # Minutes: a private repository has 2,000 free Actions minutes a month. A run takes about 70 seconds, billed as 2 minutes:
-# 18 runs a day is about 1,080 a month; the collect (daily-backup.yml) is about 13 minutes twice a day, 780. The first step
+# 12 runs a day is about 720 a month; the collect (daily-backup.yml) is about 13 minutes twice a day, 780. The first step
 # adds up the month's minutes from the run list (the run times, rounded up per run) and, at 1,700 or more, runs only in
 # the even hours; at 1,950 or more it skips, so the month never stops without warning.
 # Separate from the collect: its own concurrency group, so a slow collect never holds this back.
@@ -20,7 +20,7 @@ name: applications
 
 on:
   schedule:
-    - cron: "7 5-22 * * *"
+    - cron: "7 */2 * * *"
   workflow_dispatch:
 
 concurrency:
