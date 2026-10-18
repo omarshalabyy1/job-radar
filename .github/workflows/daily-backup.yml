@@ -1,24 +1,20 @@
-# The fallback for days the laptop is off. Airflow on the laptop collects at 12pm Cairo and publishes right after to
-# Neon (the website's database). This runs at 12:17 UTC (15:17 Cairo in summer, 14:17 in winter; off the hour, as
-# GitHub delays top-of-hour schedules).
-#   check   a job first seen today on Neon means a collect ran today (the laptop's, or this one's): nothing else runs.
-#           That is the day's marker, so a re-run or a manual run the same day changes nothing.
-#   backup  only when check finds none: the same steps as dags/job_radar.py on a fresh Postgres, seeded from Neon first
-#           (job_radar/seed.py: every Neon job with its own job_key, marked emailed), so a job Neon already
-#           has is matched by its job_key, never added twice, and published under the same id (made from job_key). Every extract_ step in
-#           job_radar/__main__.py's STEPS runs, so a new collector needs no change here; one without its secret here
-#           (LinkedIn's Apify, your mailboxes) skips itself. Each source keeps its own limits, and this collects only on
-#           a day the laptop did not. No Claude step and no email runs. publish runs with PUBLISH_PRUNE=0: it deletes
-#           nothing on Neon; the laptop's next publish prunes as usual.
-# Two runs never overlap (concurrency). Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL;
-# JOOBLE_API_KEY, optional. GitHub runs a schedule only from the default branch (main): it starts once this file is
-# merged there. Run it by hand from the Actions tab (Run workflow).
+# The main collect for the website (Fennec): Airflow on the laptop is stopped, so GitHub collects and publishes to Neon
+# (the website's database) every 4 hours, at 17 minutes past 3, 7, 11, 15, 19 and 23 UTC (off the hour, as GitHub delays
+# top-of-hour schedules). Each run does the same steps as dags/job_radar.py on a fresh Postgres, seeded from Neon first
+# (job_radar/seed.py: every Neon job with its own job_key, marked emailed), so a job Neon already has is matched by its
+# job_key, never added twice, and published under the same id (made from job_key). Every extract_ step in
+# job_radar/__main__.py's STEPS runs, so a new collector needs no change here; one without its secret here (LinkedIn's
+# Apify, your mailboxes) skips itself. No Claude step and no email runs. publish runs with PUBLISH_PRUNE=0: it deletes
+# nothing on Neon. After each publish, publish.py asks the website for the instant Telegram push (CRON_SECRET).
+# Two runs never overlap (concurrency). Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL,
+# CRON_SECRET (the website's, same value as radar-web's); JOOBLE_API_KEY, optional. GitHub runs a schedule only from the
+# default branch (main). Run it by hand from the Actions tab (Run workflow).
 
 name: daily-backup
 
 on:
   schedule:
-    - cron: "17 12 * * *"
+    - cron: "17 3,7,11,15,19,23 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -29,26 +25,7 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      collected: ${{ steps.neon.outputs.collected }}
-    steps:
-      - name: Did today's collect reach Neon?
-        id: neon
-        env:
-          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-        run: |
-          # stderr is dropped: a connection error can quote the url
-          today=$(psql "$NEON_DATABASE_URL" -tAc "SELECT coalesce(max(first_seen) >= current_date, false) FROM jobs.job" 2>/dev/null) \
-            || { echo "::error::cannot reach Neon (check the NEON_DATABASE_URL secret)"; exit 1; }
-          echo "collected=$today" >> "$GITHUB_OUTPUT"
-          if [ "$today" = "t" ]; then echo "today's collect is on Neon: nothing to do"; else echo "no job first seen today on Neon: collecting here"; fi
-
   backup:
-    needs: check
-    if: needs.check.outputs.collected == 'f'
     runs-on: ubuntu-latest
     timeout-minutes: 75  # 12 extracts of up to 150 s each (210 s watchdog), describe, install: about 45 minutes
     services:
@@ -68,6 +45,7 @@ jobs:
       WAREHOUSE_PASSWORD: jobradar
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
       PUBLISH_PRUNE: "0"
       PYTHONUNBUFFERED: "1"
     steps:

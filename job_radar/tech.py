@@ -10,7 +10,7 @@ import re
 _DATA_INCLUDE = re.compile(
     r"""
     \bdata\b | \banalytics?\b | \banalyst\b | \bbusiness\ intelligence\b | \bbi\b
-    | \betl\b | \belt\b | \bdbt\b | \bwarehous | \blakehouse\b | \bbig\ data\b | \bdwh\b | \bedw\b
+    | \betl\b | \belt\b | \bdbt\b | data\s*warehous |\blakehouse\b | \bbig\ data\b | \bdwh\b | \bedw\b
     | daten | donn[ée]es | \bdatos\b | \bdata-
     | \bmachine\ learning\b | \bml\b | \bmlops\b | \bai\b | scientist
     """,
@@ -98,7 +98,7 @@ _NON_TECH = re.compile(
     r"""
     \b(mechanical|civil|electrical|electronics?|chemical|structural|process|manufacturing|production
        |hvac|construction|maintenance|field\ service|service\ technician|mechatronic|aerospace|nuclear
-       |biomedical|petroleum|mining|environmental|geotechnical|piping|welding|cnc|plant|facilities
+       |biomedical|petroleum|mining|environmental|geotechnical|piping|welding|cnc|plant|facilities|copywriter
        |fashion|interior|landscape|furniture|jewel\w*|textile|kitchen|floral|instructional|packaging
        |graphic|print|garden|hair|nail|tattoo|lighting|sound|stage|costume|set)\b
     | \b(sales|account)\s+(manager|executive|representative)\b | \bdriver\b | \bnurse\b | \bmedical\b
