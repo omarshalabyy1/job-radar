@@ -167,3 +167,17 @@ def test_transforms_whole_counts_line_is_kept():
     tee = runlog.Tee(None)
     tee.last = line
     assert tee.summary() == line
+
+
+def test_a_missing_log_table_is_given_up_at_once_without_an_alert(monkeypatch):
+    """The first schema step of an empty warehouse (a GitHub runner) has no core.step_run yet: no waiting, no email."""
+    import psycopg
+    from job_radar import runlog
+
+    def no_table(row):
+        raise psycopg.errors.UndefinedTable("core.step_run")
+
+    monkeypatch.setattr(runlog, "write", no_table)
+    monkeypatch.setattr(runlog.time, "sleep", lambda s: pytest.fail("waited"))
+    monkeypatch.setattr(runlog, "unrecorded", lambda row, e: pytest.fail("alerted"))
+    runlog.save({"step": "schema"})

@@ -17,6 +17,8 @@ from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from decimal import Decimal
 
+import psycopg
+
 from .db import connect
 
 # USD per million tokens: input, output, cache write, cache read. A dated model id prices as its prefix.
@@ -123,6 +125,8 @@ def save(row: dict) -> None:
     while True:
         try:
             write(row)
+            return
+        except psycopg.errors.UndefinedTable:  # the first schema step of an empty warehouse (a GitHub runner): no log table yet
             return
         except Exception as e:
             if time.monotonic() + SAVE_PAUSE > deadline:
