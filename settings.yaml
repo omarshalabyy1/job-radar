@@ -245,14 +245,14 @@ apify:
       input: {timeRange: 24h, limit: 10, removeAgency: true, aiTaxonomiesFilter: [Data & Analytics],
               locationSearch: [Egypt, United Arab Emirates, Saudi Arabia, Qatar], aiWorkArrangementFilter: [Remote Solely]}
     x:           # kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest: $0.25 / 1k tweets (tested 2026-10-29)
-      enabled: true
+      enabled: false
       actor: kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest
       max_items: 100
       max_charge_usd: 0.05
       input: {queryType: Latest, maxItems: 100, searchTerms: [
         '("hiring" OR "we are hiring") ("data engineer" OR "analytics engineer" OR "data analyst" OR "BI developer" OR "AI engineer") -filter:retweets']}
     reddit:      # harshmaur/reddit-scraper: $2.00 / 1k + $0.02 a run, 4.7 stars (tested 2026-10-29)
-      enabled: true
+      enabled: false
       actor: harshmaur/reddit-scraper
       max_items: 50
       max_charge_usd: 0.15
