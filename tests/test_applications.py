@@ -153,7 +153,7 @@ class FakeConn:
 
     def execute(self, sql, params=None):
         sql = " ".join(sql.split())
-        rows = {"FROM core.application_email WHERE kind IN": self.emails, "SELECT DISTINCT title": [("Data Engineer",)],
+        rows = {"FROM core.application_email e LEFT JOIN core.job j USING (job_id) WHERE e.kind IN": self.emails, "SELECT DISTINCT title": [("Data Engineer",)],
                 "FROM core.job": [], "FROM core.cv ORDER": [("Alex Example. Built a pipeline of 3 sources.",)]}
         found = next((r for key, r in rows.items() if key in sql), None)
         assert found is not None, sql
@@ -644,3 +644,20 @@ def test_a_rejection_naming_another_company_is_matched_by_its_sender_and_html_is
         matched, moved = applications.rematch(cur, [])
     assert conn.execute("SELECT job_id FROM core.application_email WHERE message_id = '<zzr-2>'").fetchone()[0] == job_id
     assert conn.execute("SELECT status FROM core.application WHERE job_id = %s", (job_id,)).fetchone()[0] == "rejected"
+
+
+def test_a_rejection_matched_to_the_job_ends_its_follow_up_whatever_company_it_names(conn):
+    """due_now reads a matched email's company from its job: Raya's rejection named AMAN Holding but answers Raya."""
+    job_id = conn.execute(
+        "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+        " first_seen, in_scope) VALUES ('zz fu | zzrayafu', 'Riser', 'ZzRayaFu', 'Cairo', 'Egypt', 'manual',"
+        " 'https://test.example/zzrayafu', 1, 'AI Engineer', false, current_date - 20, true) RETURNING job_id").fetchone()[0]
+    applied = datetime.now(timezone.utc) - timedelta(days=14)
+    conn.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, company, kind, job_id)"
+                 " VALUES ('<zzfu-1>', %s, 'hr@zzrayafu.example', 'Received', 'ZzRayaFu', 'applied', %s)", (applied, job_id))
+    today = applied.astimezone(applications.CAIRO).date() + timedelta(days=14)
+    assert [d[0] for d in applications.due_now(conn, today)].count("ZzRayaFu") == 1
+    conn.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, company, kind, job_id)"
+                 " VALUES ('<zzfu-2>', %s, 'hr@zzrayafu.example', 'Update', 'ZzAman Holding', 'rejected', %s)",
+                 (applied + timedelta(days=1), job_id))
+    assert "ZzRayaFu" not in [d[0] for d in applications.due_now(conn, today)]

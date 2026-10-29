@@ -348,8 +348,10 @@ def due_follow_ups(rows: list[tuple], today: date) -> list[tuple[str, str | None
 def due_now(conn, today: date | None = None) -> list[tuple[str, str | None, date, int]]:
     """due_follow_ups of the mailbox (core.application_email) on `today`, a Cairo day (default today): what the email lists
     and the drafts are written for."""
-    return due_follow_ups(conn.execute("SELECT company, title, kind, received_at FROM core.application_email"
-                                       " WHERE kind IN ('applied', 'rejected', 'interview', 'offer', 'hired')").fetchall(),
+    # an email matched to a job goes by that job's company: Raya's rejection named AMAN Holding but answers Raya's job
+    return due_follow_ups(conn.execute("SELECT coalesce(j.company, e.company), e.title, e.kind, e.received_at"
+                                       " FROM core.application_email e LEFT JOIN core.job j USING (job_id)"
+                                       " WHERE e.kind IN ('applied', 'rejected', 'interview', 'offer', 'hired')").fetchall(),
                           today or cairo_today())
 
 
