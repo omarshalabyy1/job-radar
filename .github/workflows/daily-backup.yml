@@ -80,7 +80,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
       - name: Keep the sources' holds between runs  # else LinkedIn's 20-hour Apify hold is forgotten and it runs every collect
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: output/waits
           key: waits-${{ github.run_id }}
@@ -102,3 +102,9 @@ jobs:
           done
       - name: Publish to Neon
         run: python -m job_radar publish
+      - name: Save the sources' holds  # always: a failed publish must not make the next run pay for Apify again
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: output/waits
+          key: waits-${{ github.run_id }}
