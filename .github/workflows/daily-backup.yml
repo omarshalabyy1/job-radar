@@ -70,7 +70,7 @@ jobs:
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
-      APIFY_TOKENS: ${{ secrets.APIFY_TOKENS }}  # optional: LinkedIn's search, the next token on a 402 or 403
+      APIFY_TOKENS: ${{ secrets.APIFY_TOKENS }}  # optional: LinkedIn's search and the Apify boards, spread over the accounts
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -98,7 +98,8 @@ jobs:
         run: |
           extracts=$(python -c "from job_radar.__main__ import STEPS; print(' '.join(s for s in STEPS if s.startswith('extract_')))")
           for step in $extracts transform describe match_skills eligibility; do
-            timeout 600 python -m job_radar "$step" || echo "::warning::$step ended with exit code $?"
+            limit=600; [ "$step" = extract_apify ] && limit=1800  # a run per Apify board, each up to 4 minutes
+            timeout $limit python -m job_radar "$step" || echo "::warning::$step ended with exit code $?"
           done
       - name: Publish to Neon
         run: python -m job_radar publish

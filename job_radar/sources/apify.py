@@ -22,7 +22,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 import requests
 
 from ..config import SETTINGS
-from .base import row
+from .base import duration, hold, row, waiting
 from .market import text
 
 API = "https://api.apify.com/v2"
@@ -32,7 +32,7 @@ FIELDS = {"title": ("title", "jobTitle", "job_title", "positionName", "position"
                       "author.userName", "communityName"),
           "location": ("location", "jobLocation", "formattedLocation", "locationName", "city", "locations_derived",
                        "location.city", "location.countryName", "job_location.unknown"),
-          "url": ("link", "url", "job_url", "jobUrl", "applyUrl", "externalApplyLink", "postUrl"),
+          "url": ("link", "url", "job_url", "jobUrl", "detailUrl", "applyUrl", "externalApplyLink", "postUrl"),
           "posted": ("postedAt", "datePosted", "publishedAt", "postingDateParsed", "posted_at", "listedAt", "postedDate",
                      "date_posted", "datePublished", "job_posted_date", "createdAt"),
           "description": ("descriptionText", "description", "description.text", "jobDescription", "job_description",
@@ -117,8 +117,11 @@ def apify_jobs() -> list[dict]:
     if not accounts:
         print("apify: no APIFY_TOKENS or APIFY_TOKEN in .env, skipped")
         return []
-    margin, rows = float(cfg.get("margin_usd", 0.5)), []
+    margin, every, rows = float(cfg.get("margin_usd", 0.5)), float(cfg.get("every_hours", 20)) * 3600, []
     for name, b in boards.items():
+        if wait := waiting(f"apify-{name}"):  # one run a day, however many collects (GitHub's two, Airflow's)
+            print(f"apify {name}: next run in {duration(wait)} (apify.every_hours)")
+            continue
         cap, left = float(b["max_charge_usd"]), {}
         for n, token in enumerate(accounts, 1):
             try:
@@ -134,6 +137,7 @@ def apify_jobs() -> list[dict]:
         try:
             rows += normalize(name, run(accounts[best - 1], b["actor"], b["input"], int(b["max_items"]), cap),
                               b.get("link_base", ""))
+            hold(f"apify-{name}", every)
         except requests.RequestException as e:  # one board's failure leaves the others to run
             print(f"apify {name}: run failed ({type(e).__name__}), next run tries again")
     return rows

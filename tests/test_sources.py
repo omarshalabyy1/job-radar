@@ -247,10 +247,16 @@ def test_apify_items_become_wide_postings_keyed_by_their_link_and_the_budget_sto
     monkeypatch.setenv("APIFY_TOKENS", "a,b,c")
     usage = {"a": (4.8, 5.0), "b": (2.0, 10.0), "c": (1.0, 5.0)}
     monkeypatch.setattr(apify, "spent", lambda token: usage[token])
+    holds = {}
+    monkeypatch.setattr(apify, "waiting", lambda key: holds.get(key, 0))
+    monkeypatch.setattr(apify, "hold", lambda key, seconds: holds.__setitem__(key, seconds))
     used = []
     monkeypatch.setattr(apify, "run", lambda token, *a: used.append(token) or [])
     apify.apify_jobs()
     assert used == ["b"]  # the account with the most left: $10 - $2
+    apify.apify_jobs()
+    assert used == ["b"]  # held for apify.every_hours: the next collect starts no run
+    holds.clear()
     usage.update(b=(9.5, 10.0), c=(4.5, 5.0))  # $4.8+, $9.5+, $4.5+ and $0.50 kept back: none has $0.50 left
     monkeypatch.setattr(apify, "run", lambda *a: pytest.fail("a run started over the budget"))
     assert apify.apify_jobs() == []
