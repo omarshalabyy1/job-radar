@@ -145,12 +145,73 @@ apify:
       max_items: 100
       max_charge_usd: 0.05
       input: {country: de, title: software engineer, location: "", limit: 100, datePosted: "1"}
+    # Indeed by country (Omar, 2026-10-29: the US, English-speaking Europe and the Gulf); same actor and price
+    indeed_us:
+      enabled: true
+      actor: valig/indeed-jobs-scraper
+      max_items: 100
+      max_charge_usd: 0.05
+      input: {country: us, title: data engineer, location: "", limit: 100, datePosted: "1"}
+    indeed_uk:
+      enabled: true
+      actor: valig/indeed-jobs-scraper
+      max_items: 100
+      max_charge_usd: 0.05
+      input: {country: uk, title: data engineer, location: "", limit: 100, datePosted: "1"}
+    indeed_ie:
+      enabled: true
+      actor: valig/indeed-jobs-scraper
+      max_items: 50
+      max_charge_usd: 0.05
+      input: {country: ie, title: data engineer, location: "", limit: 50, datePosted: "1"}
+    indeed_nl:
+      enabled: true
+      actor: valig/indeed-jobs-scraper
+      max_items: 50
+      max_charge_usd: 0.05
+      input: {country: nl, title: data engineer, location: "", limit: 50, datePosted: "1"}
+    indeed_sa:
+      enabled: true
+      actor: valig/indeed-jobs-scraper
+      max_items: 50
+      max_charge_usd: 0.05
+      input: {country: sa, title: data, location: "", limit: 50, datePosted: "1"}
+    indeed_qa:
+      enabled: true
+      actor: valig/indeed-jobs-scraper
+      max_items: 50
+      max_charge_usd: 0.05
+      input: {country: qa, title: data, location: "", limit: 50, datePosted: "1"}
+    indeed_kw:
+      enabled: true
+      actor: valig/indeed-jobs-scraper
+      max_items: 50
+      max_charge_usd: 0.05
+      input: {country: kw, title: data, location: "", limit: 50, datePosted: "1"}
     glassdoor:   # bebity/glassdoor-jobs-scraper: $0.40 / 1k, 4.4 stars
       enabled: true
       actor: bebity/glassdoor-jobs-scraper
       max_items: 100
       max_charge_usd: 0.10
       input: {keyword: software engineer, location: United Kingdom, maxItems: 100, postedWithinDays: "1", scrapeDetails: true}
+    glassdoor_us:
+      enabled: true
+      actor: bebity/glassdoor-jobs-scraper
+      max_items: 100
+      max_charge_usd: 0.10
+      input: {keyword: data engineer, location: United States, maxItems: 100, postedWithinDays: "1", scrapeDetails: true}
+    linkedin_saudi:
+      enabled: true
+      actor: valig/linkedin-jobs-scraper
+      max_items: 200
+      max_charge_usd: 0.10
+      input: {keywords: data OR analytics OR AI OR BI, location: Saudi Arabia, datePosted: r86400, limit: 200}
+    linkedin_qatar:
+      enabled: true
+      actor: valig/linkedin-jobs-scraper
+      max_items: 100
+      max_charge_usd: 0.05
+      input: {keywords: data OR analytics OR AI OR BI, location: Qatar, datePosted: r86400, limit: 100}
     wellfound:   # blackfalcondata/wellfound-scraper: $3.00 / 1k (+$0.005 a run), 5 stars (tested 2026-10-29)
       enabled: true
       actor: blackfalcondata/wellfound-scraper
@@ -158,20 +219,20 @@ apify:
       max_charge_usd: 0.20
       input: {query: data engineer, remote: true, maxAgeMinutes: 1440}
     stepstone:   # memo23/stepstone-search-cheerio-ppr: $1.00 / 1k (+$0.005 a run), 5 stars
-      enabled: true
+      enabled: false
       actor: memo23/stepstone-search-cheerio-ppr
       link_base: https://www.stepstone.de
       max_items: 100
       max_charge_usd: 0.15
       input: {keyword: Software Engineer, country: de, postedWithin: "1", maxItems: 100}
     xing:        # shahidirfan/Xing-Jobs-Scraper: $1.00 / 1k, 4.6 stars
-      enabled: true
+      enabled: false
       actor: shahidirfan/Xing-Jobs-Scraper
       max_items: 100
       max_charge_usd: 0.15
       input: {keyword: software engineer, location: "", date_posted: LAST_24_HOURS, results_wanted: 100}
     seek:        # websift/seek-job-scraper: $2.50 / 1k, 4.8 stars (Australia and New Zealand)
-      enabled: true
+      enabled: false
       actor: websift/seek-job-scraper
       max_items: 50
       max_charge_usd: 0.15
