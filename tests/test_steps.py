@@ -719,7 +719,8 @@ def test_a_job_with_no_known_place_is_placed_by_its_location(conn):
     """match_skills (rolled back): place 'Unknown location' -> 'Remote' for a remote job, else the one country its
     location names ('Bengaluru': India, 'New Jersey , U.S.': United States); a location naming none stays unknown."""
     ids = {}
-    for name, location in (("remote", "Remote"), ("bengaluru", "Bengaluru"), ("us", "New Jersey , U.S."), ("home", "Home")):
+    for name, location in (("remote", "Remote"), ("bengaluru", "Bengaluru"), ("us", "New Jersey , U.S."), ("home", "Home"),
+                           ("seoul", "Seoul, South Korea (remote)")):
         ids[name] = conn.execute(
             "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
             " first_seen, in_scope, last_seen) VALUES (%s, 'Data Engineer', 'Acme', %s, 'Unknown location', 'test', %s, 0,"
@@ -727,7 +728,8 @@ def test_a_job_with_no_known_place_is_placed_by_its_location(conn):
             (f"test unknown {name}", location, f"https://test.example/unknown_{name}")).fetchone()[0]
     steps.match_skills(RolledBack(conn))
     places = {name: conn.execute("SELECT place FROM core.job WHERE job_id = %s", (job_id,)).fetchone()[0] for name, job_id in ids.items()}
-    assert places == {"remote": "Remote", "bengaluru": "India", "us": "United States", "home": "Unknown location"}
+    assert places == {"remote": "Remote", "bengaluru": "India", "us": "United States", "home": "Unknown location",
+                      "seoul": "South Korea"}  # a remote job tied to one country takes that country
 
 
 def test_a_job_you_added_is_kept_past_30_days_and_any_other_is_not(conn):

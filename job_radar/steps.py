@@ -790,10 +790,11 @@ def match_skills(conn) -> None:
         {"nationals_text": NATIONALS_TEXT, "nationals_title": NATIONALS_TITLE, "arabic_text": ARABIC_TEXT,
          "arabic_title": ARABIC_TITLE, "visa": VISA_OFFERED, "refused": VISA_REFUSED, "worldwide": WORLDWIDE,
          "home": HOME, "not_remote": NOT_REMOTE, "days": DAYS})
-    # a job whose place transform could not name: Remote when it is done remotely, else the one country its location
-    # names (Bengaluru: India); every such job, not only the window's (a job transform moves keeps its place)
+    # a job whose place transform could not name: the one country its location names (Bengaluru: India; "Seoul, South
+    # Korea (remote)" is South Korea, not Remote: a remote job tied to a country), else Remote when done remotely;
+    # every such job, not only the window's (a job transform moves keeps its place)
     conn.execute("""
-        UPDATE core.job SET place = CASE WHEN work_mode = 'Remote' THEN 'Remote' ELSE countries[1] END
+        UPDATE core.job SET place = CASE WHEN cardinality(countries) = 1 THEN countries[1] ELSE 'Remote' END
         WHERE place = 'Unknown location' AND (work_mode = 'Remote' OR cardinality(countries) = 1)""")
     # each day's new jobs and how many ask for each skill, every tech job counted (core.skill_day: the rising skills)
     conn.execute("""
