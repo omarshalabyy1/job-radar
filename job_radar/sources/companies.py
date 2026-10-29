@@ -19,7 +19,7 @@ from .base import (CHALLENGE, SITE, Challenge, ERRORS, Held, duration, fetch, ge
                    since, time_left, waiting)
 
 
-PORTAL_FEED = "https://feashliaa.github.io/job-board-data/data/chunks"
+PORTAL_FEED = "https://riley-dorrington.github.io/job-board-data/data/chunks"
 
 # the feed's last_updated and the chunks of that version read so far, as JSON: a feed is downloaded again only once
 # it changes, and a version only part read (the time budget) is continued by the next run
