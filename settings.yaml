@@ -114,31 +114,38 @@ linkedin:
   words: [data engineer, AI engineer, BI developer, data analyst]
   places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
 
-# The website's hard boards through Apify Actors (sources/apify.py, the extract_apify step; APIFY_TOKEN in .env), every tech
-# job, for the website only. Each is off (enabled: false) until Omar subscribes; check the Actor's input page on Apify
-# before turning one on. A run stops at max_items jobs and at max_charge_usd; no run starts once this month's Apify spend
-# (your LinkedIn leg above included) plus its cap would pass monthly_budget_usd. Price: dollars per 1,000 jobs (Apify
-# Store, 2026-10-17). At max_items a day for 30 days: linkedin ~$6, indeed ~$0.30, glassdoor ~$1.20, wellfound ~$9,
-# stepstone ~$3, xing ~$3, seek ~$7.50 a month (~$30 for all seven; the cheap four fit in $5).
+# The website's hard boards and social hiring posts through Apify Actors (sources/apify.py, the extract_apify step), every
+# tech job, for the website. APIFY_TOKENS in .env lists the Apify accounts (5 on 2026-10-29: $10 + $10 + $5 + $5 + $5 a
+# month); each run goes to the account with the most left after its max_charge_usd and margin_usd, read from Apify's own
+# usage and limit, so no account passes its limit. A run stops at max_items jobs and at max_charge_usd. Price: dollars per
+# 1,000 items (Apify Store, 2026-10-29). At max_items a day for 30 days the enabled boards cost about: linkedin $2.40,
+# linkedin_gulf $2.40, indeed $0.30, glassdoor $1.20, stepstone $3, xing $3, career_sites $3.90, x $0.75, reddit $3.60
+# (~$20.50, plus ~$3 for the LinkedIn leg above, inside the ~$35 the five accounts get a month). X and Reddit return
+# posts, not listings: Claude's grading hides the ones that are no job. Off: wellfound ($9), seek ($7.50), facebook
+# (needs your public group links first).
 apify:
-  monthly_budget_usd: 5
+  margin_usd: 0.5
   boards:
-    linkedin:    # curious_coder/linkedin-jobs-scraper: $2.00 / 1k, 4.5 stars, 170k users (the Actor your LinkedIn leg uses)
-      enabled: false
-      actor: curious_coder/linkedin-jobs-scraper
-      max_items: 100
-      max_charge_usd: 0.25
-      input: {scrapeCompany: false, limitPerSource: 50, urls: [
-        "https://www.linkedin.com/jobs/search/?keywords=software%20OR%20data%20OR%20developer&location=European%20Union&f_TPR=r86400&f_WT=2",
-        "https://www.linkedin.com/jobs/search/?keywords=software%20OR%20data%20OR%20developer&location=Egypt&f_TPR=r86400"]}
+    linkedin:    # valig/linkedin-jobs-scraper: $0.40 / 1k, 4.7 stars, 36k users (tested 2026-10-29)
+      enabled: true
+      actor: valig/linkedin-jobs-scraper
+      max_items: 200
+      max_charge_usd: 0.10
+      input: {keywords: software OR data OR developer OR engineer, location: Egypt, datePosted: r86400, limit: 200}
+    linkedin_gulf:
+      enabled: true
+      actor: valig/linkedin-jobs-scraper
+      max_items: 200
+      max_charge_usd: 0.10
+      input: {keywords: data OR analytics OR AI OR BI, location: United Arab Emirates, datePosted: r86400, limit: 200}
     indeed:      # valig/indeed-jobs-scraper: $0.10 / 1k, 4.7 stars, 35k users
-      enabled: false
+      enabled: true
       actor: valig/indeed-jobs-scraper
       max_items: 100
       max_charge_usd: 0.05
       input: {country: de, title: software engineer, location: "", limit: 100, datePosted: "1"}
     glassdoor:   # bebity/glassdoor-jobs-scraper: $0.40 / 1k, 4.4 stars
-      enabled: false
+      enabled: true
       actor: bebity/glassdoor-jobs-scraper
       max_items: 100
       max_charge_usd: 0.10
@@ -150,23 +157,52 @@ apify:
       max_charge_usd: 0.35
       input: {query: engineer, remote: true, maxAgeMinutes: 1440}
     stepstone:   # memo23/stepstone-search-cheerio-ppr: $1.00 / 1k (+$0.005 a run), 5 stars
-      enabled: false
+      enabled: true
       actor: memo23/stepstone-search-cheerio-ppr
+      link_base: https://www.stepstone.de
       max_items: 100
       max_charge_usd: 0.15
       input: {keyword: Software Engineer, country: de, postedWithin: "1", maxItems: 100}
     xing:        # shahidirfan/Xing-Jobs-Scraper: $1.00 / 1k, 4.6 stars
-      enabled: false
+      enabled: true
       actor: shahidirfan/Xing-Jobs-Scraper
       max_items: 100
       max_charge_usd: 0.15
-      input: {keyword: software engineer, location: "", date_posted: "1", results_wanted: 100}
+      input: {keyword: software engineer, location: "", date_posted: LAST_24_HOURS, results_wanted: 100}
     seek:        # websift/seek-job-scraper: $2.50 / 1k, 4.8 stars (Australia and New Zealand)
       enabled: false
       actor: websift/seek-job-scraper
       max_items: 100
       max_charge_usd: 0.30
       input: {searchTerm: software engineer, maxResults: 100, dateRange: 1, country: AU}
+    career_sites:  # fantastic-jobs/career-site-job-listing-api: $12 / 1k + $0.01 a run, direct from 275k company career
+      enabled: true  # sites (Workday, Greenhouse, Lever, Ashby...); its smallest run is 10 jobs
+      actor: fantastic-jobs/career-site-job-listing-api
+      max_items: 10
+      max_charge_usd: 0.15
+      input: {timeRange: 24h, limit: 10, removeAgency: true, aiTaxonomiesFilter: [Data & Analytics],
+              locationSearch: [Egypt, United Arab Emirates, Saudi Arabia, Qatar], aiWorkArrangementFilter: [Remote Solely]}
+    x:           # kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest: $0.25 / 1k tweets (tested 2026-10-29)
+      enabled: true
+      actor: kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest
+      max_items: 100
+      max_charge_usd: 0.05
+      input: {queryType: Latest, maxItems: 100, searchTerms: [
+        '("hiring" OR "we are hiring") ("data engineer" OR "analytics engineer" OR "data analyst" OR "BI developer" OR "AI engineer") -filter:retweets']}
+    reddit:      # harshmaur/reddit-scraper: $2.00 / 1k + $0.02 a run, 4.7 stars (tested 2026-10-29)
+      enabled: true
+      actor: harshmaur/reddit-scraper
+      max_items: 50
+      max_charge_usd: 0.15
+      input: {maxPostsCount: 50, crawlCommentsPerPost: false, postedAfter: 1 day, subredditUrls: [
+        "https://www.reddit.com/r/forhire/new/", "https://www.reddit.com/r/dataengineeringjobs/new/",
+        "https://www.reddit.com/r/RemoteJobs/new/", "https://www.reddit.com/r/jobbit/new/"]}
+    facebook:    # apify/facebook-groups-scraper: $5 / 1k posts, 4.9 stars; add public job groups' links, then enable
+      enabled: false
+      actor: apify/facebook-groups-scraper
+      max_items: 50
+      max_charge_usd: 0.30
+      input: {resultsLimit: 50, onlyPostsNewerThan: 1 day, startUrls: []}
 
 # Claude grading, in the job_radar DAG after embed (ANTHROPIC_API_KEY in .env): the jobs of every place with a
 # description, closest to your CV first (embed's free cv_similarity), with no cap, scored 0-10 against your CVs, with the CV to send, one line why and what keeps someone living in

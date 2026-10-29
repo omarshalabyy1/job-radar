@@ -242,12 +242,20 @@ def test_apify_items_become_wide_postings_keyed_by_their_link_and_the_budget_sto
     assert [(r["source"], r["title"], r["job_url"], r["description"]) for r in rows] == [
         ("apify:linkedin", "Data Engineer", "https://www.linkedin.com/jobs/view/1", "Spark and SQL."),
         ("apify:linkedin", "QA Engineer", "https://de.indeed.com/viewjob?jk=2", "Cypress")]
-    monkeypatch.setitem(apify.SETTINGS, "apify", {"monthly_budget_usd": 5, "boards": {
+    monkeypatch.setitem(apify.SETTINGS, "apify", {"margin_usd": 0.5, "boards": {
         "linkedin": {"enabled": True, "actor": "a/b", "input": {}, "max_items": 10, "max_charge_usd": 0.5}}})
-    monkeypatch.setenv("APIFY_TOKEN", "test")
-    monkeypatch.setattr(apify, "spent", lambda token: 4.8)  # $4.80 + $0.50 would pass $5: no run
+    monkeypatch.setenv("APIFY_TOKENS", "a,b,c")
+    usage = {"a": (4.8, 5.0), "b": (2.0, 10.0), "c": (1.0, 5.0)}
+    monkeypatch.setattr(apify, "spent", lambda token: usage[token])
+    used = []
+    monkeypatch.setattr(apify, "run", lambda token, *a: used.append(token) or [])
+    apify.apify_jobs()
+    assert used == ["b"]  # the account with the most left: $10 - $2
+    usage.update(b=(9.5, 10.0), c=(4.5, 5.0))  # $4.8+, $9.5+, $4.5+ and $0.50 kept back: none has $0.50 left
     monkeypatch.setattr(apify, "run", lambda *a: pytest.fail("a run started over the budget"))
     assert apify.apify_jobs() == []
+    tweet = {"text": "Acme is hiring\n a Data Engineer", "url": "https://x.com/a/status/1", "createdAt": "Thu Oct 29 14:10:49 +0000 2026"}
+    assert [(r["title"], r["date_posted"]) for r in apify.normalize("x", [tweet])] == [("Acme is hiring a Data Engineer", None)]
 
 
 def test_a_workday_site_is_read_through_its_search_and_named_by_tenant_and_site(monkeypatch):
