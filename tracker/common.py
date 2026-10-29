@@ -68,7 +68,11 @@ def load_jobs() -> pd.DataFrame:
     jobs = query("SELECT job_id, role_rank, fresh_level, posted_at, score, skill_matches, cv_coverage, cv_similarity, target_company,"
                  " title, company, company_size, role, place, source, status, note, first_seen, job_url, skills_matched, described,"
                  " restriction, grade_reason, years_required, skills_missing, cv_evidence FROM mart.job_status")
-    jobs["posted"] = jobs["fresh_level"].map(FRESH)
+    jobs["posted"] = jobs["fresh_level"].map(FRESH)  # the filter's buckets
+    # what the tables show: the real age past 3 days ("16 days ago"), so an old job never reads as fresh
+    age = (pd.Timestamp.now(tz="UTC") - pd.to_datetime(jobs["posted_at"], utc=True)).dt.days
+    jobs["posted_ago"] = [f"{int(d)} days ago" if level == 5 and pd.notna(d) else label
+                          for level, d, label in zip(jobs["fresh_level"], age, jobs["posted"])]
     jobs["score"] = pd.to_numeric(jobs["score"])
     jobs["hidden_reason"] = [hidden_reason(*row) for row in zip(jobs["status"], jobs["restriction"], jobs["score"])]
     if not FEATURES["grade"]:  # off: no score sorts or shows

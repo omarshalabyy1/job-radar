@@ -6,7 +6,7 @@ from job_radar.config import FEATURES
 from job_radar.db import connect
 from tracker.common import HIDDEN_JOBS, HIDES, STATUSES, filtered, load_jobs, nothing_matches, numbers, plural, query
 
-ESSENTIALS = {"score", "title", "company", "place", "posted", "skill_matches", "years_required", "status", "job_url"}
+ESSENTIALS = {"score", "title", "company", "place", "posted_ago", "skill_matches", "years_required", "status", "job_url"}
 
 st.title("Jobs", icon=":material/work:")
 jobs = load_jobs()
@@ -25,7 +25,7 @@ table = shown.assign(company=[c or f"{s} (company hidden)" for c, s in zip(shown
 edited = st.data_editor(
     table, key="jobs", hide_index=True, height=620,
     # what you decide on first, then the rest
-    column_order=[c for c in ["score", "title", "company", "role", "place", "posted", "skill_matches", "years_required", "why", "cv_match", "status",
+    column_order=[c for c in ["score", "title", "company", "role", "place", "posted_ago", "skill_matches", "years_required", "why", "cv_match", "status",
                               "note", "job_url", "target_company", "cv_coverage", "cv_evidence", "skills_matched", "skills_missing", "company_size",
                               "posted_at", "first_seen", "source"]
                   # Claude's columns only with features.grade, the CV match only with features.embeddings
@@ -38,7 +38,7 @@ edited = st.data_editor(
         "title": st.column_config.TextColumn("Title", width=300),
         "company": st.column_config.TextColumn("Company", width=130),
         "place": st.column_config.TextColumn("Where", width="small"),
-        "posted": st.column_config.TextColumn("Posted", width=110, help="Apply within 48 hours of the posting"),
+        "posted_ago": st.column_config.TextColumn("Posted", width=110, help="Apply within 48 hours of the posting; past 3 days, its real age"),
         "posted_at": st.column_config.DatetimeColumn("Posted at", format="D MMM, h:mma", timezone="Africa/Cairo"),
         "why": st.column_config.TextColumn("Why", width="medium", help="Why the job is hidden, else Claude's reason for its score"),
         "skill_matches": st.column_config.NumberColumn("Skills", width="small", help="How many of your skills the job asks for"),
