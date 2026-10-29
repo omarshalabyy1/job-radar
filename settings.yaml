@@ -132,7 +132,7 @@ apify:
       actor: valig/linkedin-jobs-scraper
       max_items: 200
       max_charge_usd: 0.10
-      input: {keywords: software OR data OR developer OR engineer, location: Egypt, datePosted: r86400, limit: 200}
+      input: {keywords: software OR data OR developer OR engineer, location: Egypt, datePosted: r604800, limit: 200}  # 7 days: its 24-hour search gives 0 for Egypt (tested 2026-10-29); a link already stored is skipped
     linkedin_gulf:
       enabled: true
       actor: valig/linkedin-jobs-scraper
