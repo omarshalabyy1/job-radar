@@ -596,7 +596,9 @@ def transform(conn) -> None:
             cur, "first_seen >= current_date - %s AND emailed_at IS NULL AND job_key <> ALL(%s)"
                  " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
             (DAYS, list(jobs)), "out of scope")
-        kept = " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)"
+        kept = (" AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)"
+                # a job with a deadline not done yet stays, or the deadline would lose its job
+                " AND NOT EXISTS (SELECT 1 FROM core.deadline d WHERE d.job_id = j.job_id AND NOT d.done)")
         # a board's job it has not listed for CLOSED_AFTER_DAYS although the board was read since (a board not read is no
         # sign; one whose posting is already gone from raw keeps the job until KEEP_DAYS)
         closed_where = ("j.source LIKE '%%-board' AND j.last_seen < current_date - %s AND EXISTS (SELECT 1 FROM raw.job_posting r"

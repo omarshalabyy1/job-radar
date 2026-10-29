@@ -39,14 +39,22 @@ else:
 
 # 2. your deadlines (core.deadline): the next three not done, and every one to edit
 st.subheader("Deadlines")
-deadlines = query("SELECT d.deadline_id, d.due, d.what, d.note, d.done, d.job_id FROM core.deadline d ORDER BY d.done, d.due")
-upcoming = deadlines[~deadlines["done"]].head(3)
+deadlines = query("SELECT d.deadline_id, d.due, d.what, d.note, d.done, d.job_id,"
+                  " nullif(concat_ws(' at ', j.title, nullif(j.company, '')), '') AS job, d.due - current_date AS days_left"
+                  " FROM core.deadline d LEFT JOIN core.job j USING (job_id) ORDER BY d.done, d.due")
+# every overdue one (they are the most urgent), then the next three
+open_ = deadlines[~deadlines["done"]]
+upcoming = pd.concat([open_[open_["days_left"] < 0], open_[open_["days_left"] >= 0].head(3)])
 if upcoming.empty:
     st.caption("No deadline set: add one below.")
 else:
-    st.dataframe(upcoming[["due", "what", "note"]], hide_index=True, column_config={
+    upcoming = upcoming.assign(when=upcoming["days_left"].map(
+        lambda n: f"Overdue {-n} day{'s' if n != -1 else ''}" if n < 0 else "Today" if n == 0 else f"In {n} day{'s' if n != 1 else ''}"))
+    st.dataframe(upcoming[["due", "when", "what", "job", "note"]], hide_index=True, column_config={
         "due": st.column_config.DateColumn("Due", format="ddd D MMM", width="small"),
-        "what": st.column_config.TextColumn("What", width=300), "note": st.column_config.TextColumn("Note", width="large")})
+        "when": st.column_config.TextColumn("When", width=130),
+        "what": st.column_config.TextColumn("What", width=200), "job": st.column_config.TextColumn("Job", width=260),
+        "note": st.column_config.TextColumn("Note", width="large")})
 with st.expander("Edit deadlines"):
     edited = st.data_editor(deadlines, key="deadlines", hide_index=True, num_rows="dynamic",
                             column_order=["due", "what", "note", "job_id", "done"], column_config={

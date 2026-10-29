@@ -646,6 +646,26 @@ def test_a_job_you_added_is_kept_past_30_days_and_any_other_is_not(conn):
     assert left == {"manual"}
 
 
+def test_a_job_with_an_open_deadline_is_kept_past_keep_days(conn):
+    """transform (rolled back): an aged job you set a deadline on stays while the deadline is not done, so the Today
+    page still names it; once the deadline is done, it ages out."""
+    ids = {}
+    for name, done in (("open", False), ("done", True)):
+        ids[name] = conn.execute(
+            "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+            " first_seen, in_scope) VALUES (%s, 'Data Analyst', 'Acme', 'Cairo', 'Egypt', 'dubizzle', %s, 1, 'Data Analyst',"
+            " false, current_date - 40, true) RETURNING job_id",
+            (f"test deadline {name}", f"https://test.example/deadline_{name}")).fetchone()[0]
+        conn.execute("INSERT INTO core.deadline (job_id, what, due, done) VALUES (%s, 'Apply by', current_date + 3, %s)",
+                     (ids[name], done))
+    conn.execute("INSERT INTO raw.job_posting (run_date, source, title, company, location, searched_for, job_url, payload,"
+                 " last_seen) VALUES (current_date, 'test', 'Data Engineer', 'Zzdeadlineco', 'Cairo', 'Egypt',"
+                 " 'https://test.example/deadline_today', '{}', current_date)")
+    steps.transform(RolledBack(conn))
+    left = {n for n, job_id in ids.items() if conn.execute("SELECT 1 FROM core.job WHERE job_id = %s", (job_id,)).fetchone()}
+    assert left == {"open"}
+
+
 def test_a_short_snippet_is_read_in_full_and_a_page_without_text_keeps_it(conn, monkeypatch):
     """describe (rolled back): a board's snippet under SNIPPET characters (NaukriGulf's) is replaced by the page's whole
     text; a page that gives no text keeps the snippet."""
