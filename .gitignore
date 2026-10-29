@@ -4,3 +4,4 @@ __pycache__/
 cv.*
 data/
 output/
+!tracker/app_pages/cv.py

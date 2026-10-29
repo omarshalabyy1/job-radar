@@ -39,7 +39,7 @@ edited = st.data_editor(
         "company": st.column_config.TextColumn("Company", width=130),
         "place": st.column_config.TextColumn("Where", width="small"),
         "posted": st.column_config.TextColumn("Posted", width=110, help="Apply within 48 hours of the posting"),
-        "posted_at": st.column_config.DatetimeColumn("Posted at", format="D MMM, h:mma"),
+        "posted_at": st.column_config.DatetimeColumn("Posted at", format="D MMM, h:mma", timezone="Africa/Cairo"),
         "why": st.column_config.TextColumn("Why", width="medium", help="Why the job is hidden, else Claude's reason for its score"),
         "skill_matches": st.column_config.NumberColumn("Skills", width="small", help="How many of your skills the job asks for"),
         "years_required": st.column_config.NumberColumn("Years", width="small", format="%d+",

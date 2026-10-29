@@ -232,7 +232,8 @@ def test_the_email_leaves_out_ignored_rejected_and_hidden_jobs(conn, monkeypatch
     jobs = {name: add_job(conn, name, **kw) for name, kw in {
         "plain": {}, "saved": {}, "restricted_but_saved": {"restriction": "US citizens only"}, "ok_score": {},
         "ignored": {}, "rejected": {}, "restricted": {"restriction": "US citizens only"}, "low_score": {}, "claude_bars_it": {},
-        "already_emailed": {"emailed": True}, "too_old": {"age": 2}, "abroad": {"place": "Remote"}}.items()}
+        "already_emailed": {"emailed": True}, "unsent_2_days": {"age": 2}, "too_old": {"age": config.WORK_DAYS + 1},
+        "abroad": {"place": "Remote"}}.items()}
     for name, status in (("saved", "saved"), ("restricted_but_saved", "saved"), ("ignored", "ignored"), ("rejected", "rejected")):
         conn.execute("INSERT INTO core.application (job_id, status) VALUES (%s, %s)", (jobs[name], status))
     for name, score, restriction in (("ok_score", 4, None), ("low_score", 3, None), ("claude_bars_it", 9, "needs a US work permit")):
@@ -244,12 +245,15 @@ def test_the_email_leaves_out_ignored_rejected_and_hidden_jobs(conn, monkeypatch
         steps.email(conn, home=True)
         return {name for name, job_id in jobs.items() if job_id in sent[0]}
 
-    assert emailed() == {"plain", "saved", "restricted_but_saved", "ok_score"}  # your status wins over a hide; a score of 4 is no bar
+    # your status wins over a hide; a score of 4 is no bar; a job of the window not sent 2 days ago (Gmail failed) goes now
+    assert emailed() == {"plain", "saved", "restricted_but_saved", "ok_score", "unsent_2_days"}
     monkeypatch.setitem(config.FEATURES, "grade", False)  # scores ignored: a low score no longer hides
     monkeypatch.setitem(config.FEATURES, "eligibility", False)  # restrictions ignored
-    assert emailed() == {"plain", "saved", "restricted_but_saved", "ok_score", "restricted", "low_score", "claude_bars_it"}
+    assert emailed() == {"plain", "saved", "restricted_but_saved", "ok_score", "unsent_2_days", "restricted", "low_score",
+                         "claude_bars_it"}
     monkeypatch.setitem(config.FEATURES, "auto_hide", False)  # ignored and rejected stay out whatever the switches say
-    assert emailed() == {"plain", "saved", "restricted_but_saved", "ok_score", "restricted", "low_score", "claude_bars_it"}
+    assert emailed() == {"plain", "saved", "restricted_but_saved", "ok_score", "unsent_2_days", "restricted", "low_score",
+                         "claude_bars_it"}
     assert conn.execute("SELECT count(*) FROM core.job WHERE job_id = ANY(%s) AND emailed_at IS NOT NULL", (list(jobs.values()),)).fetchone() == (1,)
 
 
@@ -592,6 +596,103 @@ def test_a_board_job_closes_only_when_its_board_was_read_since_and_no_longer_lis
     assert not conn.execute("SELECT 1 FROM core.job_history WHERE job_key LIKE 'test board %%'").fetchone()
 
 
+def add_raw(conn, company: str) -> str:
+    """A posting of today in your scope (Data Engineer in Cairo) at `company`; returns its job_key."""
+    url = f"https://test.example/{company}"
+    conn.execute("INSERT INTO raw.job_posting (run_date, source, title, company, location, searched_for, job_url, payload,"
+                 " last_seen) VALUES (current_date, 'test', 'Data Engineer', %s, 'Cairo', 'Egypt', %s, '{}', current_date)",
+                 (company, url))
+    return steps.job_key("Data Engineer", company, url)
+
+
+def test_a_deleted_jobs_key_blocks_it_while_posted_and_frees_it_after_seen_days(conn, capsys):
+    """transform (rolled back): a key in core.job_seen seen within SEEN_DAYS is not stored again, and its day moves to today
+    (still posted); one not seen for longer is a new job (the same title at the same company months later); a job deleted
+    again has its day reset, so it is blocked again. The summary line says how many were left out. schema.sql runs twice."""
+    conn.execute((ROOT / "sql" / "schema.sql").read_text(encoding="utf-8"))  # idempotent: a second run keeps seen_on
+    recent, old = add_raw(conn, "Zzseenrecent"), add_raw(conn, "Zzseenold")
+    conn.execute("INSERT INTO core.job_seen (job_key, seen_on) VALUES (%s, current_date - 5), (%s, current_date - %s),"
+                 " ('test_steps seen again', current_date - %s)", (recent, old, config.SEEN_DAYS + 1, config.SEEN_DAYS + 10))
+    add_job(conn, "seen again", age=config.KEEP_DAYS + 10)  # in scope, aged out by this transform
+    steps.transform(RolledBack(conn))
+    stored = {key for (key,) in conn.execute("SELECT job_key FROM core.job WHERE job_key = ANY(%s)", ([recent, old],))}
+    assert stored == {old}
+    seen = dict(conn.execute("SELECT job_key, seen_on = current_date FROM core.job_seen WHERE job_key = ANY(%s)",
+                             ([recent, "test_steps seen again"],)).fetchall())
+    assert seen == {recent: True, "test_steps seen again": True}
+    assert ", 1 deleted before;" in capsys.readouterr().out
+    state = ("SELECT count(*), md5(string_agg(job_key || ':' || first_seen || ':' || in_scope, ',' ORDER BY job_key)),"
+             " (SELECT md5(string_agg(job_key || ':' || seen_on, ',' ORDER BY job_key)) FROM core.job_seen) FROM core.job")
+    first = conn.execute(state).fetchone()
+    steps.transform(RolledBack(conn))  # a rerun: the same jobs, the same days, the same key left out
+    assert conn.execute(state).fetchone() == first and ", 1 deleted before;" in capsys.readouterr().out
+
+
+def test_a_website_job_that_becomes_yours_is_new_from_that_day(conn):
+    """transform (rolled back): a website-only job first seen 3 days ago whose posting today is yours takes today as its
+    first_seen, so the email (first_seen in its window) sends it."""
+    key = add_raw(conn, "Zzbecomesyours")
+    conn.execute("INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+                 " first_seen, in_scope, last_seen) VALUES (%s, 'Data Engineer', 'Zzbecomesyours', 'Berlin', 'Unknown location',"
+                 " 'test', 'https://test.example/zz-wide', 0, 'Data Engineer', false, current_date - 3, false, current_date - 3)",
+                 (key,))
+    steps.transform(RolledBack(conn))
+    assert conn.execute("SELECT in_scope, first_seen = current_date FROM core.job WHERE job_key = %s", (key,)).fetchone() == (True, True)
+
+
+def test_a_career_site_read_yesterday_is_read_again_today(conn, monkeypatch):
+    """extract_companies (rolled back): a site checked 22 hours ago is due (the run is daily, and checked_at is stamped
+    after the step starts); one checked 10 hours ago (a second collect the same day) is not."""
+    for name, hours in (("zz due", 22), ("zz fresh", 10)):
+        conn.execute("INSERT INTO core.company (company, careers_url, checked_at) VALUES (%s, %s, now() - make_interval(hours => %s))",
+                     (name, f"https://test.example/{name}", hours))
+    asked = []
+    monkeypatch.setattr(steps, "online", lambda: True)
+    monkeypatch.setattr(steps.sources, "company_sites", lambda sites: asked.extend(s[0] for s in sites) or ([], []))
+    steps.extract_companies(RolledBack(conn))
+    assert "zz due" in asked and "zz fresh" not in asked
+
+
+def test_career_sites_are_counted_once_a_step_and_an_unchanged_portals_feed_is_not_silent(conn, monkeypatch, capsys):
+    """extract_companies (rolled back): 51 sites are 2 batches; the day's count (core.extract_count) is both batches', so a
+    last batch with no job is no "0 postings today" warning. company_portals returning nothing (its feed unchanged since
+    its last read) is not counted as a silent source either."""
+    monkeypatch.setattr(steps, "online", lambda: True)
+    monkeypatch.setitem(config.FEATURES, "eligibility", False)
+    for days_ago in range(1, 4):
+        conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %s, 'company_sites', 20, 0),"
+                     " (current_date - %s, 'company_portals', 20, 0)", (days_ago, days_ago))
+    for i in range(51):
+        conn.execute("INSERT INTO core.company (company, careers_url) VALUES (%s, %s)", (f"zz site {i:02}", f"https://test.example/site{i}"))
+    batches = []
+
+    def company_sites(sites):
+        batches.append(len(sites))
+        rows = [{"source": "zz-site", "searched_for": "Egypt", "title": "Data Engineer", "company": "Zz Sites", "location": "Cairo",
+                 "job_url": f"https://test.example/site-job{n}", "date_posted": None, "description": None, "payload": {}}
+                for n in range(12)] if len(batches) == 1 else []
+        return rows, []
+
+    monkeypatch.setattr(steps.sources, "company_sites", company_sites)
+    steps.extract_companies(RolledBack(conn))
+    assert batches == [50, 1]
+    assert conn.execute("SELECT postings FROM core.extract_count WHERE day = current_date AND board = 'company_sites'").fetchone() == (12,)
+    monkeypatch.setattr(steps.sources, "company_portals", lambda: [])
+    steps.extract_portals(RolledBack(conn))
+    assert "WARNING" not in capsys.readouterr().out
+    assert not conn.execute("SELECT 1 FROM core.extract_count WHERE day = current_date AND board = 'company_portals'").fetchone()
+
+
+def test_a_step_running_alongside_the_report_is_not_called_killed(conn):
+    """problems (rolled back): a step still 'running' 3 minutes after it started (tailor, beside publish) is not a problem;
+    one running longer than the longest timeout (runlog.STALE_SECONDS) was killed and is."""
+    for step, minutes, status in (("schema", 30, "ok"), ("zz_tailor", 3, "running"), ("zz_killed", 15, "running")):
+        conn.execute("INSERT INTO core.step_run (step, started_at, status) VALUES (%s, now() - make_interval(mins => %s), %s)",
+                     (step, minutes, status))
+    steps_found = {step for step, _, _ in steps.problems(conn)}
+    assert "zz_killed" in steps_found and "zz_tailor" not in steps_found
+
+
 def test_a_copy_title_and_an_arabic_location_are_shown_clean_while_job_key_stays_the_raw_ones(conn):
     """transform (rolled back): 'Data Engineer - Copy' in 'القاهرة, C, EG' is stored as 'Data Engineer' in 'Cairo, Egypt';
     its job_key is still the raw title's, so its published id (md5 of job_key) does not move."""
@@ -647,23 +748,28 @@ def test_a_job_you_added_is_kept_past_30_days_and_any_other_is_not(conn):
 
 
 def test_a_job_with_an_open_deadline_is_kept_past_keep_days(conn):
-    """transform (rolled back): an aged job you set a deadline on stays while the deadline is not done, so the Today
-    page still names it; once the deadline is done, it ages out."""
+    """transform (rolled back): an aged job you set a deadline on stays while the deadline is not done and not past, so
+    the Today page still names it; once the deadline is done, or its day has passed (an "Apply by" gone by), it ages
+    out. mart.job_status's "deleted tomorrow" (fresh_level 6) says the same, and never of a job you added."""
     ids = {}
-    for name, done in (("open", False), ("done", True)):
+    for name, done, due in (("open", False, 3), ("done", True, 3), ("expired", False, -1), ("manual", None, None)):
         ids[name] = conn.execute(
             "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
-            " first_seen, in_scope) VALUES (%s, 'Data Analyst', 'Acme', 'Cairo', 'Egypt', 'dubizzle', %s, 1, 'Data Analyst',"
+            " first_seen, in_scope) VALUES (%s, 'Data Analyst', 'Acme', 'Cairo', 'Egypt', %s, %s, 1, 'Data Analyst',"
             " false, current_date - 40, true) RETURNING job_id",
-            (f"test deadline {name}", f"https://test.example/deadline_{name}")).fetchone()[0]
-        conn.execute("INSERT INTO core.deadline (job_id, what, due, done) VALUES (%s, 'Apply by', current_date + 3, %s)",
-                     (ids[name], done))
+            (f"test deadline {name}", "manual" if name == "manual" else "dubizzle",
+             f"https://test.example/deadline_{name}")).fetchone()[0]
+        if due is not None:
+            conn.execute("INSERT INTO core.deadline (job_id, what, due, done) VALUES (%s, 'Apply by', current_date + %s, %s)",
+                         (ids[name], due, done))
+    level = dict(conn.execute("SELECT job_id, fresh_level FROM mart.job_status WHERE job_id = ANY(%s)", (list(ids.values()),)).fetchall())
+    assert {n for n, job_id in ids.items() if level[job_id] == 6} == {"done", "expired"}
     conn.execute("INSERT INTO raw.job_posting (run_date, source, title, company, location, searched_for, job_url, payload,"
                  " last_seen) VALUES (current_date, 'test', 'Data Engineer', 'Zzdeadlineco', 'Cairo', 'Egypt',"
                  " 'https://test.example/deadline_today', '{}', current_date)")
     steps.transform(RolledBack(conn))
     left = {n for n, job_id in ids.items() if conn.execute("SELECT 1 FROM core.job WHERE job_id = %s", (job_id,)).fetchone()}
-    assert left == {"open"}
+    assert left == {"open", "manual"}
 
 
 def test_a_short_snippet_is_read_in_full_and_a_page_without_text_keeps_it(conn, monkeypatch):

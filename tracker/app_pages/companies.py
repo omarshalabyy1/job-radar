@@ -14,4 +14,4 @@ companies = query("SELECT company, starred, careers_url, platform, note, checked
 st.dataframe(companies, hide_index=True, column_config={
     "company": "Company", "starred": st.column_config.CheckboxColumn("Starred"),
     "careers_url": st.column_config.LinkColumn("Careers page"), "platform": "Read as",
-    "note": "Why not read", "checked_at": st.column_config.DatetimeColumn("Checked", format="D MMM, HH:mm")})
+    "note": "Why not read", "checked_at": st.column_config.DatetimeColumn("Checked", format="D MMM, HH:mm", timezone="Africa/Cairo")})

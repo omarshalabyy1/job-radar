@@ -35,7 +35,7 @@ def render(query) -> None:
     last["cost_usd"] = last["cost_usd"].map(dollars)
     st.dataframe(last, hide_index=True, column_config={
         "step": "Step", "status": "Status", "summary": st.column_config.TextColumn("What it said", width="large"),
-        "started_at": st.column_config.DatetimeColumn("Started", format="D MMM, HH:mm"),
+        "started_at": st.column_config.DatetimeColumn("Started", format="D MMM, HH:mm", timezone="Africa/Cairo"),
         "seconds": st.column_config.NumberColumn("Took", format="%d s"),
         "tokens": st.column_config.NumberColumn("Tokens", format="%d"),
         "cost_usd": "Claude $"})

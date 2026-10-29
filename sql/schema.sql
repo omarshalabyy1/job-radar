@@ -566,11 +566,13 @@ INSERT INTO core.geo_pattern (pattern, country, region) VALUES
     ('(مسقط|سلطنة عمان|سلطنة عُمان)', 'Oman', 'MENA'),
     ('(عمّان|الأردن|الاردن)', 'Jordan', 'MENA');
 -- A job first seen over 5 days ago (config.KEEP_DAYS) is archived (core.job_archive), then deleted by transform with its raw postings,
--- unless you noted or applied to it; only its key stays here, so a job still posted later is never
--- stored or emailed again.
+-- unless you noted or applied to it; only its key stays here, with the day it was last deleted or posted (seen_on), so a
+-- job still posted later is not stored or emailed again; a key not seen for config.SEEN_DAYS is free again (job_key is
+-- the title and company: a new opening of the same title months later is a new job).
 CREATE TABLE IF NOT EXISTS core.job_seen (
     job_key text PRIMARY KEY
 );
+ALTER TABLE core.job_seen ADD COLUMN IF NOT EXISTS seen_on date NOT NULL DEFAULT current_date;
 
 -- The jobs transform removes are archived here first, whole (title, company, link, description, Claude's score and
 -- why): one row per job_id, `why` says which removal took it. Nothing deletes from here; the tracker's jobs and the
@@ -930,8 +932,10 @@ SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j
        j.description IS NOT NULL AS described, j.date_posted, j.first_seen, j.emailed_at,
        coalesce(a.status, 'new') AS status, a.note, a.updated_at, v.cv_label, v.cv_coverage, j.posted_at,
        -- apply within 48 hours of the posting: 1 within 12 hours, 2 within 24, 3 over 1 day, 4 over 2 days,
-       -- 5 over 3 days; 6 deleted by tomorrow's transform (first seen 5 days ago, config.KEEP_DAYS, no status set)
-       CASE WHEN a.job_id IS NULL AND j.first_seen < current_date - 4 THEN 6
+       -- 5 over 3 days; 6 deleted by tomorrow's transform (first seen 5 days ago, config.KEEP_DAYS, no status set, not
+       -- added by you, no deadline still open tomorrow: steps.transform's aged_where)
+       CASE WHEN a.job_id IS NULL AND j.first_seen < current_date - 4 AND j.source <> 'manual' AND NOT EXISTS (
+                SELECT 1 FROM core.deadline d WHERE d.job_id = j.job_id AND NOT d.done AND d.due > current_date) THEN 6
             WHEN now() - j.posted_at <= interval '12 hours' THEN 1 WHEN now() - j.posted_at <= interval '24 hours' THEN 2
             WHEN now() - j.posted_at <= interval '48 hours' THEN 3 WHEN now() - j.posted_at <= interval '72 hours' THEN 4
             ELSE 5 END AS fresh_level,

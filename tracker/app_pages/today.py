@@ -4,11 +4,12 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from job_radar.applications import application_stages, funnel_counts
 from job_radar.config import FEATURES
 from job_radar.db import connect
-from tracker.applications_tab import follow_ups
+from tracker.applications_tab import STAGE_EMAILS, STAGE_LABELS, follow_ups
 from tracker.common import BLUE, PRIORITY_ROLES, colors, filtered, load_jobs, nothing_matches, numbers, query
-from tracker.runlog_tab import dollars
+from tracker.runlog_tab import CAIRO, dollars
 
 st.title("Today", icon=":material/today:")
 jobs = load_jobs()
@@ -40,8 +41,9 @@ else:
 # 2. your deadlines (core.deadline): the next three not done, and every one to edit
 st.subheader("Deadlines")
 deadlines = query("SELECT d.deadline_id, d.due, d.what, d.note, d.done, d.job_id,"
-                  " nullif(concat_ws(' at ', j.title, nullif(j.company, '')), '') AS job, d.due - current_date AS days_left"
+                  " nullif(concat_ws(' at ', j.title, nullif(j.company, '')), '') AS job, d.due - (now() AT TIME ZONE 'Africa/Cairo')::date AS days_left"
                   " FROM core.deadline d LEFT JOIN core.job j USING (job_id) ORDER BY d.done, d.due")
+deadlines["done"] = deadlines["done"].astype(bool)  # an empty table gives an object column, and ~ of it is no mask
 # every overdue one (they are the most urgent), then the next three
 open_ = deadlines[~deadlines["done"]]
 upcoming = pd.concat([open_[open_["days_left"] < 0], open_[open_["days_left"] >= 0].head(3)])
@@ -65,8 +67,10 @@ with st.expander("Edit deadlines"):
                                 "done": st.column_config.CheckboxColumn("Done", default=False)})
     if st.button("Save deadlines", icon=":material/save:"):
         with connect() as conn:
-            kept = [int(i) for i in edited["deadline_id"].dropna()]
-            conn.execute("DELETE FROM core.deadline WHERE deadline_id <> ALL(%s)", (kept,))
+            # only the rows you deleted here: one added since the page loaded (an Apply by from the daily run) stays
+            removed = [int(i) for i in set(deadlines["deadline_id"]) - set(edited["deadline_id"].dropna())]
+            if removed:
+                conn.execute("DELETE FROM core.deadline WHERE deadline_id = ANY(%s)", (removed,))
             for d in edited.itertuples():
                 row = (d.due, d.what, d.note if isinstance(d.note, str) and d.note.strip() else None,
                        int(d.job_id) if pd.notna(d.job_id) else None, bool(d.done))
@@ -80,10 +84,9 @@ with st.expander("Edit deadlines"):
 
 # 3. your applications: the stages from your mailbox, and what is due today
 st.subheader("Your applications")
-stage = query("SELECT kind, count(DISTINCT lower(coalesce(company, title))) AS companies FROM core.application_email"
-              " WHERE kind IN ('applied', 'viewed', 'interview', 'offer', 'hired') GROUP BY kind")
-funnel = (stage.set_index("kind")["companies"].reindex(["applied", "viewed", "interview", "offer", "hired"], fill_value=0)
-          .rename(lambda k: k.capitalize()).rename_axis("Stage").reset_index(name="Companies"))
+# the Applications page's funnel (application_stages), so both pages give the same numbers
+counts = funnel_counts(application_stages(list(query(STAGE_EMAILS).itertuples(index=False))))
+funnel = pd.DataFrame({"Stage": [STAGE_LABELS[k] for k in counts], "Companies": list(counts.values())})
 with connect() as conn:
     due = len(follow_ups(conn))
 left, right = st.columns([2, 1], gap="large")
@@ -109,7 +112,7 @@ if runs.empty:
     st.caption("No run logged yet: the next run fills this.")
 else:
     month = query("SELECT sum(cost_usd) AS cost_usd FROM core.step_run"
-                  " WHERE started_at >= date_trunc('month', now() AT TIME ZONE 'Africa/Cairo')")
+                  f" WHERE (started_at {CAIRO}) >= date_trunc('month', now() {CAIRO})")
     ran = runs["started_at"].max().tz_convert("Africa/Cairo")
     problems = int(runs["status"].isin(["warn", "failed"]).sum())
     with st.container(horizontal=True):

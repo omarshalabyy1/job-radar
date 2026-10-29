@@ -29,10 +29,10 @@ from dateutil.parser import isoparse
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from . import fx, sources
+from . import fx, runlog, sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
 from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
-                     ROLE_LABEL, ROOT, WORK_DAYS,
+                     ROLE_LABEL, ROOT, SEEN_DAYS, WORK_DAYS,
                      NOT_REMOTE, SETTINGS, hidden_reason, in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
 from .eligibility import eligibility, not_for_egypt  # noqa: F401  (python -m job_radar eligibility)
@@ -69,11 +69,12 @@ def schema(conn) -> None:
     conn.commit()
 
 
-def load(conn, name: str, rows: list[dict], wide: bool = False) -> None:
+def load(conn, name: str, rows: list[dict], wide: bool = False, record: bool = True) -> tuple[int, int]:
     """Add one source's new postings to raw.job_posting: a posting already there (same source and
     link) only has its last_seen moved to today, so re-running a step adds nothing twice. With features.eligibility, a
     posting someone living in Egypt cannot take (eligibility.not_for_egypt) is never stored, unless the source is `wide`
-    (the website's collection: transform then keeps it out of your scope). NUL characters, which Postgres refuses, are dropped."""
+    (the website's collection: transform then keeps it out of your scope). NUL characters, which Postgres refuses, are dropped.
+    Returns (postings, dropped); without `record` they are not recorded (drop_warning): the caller counts its batches once."""
     barred = 0
     if FEATURES["eligibility"] and not wide:
         kept = [r for r in rows if not not_for_egypt(
@@ -99,8 +100,9 @@ def load(conn, name: str, rows: list[dict], wide: bool = False) -> None:
     conn.commit()
     new = conn.execute(count, (names,)).fetchone()[0] - before
     print(f"{name}: {rows_in} postings, {new} new" + (f", {barred} not for Egypt dropped" if barred else ""))
-    if warning := drop_warning(conn, name, rows_in, barred, judged=FEATURES["eligibility"] and not wide):
+    if record and (warning := drop_warning(conn, name, rows_in, barred, judged=FEATURES["eligibility"] and not wide)):
         print(f"WARNING {warning}")
+    return rows_in, barred
 
 
 DROP_MIN = 10  # postings a day before a board's drop rate is judged
@@ -201,31 +203,36 @@ def extract_linkedin(conn) -> None:
 
 def extract_companies(conn) -> None:
     """The careers pages in core.company; a site not yet known is detected first, and one another
-    source covers is not read. A site checked in the last 24 hours is skipped, so each run moves on
-    to the others, never checked or oldest checked first."""
+    source covers is not read. A site checked in the last 20 hours is skipped (not 24: checked_at is stamped after the step
+    starts, so yesterday's read is under 24 hours old), so each run moves on to the others, never checked or oldest checked
+    first. The day's count (drop_warning) is all batches', once: a last batch with no job is not a silent board."""
+    if not online():  # a red task Airflow retries, not a green run that found nothing
+        raise RuntimeError("no network: host names do not resolve")
     sites = conn.execute(
         "SELECT company, careers_url, platform, api FROM core.company WHERE coalesce(careers_url, '') <> ''"
         " AND platform IS DISTINCT FROM 'covered'"
-        " AND (checked_at IS NULL OR checked_at < now() - interval '1 day')"
+        " AND (checked_at IS NULL OR checked_at < now() - interval '20 hours')"
         " ORDER BY checked_at NULLS FIRST").fetchall()
+    batches = postings = dropped = 0
     # 50 sites at a time, each batch saved before the next: a run stopped part way keeps what it found,
     # and no batch starts once the step's time budget is nearly spent
     for start in range(0, len(sites), 50):
         if sources.time_left(EXTRACT_SECONDS) < 70:
             print(f"extract_companies: time budget reached, {len(sites) - start} sites wait for the next run")
             break
-        found: list[tuple] = []
-
-        def company_sites():
-            rows, detected = sources.company_sites(sites[start:start + 50])
-            found.extend(detected)
-            return rows
-
-        extract(conn, company_sites)
+        try:
+            rows, found = sources.company_sites(sites[start:start + 50])
+        except Exception as e:  # one batch down is a short day, not a failed run
+            print(f"WARNING company_sites: {e!r}"[:300])
+            continue
+        batch = load(conn, "company_sites", rows, record=False)
+        batches, postings, dropped = batches + 1, postings + batch[0], dropped + batch[1]
         with conn.cursor() as cur:
             cur.executemany("UPDATE core.company SET platform = %s, api = %s, note = %s, checked_at = now()"
                             " WHERE company = %s", found)
         conn.commit()
+    if batches and (warning := drop_warning(conn, "company_sites", postings, dropped, judged=FEATURES["eligibility"])):
+        print(f"WARNING {warning}")
 
 
 MARKET_BOARDS = 40  # boards read a run, oldest read first: grown step by step (Omar, 2026-10-17: 20, then 40; watch time and RAM)
@@ -300,7 +307,17 @@ def extract_apify(conn) -> None:
 
 
 def extract_portals(conn) -> None:
-    extract(conn, sources.company_portals)
+    """company_portals. Nothing back (its feed unchanged since its last read, or no chunk read: each failure prints its
+    own WARNING) is not counted, so an unchanged feed is not a board gone silent (drop_warning)."""
+    if not online():
+        raise RuntimeError("no network: host names do not resolve")
+    try:
+        rows = sources.company_portals()
+    except Exception as e:  # down is a short day, not a failed run
+        print(f"WARNING company_portals: {e!r}"[:300])
+        return
+    if rows:
+        load(conn, "company_portals", rows)
 
 
 def extract_email(conn) -> None:
@@ -551,7 +568,9 @@ def transform(conn) -> None:
     for job in jobs.values():
         job["company_size"] = sizes.get(letters(job["company"]))
         job.update(job.pop("salary") or dict.fromkeys(("salary_min", "salary_max", "salary_currency", "salary_period")))
-    deleted = {key for (key,) in conn.execute("SELECT job_key FROM core.job_seen")}  # never stored again
+    # a key deleted, then deleted or posted again within SEEN_DAYS, is not stored again (one not seen longer is a new opening)
+    deleted = {key for (key,) in conn.execute("SELECT job_key FROM core.job_seen WHERE seen_on >= current_date - %s",
+                                               (SEEN_DAYS,))} & jobs.keys()
     jobs = {key: job for key, job in jobs.items() if key not in deleted}
     with conn.cursor() as cur:
         cur.executemany("""
@@ -564,6 +583,7 @@ def transform(conn) -> None:
                     %(salary_currency)s, %(salary_period)s, %(in_scope)s, %(last_seen)s)
             ON CONFLICT (job_key) DO UPDATE SET
                 in_scope = j.in_scope OR EXCLUDED.in_scope,
+                first_seen = CASE WHEN EXCLUDED.in_scope AND NOT j.in_scope THEN EXCLUDED.first_seen ELSE j.first_seen END,
                 role_rank = CASE WHEN EXCLUDED.in_scope AND NOT j.in_scope THEN EXCLUDED.role_rank ELSE j.role_rank END,
                 role = CASE WHEN EXCLUDED.in_scope AND NOT j.in_scope THEN EXCLUDED.role ELSE j.role END,
                 last_seen = greatest(j.last_seen, EXCLUDED.last_seen),
@@ -583,6 +603,7 @@ def transform(conn) -> None:
                 # a remote listing of it (yours), or the first posting of it that is yours: the job takes its place and link
                 moved="EXCLUDED.in_scope AND (EXCLUDED.place = 'Remote' OR NOT j.in_scope)"),
             list(jobs.values()))
+        cur.execute("UPDATE core.job_seen SET seen_on = current_date WHERE job_key = ANY(%s)", (list(deleted),))  # still posted
         # the slim history first, so a job deleted below keeps its line (seen today: a posting of it came in this window)
         cur.execute(
             "INSERT INTO core.job_history AS h (job_key, first_seen, last_seen, source, role, place, score, closed_on)"
@@ -597,8 +618,9 @@ def transform(conn) -> None:
                  " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
             (DAYS, list(jobs)), "out of scope")
         kept = (" AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)"
-                # a job with a deadline not done yet stays, or the deadline would lose its job
-                " AND NOT EXISTS (SELECT 1 FROM core.deadline d WHERE d.job_id = j.job_id AND NOT d.done)")
+                # a job with a deadline not done yet and not past stays, or the deadline would lose its job
+                # (mart.job_status's fresh_level 6 says the same)
+                " AND NOT EXISTS (SELECT 1 FROM core.deadline d WHERE d.job_id = j.job_id AND NOT d.done AND d.due >= current_date)")
         # a board's job it has not listed for CLOSED_AFTER_DAYS although the board was read since (a board not read is no
         # sign; one whose posting is already gone from raw keeps the job until KEEP_DAYS)
         closed_where = ("j.source LIKE '%%-board' AND j.last_seen < current_date - %s AND EXISTS (SELECT 1 FROM raw.job_posting r"
@@ -607,14 +629,15 @@ def transform(conn) -> None:
         aged_where = "j.first_seen < current_date - %s AND j.source <> 'manual'" + kept  # a job you added stays till you remove it
         for where, days in ((closed_where, CLOSED_AFTER_DAYS), (aged_where, KEEP_DAYS)):
             # your jobs' keys only: a website job deleted may come back (reposted, or remote), for you or the site
-            cur.execute(f"INSERT INTO core.job_seen SELECT job_key FROM core.job j WHERE j.in_scope AND {where} ON CONFLICT DO NOTHING",
-                        (days,))
+            cur.execute(f"INSERT INTO core.job_seen (job_key) SELECT job_key FROM core.job j WHERE j.in_scope AND {where}"
+                        " ON CONFLICT (job_key) DO UPDATE SET seen_on = current_date", (days,))
         closed = archive_and_delete(cur, closed_where, (CLOSED_AFTER_DAYS,), "closed")
         aged = archive_and_delete(cur, aged_where, (KEEP_DAYS,), "aged")
         cur.execute("DELETE FROM raw.job_posting WHERE last_seen < current_date - %s", (WORK_DAYS,))
     conn.commit()
     yours = sum(job["in_scope"] for job in jobs.values())
-    print(f"transform: {len(postings)} postings -> {yours} jobs yours, {len(jobs) - yours} website only; removed: {dropped} out"
+    print(f"transform: {len(postings)} postings -> {yours} jobs yours, {len(jobs) - yours} website only, {len(deleted)} deleted"
+          f" before; removed: {dropped} out"
           f" of scope, {closed} closed, {aged} over {KEEP_DAYS} days; not yours: "
           + ", ".join(f"{skipped[reason]} {reason}" for reason in ("no role", "too senior", "not in reach", "barred")))
 
@@ -831,7 +854,8 @@ def email_abroad(conn) -> None:
     email(conn, home=False)
 
 
-# The window's jobs of one side (home or not) not emailed yet, best first; Claude's score counts only with features.grade
+# The jobs of one side (home or not) not emailed yet, first seen in the last WORK_DAYS (a day the email failed goes the
+# next day), best first; Claude's score counts only with features.grade
 EMAIL_JOBS = """
     SELECT s.*, j.description, r.payload->>'job_type' AS job_type FROM mart.job_status s
     JOIN core.job j USING (job_id) LEFT JOIN raw.job_posting r ON (r.source, r.job_url) = (s.source, s.job_url)
@@ -844,13 +868,14 @@ EMAIL_JOBS = """
 def problems(conn) -> list[tuple[str, str, str]]:
     """This run's steps that did not end clean: (step, status, summary) for each step of the latest collect (since its
     schema step started) that failed, warned (it printed a WARNING: a source down, 0 rows where it had some, a board gone)
-    or is still marked running though it ended (killed at its timeout). The run's own report is not one of them."""
+    or is still marked running longer than the longest timeout (runlog.STALE_SECONDS: killed); a step still running beside
+    this one (tailor, outreach_drafts beside publish) is not. The run's own report is not one of them."""
     return conn.execute(
         "SELECT step, status, coalesce(summary, '') FROM core.step_run WHERE started_at >= coalesce("
         "(SELECT max(started_at) FROM core.step_run WHERE step = 'schema'), now() - interval '1 day')"
         " AND step NOT IN ('run_report', 'email_egypt', 'email_abroad')"
-        " AND (status IN ('failed', 'warn') OR (status = 'running' AND started_at < now() - interval '1 minute'))"
-        " ORDER BY started_at").fetchall()
+        " AND (status IN ('failed', 'warn') OR (status = 'running' AND started_at < now() - make_interval(secs => %s)))"
+        " ORDER BY started_at", (runlog.STALE_SECONDS,)).fetchall()
 
 
 SILENT = re.compile(r"0 postings today|answered \d{3}|has the site changed|has the board changed")  # a source silent or refusing
@@ -893,7 +918,7 @@ def email(conn, home: bool) -> None:
     Each job is marked emailed, so it is never sent twice. Without Gmail settings, write it to output/
     instead and mark nothing."""
     name = HOME if home else f"Outside {HOME}"
-    jobs = conn.cursor(row_factory=dict_row).execute(EMAIL_JOBS, (DAYS, HOME, home, FEATURES["grade"])).fetchall()
+    jobs = conn.cursor(row_factory=dict_row).execute(EMAIL_JOBS, (WORK_DAYS, HOME, home, FEATURES["grade"])).fetchall()
     jobs = [j for j in jobs if not hidden_reason(j["status"], j["restriction"], j["score"])]
     if not FEATURES["grade"]:  # off: no score or reason in the email either
         for j in jobs:

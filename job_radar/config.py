@@ -16,6 +16,9 @@ WORK_DAYS = 5
 # a job read from a company board's full list of open jobs (source '<ats>-board') that the board stopped listing this
 # many days ago is closed: transform deletes it before KEEP_DAYS
 CLOSED_AFTER_DAYS = 2
+# a job transform deleted is not stored again while it is still posted; its key (title and company) is free once not
+# seen for this long, so a new opening of the same title at the same company is a new job (core.job_seen)
+SEEN_DAYS = 30
 # Each extract step (Airflow runs them one by one) gets 150 seconds and describe 60; what does not
 # fit waits for the next run.
 EXTRACT_SECONDS = 150

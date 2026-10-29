@@ -2,13 +2,14 @@
 gray is everything else; orange only marks a skill your CV lacks."""
 
 import re
+from datetime import timedelta
 from itertools import combinations
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
-from job_radar.config import ROLE_LABEL
+from job_radar.config import KEEP_DAYS, ROLE_LABEL
 from tracker.common import BLUE, GRAY, ORANGE, PRIORITY_ROLES, colors, filtered, load_jobs, nothing_matches, query
 
 st.title("Market", icon=":material/monitoring:")
@@ -49,7 +50,8 @@ de_ai = shown[prio]
 coverage = de_ai["cv_coverage"].dropna()
 today = pd.Timestamp.now(tz="Africa/Cairo").date()
 per_day = de_ai.groupby("first_seen").size()
-earlier = per_day[per_day.index < today]
+# the last KEEP_DAYS days, all still in core.job (an older day keeps only the jobs with a status), 0 for a day with none
+earlier = per_day.reindex([today - timedelta(days=n) for n in range(KEEP_DAYS, 0, -1)], fill_value=0)
 new_today = int(per_day.get(today, 0))
 
 # what the boards offered that you could not take: the extract steps' own counts
@@ -65,8 +67,8 @@ with st.container(horizontal=True):
     st.metric("DE and AI jobs", len(de_ai), border=True, width=170, delta=f"{len(de_ai) / len(shown):.0%} of {len(shown)}", delta_color="off",
               help="Jobs in your first three roles in settings.yaml, of the jobs your filters keep")
     st.metric("New today", new_today, border=True, width=170,
-              delta=f"{new_today - earlier.mean():+.0f} vs a usual day" if len(earlier) else None,
-              help="DE and AI jobs first found today, against the average of the earlier days the radar kept")
+              delta=f"{new_today - earlier.mean():+.0f} vs a usual day" if (per_day.index < today).any() else None,
+              help=f"DE and AI jobs first found today, against the average of the last {KEEP_DAYS} days")
     st.metric("Remote", f"{(de_ai['place'] == 'Remote').mean():.0%}" if len(de_ai) else "n/a", border=True, width=170,
               help="Share of the DE and AI jobs open to anywhere, or to Egypt")
     st.metric("Median CV coverage", f"{coverage.median():.0f}%" if len(coverage) else "n/a", border=True, width=200,

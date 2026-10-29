@@ -104,10 +104,10 @@ def render(query) -> None:
     st.caption("Every job you applied for (status applied, interview or offer), last updated first, even before a confirmation email arrives.")
     st.dataframe(query(SENT), hide_index=True, column_config={
         "company": "Company", "title": "Title", "status": "Status", "note": "How",
-        "updated": st.column_config.DatetimeColumn("Updated", format="D MMM YYYY", help="When you last changed the status or note"),
+        "updated": st.column_config.DatetimeColumn("Updated", format="D MMM YYYY", timezone="Africa/Cairo", help="When you last changed the status or note"),
         "job_url": st.column_config.LinkColumn("Job", display_text="Open")})
     mails = query(COMPANIES_BY_KIND).set_index("kind")["n"]
-    if mails.drop("other", errors="ignore").empty:
+    if (mails.drop("other", errors="ignore") == 0).all():  # the ghosted row is always there
         st.info("No application emails yet: the next track_applications run reads them from your mailbox.")
         return
     with st.container(horizontal=True):  # side by side on a desktop, wrapping on a phone
@@ -136,8 +136,8 @@ def render(query) -> None:
                                                         "applications", "emails"],
                  column_config={
         "started_on": st.column_config.DateColumn("Started", format="D MMM YYYY", help="Your start date there, once hired"),
-        "company": "Company", "titles": "Titles", "applications": "Applications", "first_applied": st.column_config.DatetimeColumn("First applied", format="D MMM YYYY"),
-        "latest_news": "Latest news", "latest_date": st.column_config.DatetimeColumn("Latest news on", format="D MMM YYYY"),
+        "company": "Company", "titles": "Titles", "applications": "Applications", "first_applied": st.column_config.DatetimeColumn("First applied", format="D MMM YYYY", timezone="Africa/Cairo"),
+        "latest_news": "Latest news", "latest_date": st.column_config.DatetimeColumn("Latest news on", format="D MMM YYYY", timezone="Africa/Cairo"),
         "emails": "Emails"})
 
     st.subheader("Funnel", icon=":material/filter_alt:")
