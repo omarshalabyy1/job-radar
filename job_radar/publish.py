@@ -56,7 +56,7 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 import psycopg
 
 BATCH = 500
-KEEP_DAYS = 4  # Neon holds jobs first seen in the last 4 days (the free tier's quota); the full history stays in the local warehouse
+KEEP_DAYS = 5  # Neon holds jobs first seen in the last 5 days (the free tier's quota); the full history stays in the local warehouse
 JOB = ("job_id", "title", "company", "location", "place", "role", "source", "job_url", "apply_url",
        "company_size", "years_required", "restriction", "posted_at", "first_seen", "description")
 # The wide columns, in jobs.job's order (radar-web/db/schema.sql); each is published only when Neon's jobs.job has it.

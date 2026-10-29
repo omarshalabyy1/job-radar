@@ -10,7 +10,7 @@
 #           job with its own job_key, marked emailed), so a job Neon already has is matched by its job_key, never added
 #           twice, and published under the same id (made from job_key). Every extract_ step in job_radar/__main__.py's STEPS
 #           runs, so a new collector needs no change here; one without its secret here (LinkedIn's Apify, your mailboxes)
-#           skips itself. No Claude step and no email runs. publish prunes: Neon keeps the last 4 days of jobs (publish.py KEEP_DAYS) plus every job a user saved or tracked.
+#           skips itself. No Claude step and no email runs. publish prunes: Neon keeps the last 5 days of jobs (publish.py KEEP_DAYS) plus every job a user saved or tracked.
 #           After the publish, publish.py asks the website for the instant Telegram push (CRON_SECRET).
 # Two runs never overlap (concurrency). Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL,
 # CRON_SECRET (the website's, the same value as radar-web's); JOOBLE_API_KEY and APIFY_TOKENS (comma-separated), optional. GitHub runs a schedule only from
