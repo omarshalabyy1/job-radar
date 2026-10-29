@@ -3,6 +3,8 @@ name: job-radar
 description: Run Omar's job-radar (C:\Users\DELL\GitHub\job-radar) and bring Claude into it - start a collect and check it, then grade the best new matches against his CV, tailor a CV and cover letter for the ones he picks, and help him apply. Use this whenever Omar types /job-radar, or says things like "run the radar", "any new jobs?", "check today's matches", "review my matches", "tailor my CV for this job", "write a cover letter for job 123", "apply to the best ones", "send the job emails now", or asks whether job-radar's last run worked - even if he never names the skill. Airflow's daily run has Claude grade every new job closest to his CV first and draft Egypt's best (settings.yaml features); this skill is where Claude works on his job search with him. Not for the Argus project.
 ---
 
+> **System skills (MUST):** your next action after reading this skill is a Skill tool call to `superpowers:using-superpowers`, then the matching superpowers skill (brainstorming before new work, systematic-debugging for a bug or failure, test-driven-development for code, verification-before-completion before saying done). If the task reaches outside this skill's domain, invoke `skill-finder` to pick the skill that owns it. CLAUDE.md rules win on conflict.
+
 # job-radar, with Claude
 
 job-radar finds data and AI jobs for Omar every day: Airflow collects once a day at 12pm (Cairo) and

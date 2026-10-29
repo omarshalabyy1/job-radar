@@ -56,6 +56,7 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 import psycopg
 
 BATCH = 500
+KEEP_DAYS = 4  # Neon holds jobs first seen in the last 4 days (the free tier's quota); the full history stays in the local warehouse
 JOB = ("job_id", "title", "company", "location", "place", "role", "source", "job_url", "apply_url",
        "company_size", "years_required", "restriction", "posted_at", "first_seen", "description")
 # The wide columns, in jobs.job's order (radar-web/db/schema.sql); each is published only when Neon's jobs.job has it.
@@ -220,9 +221,13 @@ def publish_once(conn) -> None:
     jobs = conn.execute(f"SELECT {', '.join(WIDE_SQL.get(c, c) + ' AS ' + c for c in wide)}, job_key FROM core.job"
                         " WHERE source NOT IN ('remotive', 'himalayas')"
                         " AND source NOT LIKE 'email:%%'"  # 'email:...' is the site's private email-job namespace
-                        " ORDER BY job_id", (list(TRACKS),)).fetchall()
+                        # Only recent jobs go (the prune below deletes older ones on Neon), by the source's posted_at: a job
+                        # pruned from Neon and found again by a fresh GitHub warehouse gets a new first_seen, not a new
+                        # posted_at, so it is not published (and pushed) again as new. Gmail alert jobs ('email') always go.
+                        " AND (source = 'email' OR coalesce(posted_at::date, first_seen) >= current_date - %s)"
+                        " ORDER BY job_id", (list(TRACKS), KEEP_DAYS)).fetchall()
     if not jobs:
-        raise RuntimeError("publish: core.job has 0 rows; Neon is left untouched")
+        raise RuntimeError(f"publish: no job in core.job posted in the last {KEEP_DAYS} days; Neon is left untouched")
     # A Gmail alert job (source 'email', owner-only on Neon) goes with clean links (clean_url); a link that cannot be
     # unwrapped goes as it is, so the job stays (Omar's choice: keep these jobs, never prune them for a link).
     src, job_url, apply_url = (wide.index(c) for c in ("source", "job_url", "apply_url"))
@@ -260,7 +265,9 @@ def publish_once(conn) -> None:
         if absent := [c for c in WIDE if c not in have]:
             print(f"WARNING publish: skipped: jobs.job columns not on Neon yet: {', '.join(absent)}")
         # Counted before the upsert; the site's own email jobs are not the warehouse's, so they are left out.
-        on_neon = cur.execute("SELECT count(*) FROM jobs.job WHERE source NOT LIKE 'email:%%'").fetchone()[0]
+        # Only Neon's recent jobs: older ones it keeps (saved, tracked) are not the warehouse's to send.
+        on_neon = cur.execute("SELECT count(*) FROM jobs.job WHERE source NOT LIKE 'email:%%' AND (source = 'email'"
+                              " OR coalesce(posted_at::date, first_seen) >= current_date - %s)", (KEEP_DAYS,)).fetchone()[0]
         if len(jobs) * 2 < on_neon:
             print(f"WARNING publish: only {len(jobs)} jobs read, Neon has {on_neon}")
         # Remove this check once radar-db's jobs.job.job_key is applied everywhere.
@@ -320,8 +327,12 @@ def publish_once(conn) -> None:
             # Each table is checked only if Neon has it yet (remove this once radar-db's inbox_job and outreach are applied everywhere).
             held = [t for (t,) in cur.execute("SELECT t FROM unnest(%s::text[]) AS t WHERE to_regclass('app.' || t) IS NOT NULL",
                                               (list(KEPT),)).fetchall()]
+            # tracker.application_email has no foreign key to jobs.job, so a job an application email points at is kept by hand.
+            emailed = cur.execute("SELECT to_regclass('tracker.application_email') IS NOT NULL").fetchone()[0]
             cur.execute("DELETE FROM jobs.job j WHERE j.job_id <> ALL(%s) AND j.source NOT LIKE 'email:%%'"
-                        + "".join(f" AND NOT EXISTS (SELECT 1 FROM app.{t} x WHERE x.job_id = j.job_id)" for t in held), (list(ids),))
+                        + "".join(f" AND NOT EXISTS (SELECT 1 FROM app.{t} x WHERE x.job_id = j.job_id)" for t in held)
+                        + (" AND NOT EXISTS (SELECT 1 FROM tracker.application_email x WHERE x.job_id = j.job_id)" if emailed else ""),
+                        (list(ids),))
             deleted = cur.rowcount
             if has_job_skill:
                 cur.execute("DELETE FROM jobs.job_skill t WHERE NOT EXISTS (SELECT 1 FROM unnest(%s::bigint[], %s::text[]) AS s(job_id, skill)"

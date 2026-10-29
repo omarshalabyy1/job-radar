@@ -10,10 +10,10 @@
 #           job with its own job_key, marked emailed), so a job Neon already has is matched by its job_key, never added
 #           twice, and published under the same id (made from job_key). Every extract_ step in job_radar/__main__.py's STEPS
 #           runs, so a new collector needs no change here; one without its secret here (LinkedIn's Apify, your mailboxes)
-#           skips itself. No Claude step and no email runs. publish runs with PUBLISH_PRUNE=0: it deletes nothing on Neon.
+#           skips itself. No Claude step and no email runs. publish prunes: Neon keeps the last 4 days of jobs (publish.py KEEP_DAYS) plus every job a user saved or tracked.
 #           After the publish, publish.py asks the website for the instant Telegram push (CRON_SECRET).
 # Two runs never overlap (concurrency). Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL,
-# CRON_SECRET (the website's, the same value as radar-web's); JOOBLE_API_KEY, optional. GitHub runs a schedule only from
+# CRON_SECRET (the website's, the same value as radar-web's); JOOBLE_API_KEY and APIFY_TOKENS (comma-separated), optional. GitHub runs a schedule only from
 # the default branch (main). Run it by hand from the Actions tab (Run workflow).
 
 name: daily-backup
@@ -70,7 +70,7 @@ jobs:
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
-      PUBLISH_PRUNE: "0"
+      APIFY_TOKENS: ${{ secrets.APIFY_TOKENS }}  # optional: LinkedIn's search, the next token on a 402 or 403
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +79,12 @@ jobs:
           python-version: "3.10"  # the Dockerfile's
           cache: pip
           cache-dependency-path: requirements.txt
+      - name: Keep the sources' holds between runs  # else LinkedIn's 20-hour Apify hold is forgotten and it runs every collect
+        uses: actions/cache/restore@v4
+        with:
+          path: output/waits
+          key: waits-${{ github.run_id }}
+          restore-keys: waits-
       - name: Install
         run: |
           pip install -r requirements.txt
@@ -96,3 +102,9 @@ jobs:
           done
       - name: Publish to Neon
         run: python -m job_radar publish
+      - name: Save the sources' holds  # always: a failed publish must not make the next run pay for Apify again
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: output/waits
+          key: waits-${{ github.run_id }}
