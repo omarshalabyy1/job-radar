@@ -39,6 +39,10 @@ certification, skill, client, number or shipped service: every one must be in <c
 "building"). The CV and the cover letter never mention a gap or something the candidate has not done ("I have not yet \
 worked with" is banned); gaps go only in notes_md.
 
+Data engineering comes first, for an AI job too: the summary, the skills and each role's bullets lead with the pipelines, \
+warehouses and data quality, and the AI work reads as the layer built on that data. The candidate does not train models: \
+never write fine-tuning, LoRA, QLoRA, PEFT, SFT, "trained a model" or any training claim, even when the posting asks for it.
+
 Voice, in all three: plain, direct, confident and senior, never junior or job-seeking. Lead with strengths, impact and \
 achievements, with numbers only from <cv>. Short sentences. Verbs and outcomes, not adjectives. The employer is the \
 subject: "your team", "your data". Spell out an abbreviation the first time a business reader meets it. Never write \
