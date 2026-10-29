@@ -16,21 +16,27 @@ nothing), so a second run changes nothing and writes nothing; the summary line s
 counted_at is the start of the day, so a rerun on the same day changes nothing. A track outside Neon's closed list of twelve
 (the warehouse's 'Not tech') goes as NULL, a startup team_size under 1 as NULL and a startup location is cut at 200 characters,
 the three values Neon's CHECKs would otherwise refuse. The source counts are pruned to this run's sources; skill days and
-startups are only added to and updated, never deleted (the spec asks no prune).
+startups are only added to and updated, never deleted (the spec asks no prune). On GitHub Actions (GITHUB_ACTIONS set) the source
+counts and skill days are left as they are, neither upserted nor pruned: that warehouse holds only Neon's jobs and one run's finds,
+so its numbers are partial; the laptop's publish writes them.
 One transaction on Neon: the remap, the jobs, the skills, the job skills, the grades, then the prunes, or nothing. When Neon's
 jobs.job has the job_key column, a job's id on Neon is nat_id(job_key), the same id whoever writes it, and the upsert carries
 job_key. Neon's rows still on a warehouse job_id (job_key null, or set by an earlier publish with the old id) are first
 renumbered in place to nat_id(job_key), the key read from core.job or core.job_archive; ON UPDATE CASCADE carries every
 user row that points at them, and tracker.application_email.job_id, which has no foreign key, is updated by hand. A row whose
 new id or key is already on Neon is left and printed. The next run finds nothing to renumber. On an older Neon without the
-column, the jobs go as before with the warehouse's job_id. The jobs prune deletes a jobs.job row that core.job no longer holds, unless it is an email job
-(source 'email:...', which the website inserts and the warehouse never holds) or some user has an app.job_status,
+column, the jobs go as before with the warehouse's job_id. The jobs prune deletes a jobs.job row older than the window the jobs are
+read with (coalesce(posted_at::date, first_seen) before current_date - KEEP_DAYS), by age, not by what this warehouse holds: the laptop
+never seeds from Neon, so the jobs a GitHub run added are not in its core.job and must not be deleted by its next publish. Never
+deleted: a Gmail alert job (source 'email', always published), an email job
+(source 'email:...', which the website inserts and the warehouse never holds) or a job some user has an app.job_status,
 app.job_document, app.inbox_job or app.outreach row on it (a job a user saved, wrote a CV or cover letter for, or an alert
 or outreach points at is never deleted under them: none of those tables cascades from jobs.job, so a delete would raise
 23503 and roll the whole publish back); a table that is not on Neon yet is left out of the check. A deleted job's grade and
 job skills go with it (ON DELETE CASCADE). The job skills prune comes
-next and deletes the pairs core.job_skill no longer holds; the skills prune deletes a jobs.skill row that core.skill no
-longer holds. Last, app.refresh_scores() rebuilds every user's matches.
+next and, only for the jobs this run sends pairs for, deletes the pairs core.job_skill no longer holds: a job sent with no pair
+(a GitHub run's seeded jobs, older than match_skills' window) keeps Neon's pairs. The skills prune deletes a jobs.skill row that
+core.skill no longer holds. Last, app.refresh_scores() rebuilds every user's matches.
 PUBLISH_PRUNE=0 (set by the GitHub backup runner) skips the prunes so a backup run never deletes rows the laptop's
 warehouse owns; the next normal publish prunes.
 Empty-source guard: a core.job or core.skill with 0 rows raises before Neon is touched, so a warehouse that is down or
@@ -40,7 +46,8 @@ The grades go to the app.app_user with is_owner = true (Omar's row, created when
 OWNER_EMAIL is only a fallback for when no such row exists: it then picks his row by email. Neither found: the grades
 are skipped with a line saying so, never a failure.
 Every skip or partial publish prints its own line starting "WARNING publish: " (job-radar's run log emails those): a table or
-column Neon lacks, no owner, PUBLISH_PRUNE=0, a remap left, and fewer than half of the warehouse-fed jobs.job rows already on Neon read
+column Neon lacks, no owner, PUBLISH_PRUNE=0, a remap left, no core.job_skill pair for the published jobs (the jobs go, Neon's
+pairs stay), and fewer than half of the warehouse-fed jobs.job rows already on Neon read
 (a warehouse that came back thin; the 0-row guards still raise)."""
 
 from __future__ import annotations
@@ -249,8 +256,8 @@ def publish_once(conn) -> None:
         raise RuntimeError("publish: core.skill has 0 rows; Neon is left untouched")
     job_skills = conn.execute("SELECT job_id, skill FROM core.job_skill WHERE job_id = ANY(%s)"
                               " AND skill IN (SELECT skill FROM core.skill) ORDER BY job_id, skill", (list(ids),)).fetchall()
-    if not job_skills:  # else the job skills prune below would wipe jobs.job_skill on Neon
-        raise RuntimeError("publish: core.job_skill has 0 rows for the published jobs; Neon is left untouched")
+    if not job_skills:  # the job skills prune below touches only the jobs sent with pairs, so Neon's pairs all stay
+        print("WARNING publish: core.job_skill has 0 rows for the published jobs; Neon's job skills are left as they are")
     grades = conn.execute("SELECT job_id, score, cv, reason, restriction, graded_at FROM core.claude_grade").fetchall()
     # One row per source: its jobs on this run, listed unless Remotive or Himalayas, its credit line; counted_at is the day (idempotent within it).
     counts = conn.execute(f"SELECT source, count(*)::integer, source NOT IN ('remotive', 'himalayas'), {WIDE_SQL['credit']},"
@@ -280,10 +287,10 @@ def publish_once(conn) -> None:
         if "job_key" in have:
             remap(cur, keys)
             new = {row[0]: nat_id(row[-1]) for row in jobs}  # warehouse job_id -> the id on Neon
-            ids = set(new.values())
             job_skills = [(new[j], s) for j, s in job_skills]
             grades = [(new[g[0]], *g[1:]) for g in grades if g[0] in new]
             changed = upsert(cur, "jobs.job", cols + ("job_key",), ("job_id",), [(new[row[0]], *row[1:]) for row in jobs])
+            ids = set(new.values())  # the ids on Neon of the jobs sent: a Gmail alert job not among them is pruned below
         else:
             grades = [g for g in grades if g[0] in ids]
             changed = upsert(cur, "jobs.job", cols, ("job_id",), [row[:-1] for row in jobs])
@@ -298,11 +305,16 @@ def publish_once(conn) -> None:
         # The three sets below are each skipped, with one line, when Neon does not have the table yet.
         counted = dayed = startuped = 0
         has_counts, has_days, startup_cols = (columns(cur, "jobs", t) for t in ("source_count", "skill_day", "startup"))
-        if has_counts:
+        github = os.environ.get("GITHUB_ACTIONS")  # a seeded warehouse: its source counts and skill days are partial
+        if github:
+            print("publish: on GitHub Actions: jobs.source_count and jobs.skill_day left as they are (the laptop writes them)")
+        elif has_counts:
             counted = upsert(cur, "jobs.source_count", SOURCE_COUNT, ("source",), counts)
         else:
             print("WARNING publish: skipped: jobs.source_count not on Neon yet")
-        if not has_days:
+        if github:
+            pass
+        elif not has_days:
             print("WARNING publish: skipped: jobs.skill_day not on Neon yet")
         elif days:
             dayed = upsert(cur, "jobs.skill_day", SKILL_DAY, ("day", "skill"), days)
@@ -335,18 +347,22 @@ def publish_once(conn) -> None:
                                               (list(KEPT),)).fetchall()]
             # tracker.application_email has no foreign key to jobs.job, so a job an application email points at is kept by hand.
             emailed = cur.execute("SELECT to_regclass('tracker.application_email') IS NOT NULL").fetchone()[0]
-            cur.execute("DELETE FROM jobs.job j WHERE j.job_id <> ALL(%s) AND j.source NOT LIKE 'email:%%'"
+            # By age, the complement of the jobs read above: a job another warehouse (the GitHub run) added is kept until it ages out.
+            # A Gmail alert job (source 'email') is sent whatever its age, so it goes once the warehouse no longer sends it.
+            cur.execute("DELETE FROM jobs.job j WHERE j.source NOT LIKE 'email:%%' AND (j.source = 'email' AND j.job_id <> ALL(%s)"
+                        " OR j.source <> 'email' AND coalesce(j.posted_at::date, j.first_seen) < current_date - %s)"
                         + "".join(f" AND NOT EXISTS (SELECT 1 FROM app.{t} x WHERE x.job_id = j.job_id)" for t in held)
                         + (" AND NOT EXISTS (SELECT 1 FROM tracker.application_email x WHERE x.job_id = j.job_id)" if emailed else ""),
-                        (list(ids),))
+                        (list(ids), KEEP_DAYS))
             deleted = cur.rowcount
-            if has_job_skill:
-                cur.execute("DELETE FROM jobs.job_skill t WHERE NOT EXISTS (SELECT 1 FROM unnest(%s::bigint[], %s::text[]) AS s(job_id, skill)"
-                            " WHERE s.job_id = t.job_id AND s.skill = t.skill)", ([p[0] for p in job_skills], [p[1] for p in job_skills]))
+            if has_job_skill:  # only the jobs sent with pairs: a job sent with none keeps Neon's pairs
+                cur.execute("DELETE FROM jobs.job_skill t WHERE t.job_id = ANY(%s) AND NOT EXISTS (SELECT 1 FROM"
+                            " unnest(%s::bigint[], %s::text[]) AS s(job_id, skill) WHERE s.job_id = t.job_id AND s.skill = t.skill)",
+                            (list({p[0] for p in job_skills}), [p[0] for p in job_skills], [p[1] for p in job_skills]))
                 job_skills_deleted = cur.rowcount
             cur.execute("DELETE FROM jobs.skill WHERE skill <> ALL(%s)", ([s[0] for s in skills],))
             skills_deleted = cur.rowcount
-            if has_counts:  # a source with no job in core.job any more has no count; core.job is not empty (checked above)
+            if has_counts and not github:  # a source with no job in core.job any more has no count; core.job is not empty (checked above)
                 cur.execute("DELETE FROM jobs.source_count WHERE source <> ALL(%s)", ([c[0] for c in counts],))
                 counts_deleted = cur.rowcount
         cur.execute("SELECT app.refresh_scores()")

@@ -57,12 +57,14 @@ def main() -> None:
         # The application emails read already (track_applications reads only the emails not stored), their job found by job_key.
         # Neon does not hold the mailbox, so each Gmail account gets one placeholder (kind 'other', which publish_applications
         # leaves out): an account with something stored is read 3 days back, not 400.
+        # the placeholder carries the newest email Neon holds, so a gap since then is read too (track_applications)
+        newest = max((mail[1] for mail in mails), default=datetime.now(timezone.utc))
         cur.executemany(
             "INSERT INTO core.application_email (message_id, received_at, sender, subject, company, title, kind, job_id)"
             " SELECT %(m)s, %(r)s, %(s)s, %(u)s, %(c)s, %(t)s, %(k)s, (SELECT job_id FROM core.job WHERE job_key = %(j)s)"
             " ON CONFLICT DO NOTHING",
             [dict(zip("mrsuctkj", mail)) for mail in mails]
-            + [dict(m=f"seed/{address}", r=datetime.now(timezone.utc), s=address, u="seed", c=None, t=None, k="other", j=None)
+            + [dict(m=f"seed/{address}", r=newest, s=address, u="seed", c=None, t=None, k="other", j=None)
                for address in accounts()])
         cur.executemany("UPDATE core.application_email SET mailbox = %s WHERE message_id = %s",
                         [(address, f"seed/{address}") for address in accounts()])

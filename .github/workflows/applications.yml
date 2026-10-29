@@ -9,8 +9,9 @@
 # be asked again on every run); the laptop's own run still classifies them. No draft or interview notes are written.
 # Minutes: a private repository has 2,000 free Actions minutes a month. A run takes about 70 seconds, billed as 2 minutes:
 # 12 runs a day is about 720 a month; the collect (daily-backup.yml) is about 13 minutes twice a day, 780. The first step
-# adds up the month's minutes from the run list (the run times, rounded up per run) and, at 1,700 or more, runs only in
-# the even hours; at 1,950 or more it skips, so the month never stops without warning.
+# adds up the month's minutes from the run list (the run times, rounded up per run) and, at 1,700 or more, runs only every
+# 4th hour (UTC 0, 4, 8, ...: half the runs, as the schedule is every 2nd hour); at 1,950 or more it skips, so the month
+# never stops without warning.
 # Separate from the collect: its own concurrency group, so a slow collect never holds this back.
 # Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL, MAILBOXES, GMAIL_USER, GMAIL_APP_PASSWORD,
 # APPLICATION_SENDERS, OWNER_EMAIL: the same values as job-radar's .env. GitHub runs a schedule only from the default
@@ -66,7 +67,7 @@ jobs:
           used=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?created=>=$(date -u +%Y-%m)-01&per_page=100"             --jq '.workflow_runs[] | select(.status == "completed") | (((.updated_at | fromdate) - (.run_started_at | fromdate)) / 60 | ceil)'             | awk '{s += $1} END {print s + 0}')
           hour=$(date -u +%-H)
           echo "about $used of 2000 minutes used this month"
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$used" -lt 1700 ] || { [ "$used" -lt 1950 ] && [ $((hour % 2)) -eq 0 ]; }; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$used" -lt 1700 ] || { [ "$used" -lt 1950 ] && [ $((hour % 4)) -eq 0 ]; }; then
             echo "read=true" >> "$GITHUB_OUTPUT"
           else
             echo "read=false" >> "$GITHUB_OUTPUT"; echo "near the month's limit: this run is skipped"

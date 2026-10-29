@@ -231,6 +231,13 @@ def test_a_wide_board_read_keeps_tech_jobs_names_its_board_and_leaves_the_text_o
     assert job["payload"]["board"] == "ashby:acme"
 
 
+def test_glassdoor_links_keep_the_listing_id_so_each_job_is_its_own_row():
+    from job_radar.sources import apify
+    base = "https://www.glassdoor.com/partner/jobListing.htm?pos=101&src=GD_JOB_AD&jobListingId="
+    assert apify.link(base + "1010309559444&jrtk=5-yul1") != apify.link(base + "1010309559445&jrtk=5-yul1")
+    assert apify.link(base + "1&jrtk=x") == "https://www.glassdoor.com/partner/jobListing.htm?jobListingId=1"
+
+
 def test_apify_items_become_wide_postings_keyed_by_their_link_and_the_budget_stops_a_run(monkeypatch):
     from job_radar.sources import apify
     items = [{"title": "Data Engineer", "companyName": "Acme", "location": "Berlin, Germany", "postedAt": "2026-10-16",

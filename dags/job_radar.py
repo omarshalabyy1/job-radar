@@ -8,6 +8,7 @@ The collect's time is in settings.yaml (schedule), Cairo time; as shipped:
     job_radar_email_egypt   after ranked: your home's jobs (Egypt) not emailed yet
     job_radar_email_abroad  after ranked: the jobs everywhere else (remote only) not emailed yet
     job_radar_applications  every hour: track_applications reads your mailbox (read-only) for your applications
+                            -> publish_applications copies them to Neon (the website's Applications page)
     job_radar_backup        3am: pg_dump of the core and raw schemas to output/backups, the last 14 kept
 
 The smart steps have a switch each in settings.yaml (features) and print that they are off when it is false.
@@ -152,11 +153,12 @@ for dag_id, name in (("job_radar_email_egypt", "email_egypt"), ("job_radar_email
              default_args=DEFAULTS):
         step(name)
 
-# your applications as your mailbox tells them, every hour (read-only)
+# your applications as your mailbox tells them, every hour (read-only), then on Neon. publish_applications runs after the read
+# whatever it did (all_done: what is stored still goes); a Neon failure is its own red task and alert, the read stays green.
 with DAG(dag_id="job_radar_applications", schedule="0 * * * *", start_date=pendulum.datetime(2026, 10, 1, tz="Africa/Cairo"),
          catchup=False, max_active_runs=1, is_paused_upon_creation=False,
          default_args={**DEFAULTS, "execution_timeout": timedelta(seconds=300)}):
-    step("track_applications")
+    step("track_applications") >> step("publish_applications", trigger_rule="all_done")
 
 # the warehouse's own data (core and raw; the mart views are made again by schema), every night, in pg_dump's custom
 # format (nightly-<day>.dump): restore one with pg_restore. Only the newest 14 nightly dumps are kept; other files stay.

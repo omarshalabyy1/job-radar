@@ -493,13 +493,16 @@ def test_each_mailbox_is_read_for_its_own_window_and_stored_with_its_mailbox(con
                                     "zz-b@gmail.com": [mail("<zz-shared>"), mail("<zz-b-1>", "interview")],
                                     "zz-c@gmail.com": [mail("<zz-shared>")]})  # the same email in two mailboxes
     applications.track_applications(NoCommit(conn))
-    assert reads == [("zz-a@gmail.com", 3), ("zz-b@gmail.com", 400), ("zz-c@gmail.com", 400)]  # only the mailbox with no rows yet: 400 days
+    assert reads == [("zz-a@gmail.com", 14), ("zz-b@gmail.com", 400), ("zz-c@gmail.com", 400)]  # no rows yet: 400 days; a's newest is 30 days old: the 14-day gap cap
     assert conn.execute("SELECT message_id, mailbox FROM core.application_email WHERE message_id LIKE '<zz-%' ORDER BY 1").fetchall() == [
         ("<zz-a-1>", "zz-a@gmail.com"), ("<zz-b-1>", "zz-b@gmail.com"), ("<zz-old>", "zz-a@gmail.com"),
         ("<zz-shared>", "zz-b@gmail.com")]  # stored once, with the first mailbox that had it
     reads.clear()
     applications.track_applications(NoCommit(conn))  # rerun: every mailbox with rows now reads 3 days, and nothing is added
-    assert reads == [("zz-a@gmail.com", 3), ("zz-b@gmail.com", 3), ("zz-c@gmail.com", 400)]  # c holds no row of its own
+    gap = {box: min(14, max(3, (datetime.now(timezone.utc) - newest).days + 2)) for box, newest in conn.execute(
+        "SELECT mailbox, max(received_at) FROM core.application_email WHERE message_id LIKE '<zz-%' GROUP BY 1")}
+    assert reads == [("zz-a@gmail.com", gap["zz-a@gmail.com"]), ("zz-b@gmail.com", gap["zz-b@gmail.com"]),
+                     ("zz-c@gmail.com", 400)]  # from each mailbox's newest stored email; c holds no row of its own
     assert conn.execute("SELECT count(*) FROM core.application_email WHERE message_id LIKE '<zz-%'").fetchone()[0] == 4
 
 
@@ -622,3 +625,22 @@ def test_a_company_that_hired_you_shows_hired_and_your_start_date(conn):
     conn.execute("INSERT INTO core.hire (company, started_on) VALUES ('Zz Quorvex', '2026-09-01')")
     row = conn.execute(f"SELECT latest_news, started_on FROM ({APPLICATIONS}) a WHERE company = 'ZZ QUORVEX'").fetchone()
     assert row == ("hired", date(2026, 9, 1))
+
+
+def test_a_rejection_naming_another_company_is_matched_by_its_sender_and_html_is_stripped(conn):
+    """Raya's rejection came from the address of its confirmation but named its holding company, with HTML tags in the
+    subject: rematch gives it the confirmation's job (the only one from that address) and moves the job to rejected."""
+    assert applications.clean("Update with <b><span>AMAN Holding</span></b>") == "Update with AMAN Holding"
+    assert applications.clean("Raya Careers <hr@zzraya.example>") == "Raya Careers <hr@zzraya.example>"
+    job_id = conn.execute(
+        "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
+        " first_seen, in_scope) VALUES ('zz riser | zzraya', 'Riser - AI Engineer', 'ZzRaya', 'Cairo', 'Egypt', 'manual',"
+        " 'https://test.example/zzraya', 1, 'AI Engineer', false, current_date - 20, true) RETURNING job_id").fetchone()[0]
+    conn.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, company, kind, job_id)"
+                 " VALUES ('<zzr-1>', %s, 'Raya Careers <hr@zzraya.example>', 'Received', 'ZzRaya', 'applied', %s),"
+                 " ('<zzr-2>', %s, 'Raya Careers <hr@zzraya.example>', 'Update', 'AMAN Holding', 'rejected', NULL)",
+                 (at(15), job_id, at(14)))
+    with conn.cursor() as cur:
+        matched, moved = applications.rematch(cur, [])
+    assert conn.execute("SELECT job_id FROM core.application_email WHERE message_id = '<zzr-2>'").fetchone()[0] == job_id
+    assert conn.execute("SELECT status FROM core.application WHERE job_id = %s", (job_id,)).fetchone()[0] == "rejected"

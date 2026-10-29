@@ -133,15 +133,18 @@ class FakeClient:
                                   "usage": usage})
 
 
-def run_grade(monkeypatch, titles: list[str]) -> None:
+def run_grade(monkeypatch, titles: list[str]) -> list[int]:
+    """grade_claude on jobs 0, 1, ... with these titles; returns the job ids handed to alert_fresh."""
+    alerted = []
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
     monkeypatch.setitem(grade.FEATURES, "grade", True)
     monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
     monkeypatch.setattr(grade, "recent_clicks", lambda conn: [])
     monkeypatch.setattr(grade, "save_grades", lambda conn, rows: None)
-    monkeypatch.setattr(grade, "alert_fresh", lambda conn, job_ids: None)
+    monkeypatch.setattr(grade, "alert_fresh", lambda conn, job_ids: alerted.extend(job_ids))
     monkeypatch.setattr(grade, "jobs_to_grade", lambda conn: [(i, t, "Acme", "Cairo", "text", None) for i, t in enumerate(titles)])
     grade.grade_claude(FakeConn())
+    return alerted
 
 
 def test_grade_claude_fails_when_it_selected_jobs_and_graded_none(monkeypatch, capsys):
@@ -237,6 +240,16 @@ def test_a_fresh_job_graded_8_or_more_is_pushed_to_the_phone(conn, monkeypatch):
     assert pushed == ["9/10: Data Engineer"]
 
 
+def test_a_job_already_graded_8_or_more_is_not_pushed_again_when_graded_again(conn, monkeypatch):
+    jobs = {name: add_job(conn, name) for name in ("was_9", "was_7", "new")}
+    for name, score in (("was_9", 9), ("was_7", 7)):
+        conn.execute("INSERT INTO core.claude_grade (job_id, score, cv, reason, model) VALUES (%s, %s, 'cv', 'why', 'm')", (jobs[name], score))
+    assert grade.graded_8_before(conn, list(jobs.values())) == {jobs["was_9"]}
+    # grade_claude reads them before it saves the new grades, and hands alert_fresh only the others
+    monkeypatch.setattr(grade, "graded_8_before", lambda conn, job_ids: {0})
+    assert run_grade(monkeypatch, ["good zero", "good one"]) == [1]
+
+
 # ---- the free models first (llm.py), Claude last; no network ----
 import json as jsonlib  # noqa: E402
 from collections import Counter  # noqa: E402
@@ -298,6 +311,18 @@ def test_grading_uses_a_free_model_first_and_claude_only_when_none_answers(monke
     run_grade(monkeypatch, ["good one"])  # Groq down: Claude grades it
     out = capsys.readouterr().out
     assert f"1 of 1 jobs graded ({grade.SETTINGS['claude']['model']} 1); free models failed: groq HTTP 503 x1" in out
+
+
+def test_claude_grading_while_free_models_are_set_is_a_warning(monkeypatch, capsys):
+    for key in KEYS:  # test_grade loads .env: only the keys set here count
+        monkeypatch.delenv(key, raising=False)
+    free_models(monkeypatch, {"groq": (503, "")}, keys=KEYS[:1])
+    run_grade(monkeypatch, ["good one"])  # Groq down: Claude (paid) grades it
+    assert "WARNING grade_claude: Claude (paid) graded 1 of 1 jobs while free models are set; free failures: groq HTTP 503 x1" \
+        in capsys.readouterr().out
+    monkeypatch.delenv(KEYS[0])
+    run_grade(monkeypatch, ["good one"])  # no free model set: Claude is the only grader, no warning
+    assert "WARNING grade_claude: Claude (paid)" not in capsys.readouterr().out
 
 
 def test_tailoring_stays_on_claude():

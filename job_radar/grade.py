@@ -127,6 +127,13 @@ def save_deadlines(conn, rows: list[tuple]) -> None:
                         " AND what = 'Apply by')", [(job_id, day, day, job_id) for job_id, day in rows])
 
 
+def graded_8_before(conn, job_ids: list[int]) -> set:
+    """The jobs among job_ids that already hold a grade of 8 or more, read before this run's grades are saved: graded
+    again (a new CV), they are not pushed again."""
+    return {row[0] for row in conn.execute("SELECT job_id FROM core.claude_grade WHERE job_id = ANY(%s) AND score >= 8",
+                                           (job_ids,)).fetchall()}
+
+
 def alert_fresh(conn, job_ids: list[int]) -> None:
     """A phone push (digest.push) for each job just graded 8 or more that is still in its first 12 hours since it was
     posted: the ones worth applying to today. A push that fails is a warning; the grades are kept."""
@@ -198,8 +205,9 @@ def grade_claude(conn) -> None:
     first = [grade(jobs[0])] if jobs else []
     with ThreadPoolExecutor(4) as pool:
         done = [row for row in [*first, *pool.map(grade, jobs[1:])] if row]
+    pushed = graded_8_before(conn, [row[0] for row in done])  # before save_grades overwrites those grades
     save_grades(conn, [row[:6] for row in done])
-    alert_fresh(conn, [row[0] for row in done])
+    alert_fresh(conn, [row[0] for row in done if row[0] not in pushed])
     save_deadlines(conn, [(row[0], row[7]) for row in done if row[1] >= 8 and not row[4] and row[7]])
     with conn.cursor() as cur:  # the description's own digits (steps.years_required) win over Claude's reading
         cur.executemany("UPDATE core.job SET years_required = %s WHERE job_id = %s AND years_required IS NULL",
@@ -210,5 +218,9 @@ def grade_claude(conn) -> None:
           + ", ".join(f"{model} {n}" for model, n in by_model.most_common()) + ")"
           + (f"; free models failed: {', '.join(f'{why} x{n}' for why, n in llm.FAILED.most_common())}" if llm.FAILED else "")
           + (" - WARNING the API credit ran out: no more grades until you buy more" if out_of_credit else ""))
+    # The free models' daily caps count only the grades they stored, not their failed calls: say when the paid model took over.
+    if (paid := by_model[cfg["model"]]) and any(os.environ.get(key) for _, key, *_ in llm.PROVIDERS):
+        print(f"WARNING grade_claude: Claude (paid) graded {paid} of {len(done)} jobs while free models are set; free failures: "
+              + (", ".join(f"{why} x{n}" for why, n in llm.FAILED.most_common()) or "none (each at its daily cap)"))
     if jobs and not done:
         raise RuntimeError(f"grade_claude: 0 of {len(jobs)} jobs graded - check the API key, credit and network")

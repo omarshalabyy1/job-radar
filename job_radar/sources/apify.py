@@ -50,7 +50,8 @@ def field(item: dict, name: str):
     return None
 
 
-ID_PARAMS = {"jk", "id", "jobid", "job_id", "currentjobid", "gh_jid", "vjk"}  # a link's query keys that name the job
+# a link's query keys that name the job (Glassdoor's jobListingId and jl: without them its 84 jobs were one link)
+ID_PARAMS = {"jk", "id", "jobid", "job_id", "currentjobid", "gh_jid", "vjk", "joblistingid", "jl"}
 
 
 def link(url: str) -> str:

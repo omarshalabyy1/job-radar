@@ -46,7 +46,7 @@ from .tailor import GAP_WORDS, RULES, slug  # GAP_WORDS: Claude's text with one 
 # an offer only as a job offer's words ("Offer Letter", "Job Offer", "Offer of Employment"): "offer" alone brought food deals
 SEARCH = ("(subject:(applying OR application OR applied OR interview OR candidate OR position OR interest OR steps)"
           " OR subject:(offer letter) OR subject:(job offer) OR subject:(employment offer))")
-BACKFILL_DAYS, DAILY_DAYS = 400, 3
+BACKFILL_DAYS, DAILY_DAYS, GAP_DAYS = 400, 3, 14
 BODY_CHARS = 2000  # of an email sent to Claude
 # the statuses in the order an application moves up; 'viewed' and 'other' move nothing, 'ignored' is yours
 LADDER = ["new", "saved", "applied", "interview", "rejected", "offer"]
@@ -112,7 +112,9 @@ class Mail(BaseModel):
 
 
 def clean(text: str) -> str:
-    """One line without zero-width characters (SmartRecruiters puts them round the company)."""
+    """One line without zero-width characters (SmartRecruiters puts them round the company) or inline HTML tags (Raya's
+    subject came as 'with <b><span>AMAN Holding</span></b>'); a sender's <address> is kept."""
+    text = re.sub(r"</?(?:b|i|u|em|strong|span|font)\b[^>]*>", "", text, flags=re.I)
     return " ".join(re.sub(r"[​-‏⁠﻿\x00]", "", text).split())
 
 
@@ -591,14 +593,31 @@ def store(cur, jobs: list[tuple], mailbox: str, mails: list[dict]) -> tuple[int,
     return added, matched, moved, kinds
 
 
+# applicant tracking systems that send every company's emails from one address: their sender names no single job
+SHARED_SENDERS = ("greenhouse", "lever.co", "myworkday", "smartrecruiters", "ashbyhq", "workable", "linkedin", "indeed",
+                  "wuzzuf", "bayt", "recruitee", "teamtailor", "bamboohr", "jobvite", "icims", "breezy")
+
+
+def same_sender_job(cur, sender: str, received_at) -> int | None:
+    """The one job the earlier emails from this exact address are about (Raya's rejection named its holding company,
+    AMAN Holding, not Raya), or None: an address linked to several jobs, or an applicant tracking system's."""
+    address = parseaddr(sender)[1].lower()
+    if not address or any(s in address.rpartition("@")[2] for s in SHARED_SENDERS):
+        return None
+    ids = [job_id for (job_id,) in cur.execute(
+        "SELECT DISTINCT job_id FROM core.application_email WHERE job_id IS NOT NULL AND received_at <= %s"
+        " AND lower(sender) LIKE %s", (received_at, f"%{address}%")).fetchall()]
+    return ids[0] if len(ids) == 1 else None
+
+
 def rematch(cur, jobs: list[tuple]) -> tuple[int, int]:
     """(matched, moved up): the stored emails with no job, matched again (the matcher or the jobs may have changed
     since they were read), and their job's status moved as store() does. Oldest first, so the status climbs in order."""
     matched = moved = 0
-    for message_id, company, title, kind, received_at in cur.execute(
-            "SELECT message_id, company, title, kind, received_at FROM core.application_email"
+    for message_id, company, title, kind, received_at, sender in cur.execute(
+            "SELECT message_id, company, title, kind, received_at, sender FROM core.application_email"
             " WHERE job_id IS NULL AND kind <> 'other' ORDER BY received_at").fetchall():
-        if not (job_id := find_job(jobs, title, company, received_at.date())):
+        if not (job_id := find_job(jobs, title, company, received_at.date()) or same_sender_job(cur, sender, received_at)):
             continue
         cur.execute("UPDATE core.application_email SET job_id = %s WHERE message_id = %s", (job_id, message_id))
         matched += 1
@@ -617,12 +636,15 @@ def track_applications(conn) -> None:
         raise RuntimeError("track_applications: no Gmail account: MAILBOXES (address:app-password, comma-separated) or GMAIL_USER "
                            "and GMAIL_APP_PASSWORD are not set in .env")
     stored = {message_id for (message_id,) in conn.execute("SELECT message_id FROM core.application_email")}
-    known = dict(conn.execute("SELECT mailbox, count(*) FROM core.application_email GROUP BY mailbox").fetchall())
+    known = dict(conn.execute("SELECT mailbox, max(received_at) FROM core.application_email GROUP BY mailbox").fetchall())
     cfg = SETTINGS.get("claude") or {}
     jobs = conn.execute("SELECT job_id, title, company, first_seen FROM core.job WHERE in_scope").fetchall()
     emails, leftover, asked, added, matched, moved, kinds, failed = 0, 0, 0, 0, 0, 0, {}, 0
     for n, (address, password) in enumerate(boxes.items(), 1):
-        days = DAILY_DAYS if known.get(address) else BACKFILL_DAYS  # a mailbox with nothing stored yet is read from the start
+        # a mailbox with nothing stored yet is read from the start; else from its newest stored email (a gap of a few
+        # days is caught up), at least DAILY_DAYS and at most GAP_DAYS
+        days = (min(GAP_DAYS, max(DAILY_DAYS, (datetime.now(timezone.utc) - known[address]).days + 2))
+                if known.get(address) else BACKFILL_DAYS)
         try:
             classified, leftovers, found = read_mailbox(address, password, days, stored)
             if not found and not known.get(address):
