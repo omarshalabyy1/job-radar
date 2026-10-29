@@ -76,7 +76,7 @@ roles:
     search: [AI Engineer, LLM Engineer, NLP Engineer, Machine Learning Engineer, GenAI Engineer, AI Developer,
              Data Scientist, Generative AI, RAG]
     title_needs:
-      - [ai, ml, nlp, llm, llms, genai, gen ai, generative ai, machine learning, deep learning,
+      - [ai, ml, mlops, llmops, nlp, llm, llms, genai, gen ai, generative ai, machine learning, deep learning,
          computer vision, rag, agentic, conversational ai, chatbot, prompt, langchain, langgraph,
          data scien*, ذكاء اصطناعي*, تعلم الآلة*]
       - [engineer*, developer*, specialist*, scientist*, programmer*, researcher*, consultant*, intern*,
@@ -344,7 +344,7 @@ research:
 too_senior: [lead, principal, staff, head, director, manager, vp, chief, architect]
 
 # Never yours, whatever else the title says
-never: [data entry, mlops, llmops, devops, sre, site reliability, technician, teacher, tutor, instructor,
+never: [data entry, devops, sre, site reliability, technician, teacher, tutor, instructor,
         lecturer, recruiter, accountant, cyber security, cybersecurity, quality assurance, quality control,
         quality inspector, إدخال بيانات*]
 
