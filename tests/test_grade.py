@@ -285,7 +285,7 @@ def test_the_free_models_are_asked_in_order_and_a_429_or_bad_json_moves_on(monke
 
 def test_a_provider_without_a_key_or_at_its_daily_cap_is_skipped(monkeypatch):
     post = free_models(monkeypatch, {"googleapis": (200, GOOD), "openrouter": (200, GOOD)}, keys=KEYS[1:])
-    used = Counter({"gemini-2.0-flash": 180})  # Gemini's cap reached today
+    used = Counter({"gemini-flash-latest": 180})  # Gemini's cap reached today
     model, _ = llm.ask_json("system", "job", grade.Grade, used)
     assert post.asked == ["openrouter"] and used[model] == 1
 
@@ -293,7 +293,7 @@ def test_a_provider_without_a_key_or_at_its_daily_cap_is_skipped(monkeypatch):
 def test_grading_uses_a_free_model_first_and_claude_only_when_none_answers(monkeypatch, capsys):
     free_models(monkeypatch, {"groq": (200, GOOD)}, keys=KEYS[:1])
     run_grade(monkeypatch, ["good one"])
-    assert "1 of 1 jobs graded (llama-3.3-70b-versatile 1)" in capsys.readouterr().out
+    assert "1 of 1 jobs graded (openai/gpt-oss-120b 1)" in capsys.readouterr().out
     free_models(monkeypatch, {"groq": (503, "")}, keys=KEYS[:1])
     run_grade(monkeypatch, ["good one"])  # Groq down: Claude grades it
     out = capsys.readouterr().out

@@ -15,11 +15,11 @@ from pydantic import BaseModel
 
 # (name, key in .env, chat completions URL, model, calls a day: under the free tier's daily limit)
 PROVIDERS = [
-    ("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", 900),
+    ("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b", 900),
     ("gemini", "GOOGLE_GENERATIVE_AI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-     "gemini-2.0-flash", 180),
+     "gemini-flash-latest", 180),
     ("openrouter", "OPENROUTER_API_KEY", "https://openrouter.ai/api/v1/chat/completions",
-     "meta-llama/llama-3.3-70b-instruct:free", 45),
+     "google/gemma-4-26b-a4b-it:free", 45),
 ]
 LOCK = threading.Lock()
 FAILED: Counter = Counter()  # failures per provider this run, for the step's summary line

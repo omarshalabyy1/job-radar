@@ -13,8 +13,8 @@ TIMEOUTS = {"extract_linkedin": 300, "describe": 150, "embed": 240, "grade_claud
 
 
 def dollars(amount) -> str:
-    """The exact dollars as stored, never rounded; n/a when no cost was stored (not $0)."""
-    return "n/a" if amount is None or amount != amount else f"${amount:f}"
+    """Dollars to the cent; n/a when no cost was stored (not $0)."""
+    return "n/a" if amount is None or amount != amount else f"${amount:.2f}"
 
 
 def badge(step: str, status: str, age: int) -> str:
