@@ -577,7 +577,7 @@ def test_a_board_job_closes_only_when_its_board_was_read_since_and_no_longer_lis
         ids[name] = conn.execute(
             "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
             " first_seen, in_scope, last_seen) VALUES (%s, 'Engineer', 'Acme', 'Berlin', 'Unknown location', 'ashby-board', %s,"
-            " 0, 'Software Engineer', false, current_date - 10, false, current_date - 3) RETURNING job_id",
+            " 0, 'Software Engineer', false, current_date - 3, false, current_date - 3) RETURNING job_id",
             (f"test board {name}", url)).fetchone()[0]
         conn.execute("INSERT INTO raw.job_posting (run_date, last_seen, source, title, company, location, job_url, payload)"
                      " VALUES (current_date - 3, current_date - 3, 'ashby-board', 'Engineer', 'Acme', 'Berlin', %s, %s)",

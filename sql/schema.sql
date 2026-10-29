@@ -565,7 +565,7 @@ INSERT INTO core.geo_pattern (pattern, country, region) VALUES
     ('(المنامة|البحرين)', 'Bahrain', 'MENA'),
     ('(مسقط|سلطنة عمان|سلطنة عُمان)', 'Oman', 'MENA'),
     ('(عمّان|الأردن|الاردن)', 'Jordan', 'MENA');
--- A job first seen over 5 days ago (config.KEEP_DAYS) is archived (core.job_archive), then deleted by transform with its raw postings,
+-- A job first seen over 4 days ago (config.KEEP_DAYS) is archived (core.job_archive), then deleted by transform with its raw postings,
 -- unless you noted or applied to it; only its key stays here, so a job still posted later is never
 -- stored or emailed again.
 CREATE TABLE IF NOT EXISTS core.job_seen (
@@ -930,8 +930,8 @@ SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j
        j.description IS NOT NULL AS described, j.date_posted, j.first_seen, j.emailed_at,
        coalesce(a.status, 'new') AS status, a.note, a.updated_at, v.cv_label, v.cv_coverage, j.posted_at,
        -- apply within 48 hours of the posting: 1 within 12 hours, 2 within 24, 3 over 1 day, 4 over 2 days,
-       -- 5 over 3 days; 6 deleted by tomorrow's transform (first seen 30 days ago, config.KEEP_DAYS, no status set)
-       CASE WHEN a.job_id IS NULL AND j.first_seen < current_date - 29 THEN 6
+       -- 5 over 3 days; 6 deleted by tomorrow's transform (first seen 4 days ago, config.KEEP_DAYS, no status set)
+       CASE WHEN a.job_id IS NULL AND j.first_seen < current_date - 3 THEN 6
             WHEN now() - j.posted_at <= interval '12 hours' THEN 1 WHEN now() - j.posted_at <= interval '24 hours' THEN 2
             WHEN now() - j.posted_at <= interval '48 hours' THEN 3 WHEN now() - j.posted_at <= interval '72 hours' THEN 4
             ELSE 5 END AS fresh_level,

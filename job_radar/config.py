@@ -9,7 +9,7 @@ import yaml
 from dotenv import load_dotenv
 
 HOURS_OLD = 24  # every run looks back this far: a run after the laptop was asleep or off backfills the last day
-KEEP_DAYS = 30  # a job first seen longer ago is deleted (transform), unless you noted or applied to it (Omar, 2026-10-17)
+KEEP_DAYS = 4  # a job first seen longer ago is archived (core.job_archive) and deleted by transform, unless you noted or applied to it (Omar, 2026-10-29; was 30)
 # the AI steps (eligibility, embed, grade), the descriptions shared between postings and the raw postings look back
 # this far: a job is judged once, in its first days; raw postings not seen again for this long are deleted
 WORK_DAYS = 5
