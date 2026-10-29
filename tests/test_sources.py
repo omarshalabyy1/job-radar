@@ -238,7 +238,7 @@ def test_glassdoor_links_keep_the_listing_id_so_each_job_is_its_own_row():
     assert apify.link(base + "1&jrtk=x") == "https://www.glassdoor.com/partner/jobListing.htm?jobListingId=1"
 
 
-def test_apify_items_become_wide_postings_keyed_by_their_link_and_the_budget_stops_a_run(monkeypatch):
+def test_apify_items_become_wide_postings_keyed_by_their_link_and_the_budget_stops_a_run(monkeypatch, capsys):
     from job_radar.sources import apify
     items = [{"title": "Data Engineer", "companyName": "Acme", "location": "Berlin, Germany", "postedAt": "2026-10-16",
               "link": "https://www.linkedin.com/jobs/view/1?trk=x", "descriptionText": "Spark and SQL."},
@@ -267,6 +267,12 @@ def test_apify_items_become_wide_postings_keyed_by_their_link_and_the_budget_sto
     usage.update(b=(9.5, 10.0), c=(4.5, 5.0))  # $4.8+, $9.5+, $4.5+ and $0.50 kept back: none has $0.50 left
     monkeypatch.setattr(apify, "run", lambda *a: pytest.fail("a run started over the budget"))
     assert apify.apify_jobs() == []
+    holds.clear()
+    usage.update(b=(2.0, 10.0))
+    monkeypatch.setattr(apify, "run", lambda *a: [{"no": "title or link"}] * 3)  # a board that stopped giving postings
+    capsys.readouterr()
+    assert apify.apify_jobs() == []
+    assert "WARNING apify linkedin: 3 items, 0 postings" in capsys.readouterr().out
     tweet = {"text": "Acme is hiring\n a Data Engineer", "url": "https://x.com/a/status/1", "createdAt": "Thu Oct 29 14:10:49 +0000 2026"}
     assert [(r["title"], r["date_posted"]) for r in apify.normalize("x", [tweet])] == [("Acme is hiring a Data Engineer", None)]
 

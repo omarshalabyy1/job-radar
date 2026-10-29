@@ -127,18 +127,27 @@ def apify_jobs() -> list[dict]:
         for n, token in enumerate(accounts, 1):
             try:
                 used, limit = spent(token)
-            except requests.RequestException:
-                print(f"apify: account {n}'s usage could not be read, skipped")
+            except requests.RequestException as e:
+                print(f"WARNING apify: account {n}'s usage could not be read ({type(e).__name__}), skipped")
                 continue
             left[n] = limit - used - margin - cap
         best = max(left, key=left.get, default=None)
-        if best is None or left[best] < 0:
+        if best is None:
+            print(f"WARNING apify {name}: no account's usage could be read: not run")
+            continue
+        if left[best] < 0:
             print(f"apify {name}: no account has ${cap:.2f} left this month: next month")
             continue
         try:
-            rows += normalize(name, run(accounts[best - 1], b["actor"], b["input"], int(b["max_items"]), cap),
-                              b.get("link_base", ""))
+            items = run(accounts[best - 1], b["actor"], b["input"], int(b["max_items"]), cap)
+            found = normalize(name, items, b.get("link_base", ""))
             hold(f"apify-{name}", every)
         except requests.RequestException as e:  # one board's failure leaves the others to run
-            print(f"apify {name}: run failed ({type(e).__name__}), next run tries again")
+            print(f"WARNING apify {name}: run failed ({type(e).__name__}), next run tries again")
+            continue
+        # a run that gives nothing, or items none of which has a title and a link, is a board that stopped working
+        # (LinkedIn Egypt's search gave 0 items, Seek's 50 items gave 0 postings on 2026-10-29)
+        if not found:
+            print(f"WARNING apify {name}: {len(items)} items, 0 postings: check its input or its fields")
+        rows += found
     return rows
