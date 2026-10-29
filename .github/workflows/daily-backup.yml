@@ -13,7 +13,7 @@
 #           skips itself. No Claude step and no email runs. publish prunes: Neon keeps the last 4 days of jobs (publish.py KEEP_DAYS) plus every job a user saved or tracked.
 #           After the publish, publish.py asks the website for the instant Telegram push (CRON_SECRET).
 # Two runs never overlap (concurrency). Secrets (Settings > Secrets and variables > Actions): NEON_DATABASE_URL,
-# CRON_SECRET (the website's, the same value as radar-web's); JOOBLE_API_KEY, optional. GitHub runs a schedule only from
+# CRON_SECRET (the website's, the same value as radar-web's); JOOBLE_API_KEY and APIFY_TOKENS (comma-separated), optional. GitHub runs a schedule only from
 # the default branch (main). Run it by hand from the Actions tab (Run workflow).
 
 name: daily-backup
@@ -70,6 +70,7 @@ jobs:
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      APIFY_TOKENS: ${{ secrets.APIFY_TOKENS }}  # optional: LinkedIn's search, the next token on a 402 or 403
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +79,12 @@ jobs:
           python-version: "3.10"  # the Dockerfile's
           cache: pip
           cache-dependency-path: requirements.txt
+      - name: Keep the sources' holds between runs  # else LinkedIn's 20-hour Apify hold is forgotten and it runs every collect
+        uses: actions/cache@v4
+        with:
+          path: output/waits
+          key: waits-${{ github.run_id }}
+          restore-keys: waits-
       - name: Install
         run: |
           pip install -r requirements.txt
