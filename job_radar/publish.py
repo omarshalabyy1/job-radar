@@ -56,6 +56,7 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 import psycopg
 
 BATCH = 500
+KEEP_DAYS = 4  # Neon holds jobs first seen in the last 4 days (the free tier's quota); the full history stays in the local warehouse
 JOB = ("job_id", "title", "company", "location", "place", "role", "source", "job_url", "apply_url",
        "company_size", "years_required", "restriction", "posted_at", "first_seen", "description")
 # The wide columns, in jobs.job's order (radar-web/db/schema.sql); each is published only when Neon's jobs.job has it.
@@ -220,7 +221,8 @@ def publish_once(conn) -> None:
     jobs = conn.execute(f"SELECT {', '.join(WIDE_SQL.get(c, c) + ' AS ' + c for c in wide)}, job_key FROM core.job"
                         " WHERE source NOT IN ('remotive', 'himalayas')"
                         " AND source NOT LIKE 'email:%%'"  # 'email:...' is the site's private email-job namespace
-                        " ORDER BY job_id", (list(TRACKS),)).fetchall()
+                        " AND first_seen >= current_date - %s"  # only recent jobs go; the prune below deletes older ones on Neon
+                        " ORDER BY job_id", (list(TRACKS), KEEP_DAYS)).fetchall()
     if not jobs:
         raise RuntimeError("publish: core.job has 0 rows; Neon is left untouched")
     # A Gmail alert job (source 'email', owner-only on Neon) goes with clean links (clean_url); a link that cannot be
