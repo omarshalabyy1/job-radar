@@ -18,6 +18,7 @@ import re
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from datetime import datetime, timezone
 
 import numpy as np
@@ -78,7 +79,10 @@ def vectors_of(texts: list) -> list:
     cfg = SETTINGS["embeddings"]
     # on the CPU (num_gpu 0): the model is small, and Ollama's GPU runner crashed on embeddings on the laptop's GPU
     body = {"model": cfg["model"], "input": texts, "options": {"num_gpu": 0}}
-    request = urllib.request.Request(cfg["url"] + "/api/embed", headers={"Content-Type": "application/json"},
+    url = cfg["url"]
+    if not Path("/.dockerenv").exists():  # run on the laptop itself, not in Airflow's container: Ollama is localhost
+        url = url.replace("host.docker.internal", "localhost")
+    request = urllib.request.Request(url + "/api/embed", headers={"Content-Type": "application/json"},
                                      data=json.dumps(body).encode())
     with urllib.request.urlopen(request, timeout=120) as r:
         return json.load(r)["embeddings"]

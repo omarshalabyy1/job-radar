@@ -88,6 +88,12 @@ RETRIES = 2  # a deadlock or serialization failure on Neon (a schema apply runni
 PUSH_URL = "https://fennec.omarlabs.dev/api/cron/push"  # radar-web's instant Telegram push, asked for after each publish
 
 
+def neon_error(e: Exception) -> str:
+    """A connection error's first line with any url cut out (it can quote NEON_DATABASE_URL), e.g. Neon's quota refusal."""
+    text = str(e).strip()
+    return re.sub(r"postgres(?:ql)?://\S+", "<url>", text.splitlines()[0] if text else type(e).__name__)[:200]
+
+
 def nat_id(key: str) -> int:
     """A job's id on Neon: the first 13 hex digits of md5(key) as a 52-bit number, the same as radar-web's SQL
     ('x' || substr(md5(job_key), 1, 13))::bit(52)::bigint, so one job has one id whoever writes it."""
@@ -255,8 +261,8 @@ def publish_once(conn) -> None:
     keys = keys_by_id(conn)  # read before Neon is touched, for the remap
     try:
         neon = psycopg.connect(url, connect_timeout=30)  # Neon wakes slowly
-    except psycopg.Error:
-        raise RuntimeError("publish: cannot connect to Neon; check NEON_DATABASE_URL") from None  # the error can quote the url
+    except psycopg.Error as e:
+        raise RuntimeError(f"publish: cannot connect to Neon ({neon_error(e)}); check NEON_DATABASE_URL and the Neon quota") from None
     with neon, neon.cursor() as cur:  # one transaction: committed when the block ends, rolled back when it raises
         have = columns(cur, "jobs", "job")  # the columns Neon's jobs.job has; the rest are left out of the upsert
         pick = [i for i, c in enumerate(wide) if c in have or c in JOB]

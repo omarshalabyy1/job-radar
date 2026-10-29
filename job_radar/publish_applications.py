@@ -16,7 +16,7 @@ import os
 
 import psycopg
 
-from .publish import keys_by_id, nat_id
+from .publish import keys_by_id, nat_id, neon_error
 
 STAGES = ["saved", "applied", "interview", "rejected", "offer"]  # applications.LADDER without 'new'
 MOVES = {"applied": "applied", "interview": "interview", "rejected": "rejected", "offer": "offer", "hired": "offer"}
@@ -46,8 +46,9 @@ def publish_applications(conn) -> None:
     rows = [(*r[:7], nat_id(keys[r[7]]) if r[7] in keys else None) for r in rows]
     try:
         neon = psycopg.connect(url, connect_timeout=30)  # Neon wakes slowly
-    except psycopg.Error:
-        raise RuntimeError("publish_applications: cannot connect to Neon; check NEON_DATABASE_URL") from None
+    except psycopg.Error as e:
+        raise RuntimeError(f"publish_applications: cannot connect to Neon ({neon_error(e)}); check NEON_DATABASE_URL"
+                           " and the Neon quota") from None
     with neon, neon.cursor() as cur:
         on_neon = {j for (j,) in cur.execute("SELECT job_id FROM jobs.job WHERE job_id = ANY(%s)",
                                              ([r[7] for r in rows if r[7]],)).fetchall()}

@@ -13,13 +13,15 @@ from collections import Counter
 import requests
 from pydantic import BaseModel
 
-# (name, key in .env, chat completions URL, model, calls a day: under the free tier's daily limit)
+# (name, key in .env, chat completions URL, model, calls a day: under the free tier's daily limit). Checked 2026-10-29
+# with a real ~10k-token grade prompt: Gemini and OpenRouter answer; Groq's free tier refuses it (413, over its
+# tokens a minute), so Groq is last, for the shorter prompts.
 PROVIDERS = [
-    ("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b", 900),
     ("gemini", "GOOGLE_GENERATIVE_AI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-     "gemini-flash-latest", 180),
+     "gemini-3.1-flash-lite", 180),
     ("openrouter", "OPENROUTER_API_KEY", "https://openrouter.ai/api/v1/chat/completions",
-     "google/gemma-4-26b-a4b-it:free", 45),
+     "nvidia/nemotron-3-ultra-550b-a55b:free", 45),
+    ("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b", 900),
 ]
 LOCK = threading.Lock()
 FAILED: Counter = Counter()  # failures per provider this run, for the step's summary line

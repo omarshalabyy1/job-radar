@@ -275,17 +275,17 @@ def free_models(monkeypatch, answers: dict, keys=KEYS) -> Post:
 
 
 def test_the_free_models_are_asked_in_order_and_a_429_or_bad_json_moves_on(monkeypatch):
-    post = free_models(monkeypatch, {"groq": (429, ""), "googleapis": (200, "not json"), "openrouter": (200, f"```json\n{GOOD}\n```")})
+    post = free_models(monkeypatch, {"googleapis": (429, ""), "openrouter": (200, "not json"), "groq": (200, f"```json\n{GOOD}\n```")})
     model, g = llm.ask_json("system", "job", grade.Grade, Counter())
-    assert post.asked == ["groq", "googleapis", "openrouter"] and model.endswith(":free") and g.score == 7
-    assert set(llm.FAILED) == {"groq HTTP 429", "gemini ValidationError"}
+    assert post.asked == ["googleapis", "openrouter", "groq"] and model == "openai/gpt-oss-120b" and g.score == 7
+    assert set(llm.FAILED) == {"gemini HTTP 429", "openrouter ValidationError"}
     post = free_models(monkeypatch, {"groq": (200, '{"score": 5}'), "googleapis": (500, ""), "openrouter": (200, "{}")})
     assert llm.ask_json("system", "job", grade.Grade, Counter()) is None  # every one failed: the caller asks Claude
 
 
 def test_a_provider_without_a_key_or_at_its_daily_cap_is_skipped(monkeypatch):
     post = free_models(monkeypatch, {"googleapis": (200, GOOD), "openrouter": (200, GOOD)}, keys=KEYS[1:])
-    used = Counter({"gemini-flash-latest": 180})  # Gemini's cap reached today
+    used = Counter({"gemini-3.1-flash-lite": 180})  # Gemini's cap reached today
     model, _ = llm.ask_json("system", "job", grade.Grade, used)
     assert post.asked == ["openrouter"] and used[model] == 1
 
