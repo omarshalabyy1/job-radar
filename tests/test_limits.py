@@ -45,10 +45,13 @@ def web(monkeypatch, tmp_path):
 
 def test_one_request_a_second_per_host_across_threads(web):
     threads = [threading.Thread(target=sources.fetch, args=("GET", "https://a.test/x")) for _ in range(3)]
+    first = time.monotonic()
     [t.start() for t in threads]
     [t.join() for t in threads]
     starts = sorted(at for _, at, _ in web.calls)
-    assert all(b - a >= 0.99 for a, b in zip(starts, starts[1:]))
+    # the k-th request never starts before its turn, k seconds after the first; a thread that runs late after its turn
+    # (a busy laptop) can shorten the gap to the next one, so the gaps themselves are not what pace() promises
+    assert all(at >= first + k - 0.01 for k, at in enumerate(starts))
     began = time.monotonic()
     sources.fetch("GET", "https://b.test/x")  # another host does not wait
     assert time.monotonic() - began < 0.9  # under the 1 s a held turn would cost, even on a busy laptop
