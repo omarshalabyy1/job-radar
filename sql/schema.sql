@@ -908,6 +908,18 @@ CREATE TABLE IF NOT EXISTS core.extract_count (
     PRIMARY KEY (day, board)
 );
 
+-- What this warehouse last published to Neon (publish.py), one row per kind per id: kind 'job' (a jobs.job row),
+-- 'job_skill' (a job's skills, all together) or 'grade' (its app.job_grade row); id the job's id on Neon; hash the md5 of
+-- what was sent. publish sends only the rows whose md5 differs, writes these once Neon has committed, and keeps only the
+-- ids of the jobs it read. Empty (a fresh warehouse) or PUBLISH_ALL=1: everything is sent.
+CREATE TABLE IF NOT EXISTS core.published (
+    kind         text        NOT NULL CHECK (kind IN ('job', 'job_skill', 'grade')),
+    id           text        NOT NULL,
+    hash         text        NOT NULL,
+    published_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (kind, id)
+);
+
 -- Your own deadlines (a coding test, an interview, a document to send), edited on the tracker's Today page: about a job
 -- in the radar (job_id) or free text (what), with the day it is due and a note.
 CREATE TABLE IF NOT EXISTS core.deadline (

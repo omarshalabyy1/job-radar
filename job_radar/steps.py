@@ -21,7 +21,7 @@ import socket
 import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
@@ -883,11 +883,47 @@ SILENT = re.compile(r"0 postings today|answered \d{3}|has the site changed|has t
 SILENT_SOURCES = 3  # this many in one run is an alert, not only a line in the email
 
 
+DEAD_DAYS = 30  # a board read in this many days that gave no posting in them is dead (dead_boards)
+
+
+def dead_boards(conn) -> list[str] | None:
+    """The boards gone dead, one line each with how long: a board of core.extract_count (a source, a company board
+    'ats:token', company_sites, an Apify board) read in the last DEAD_DAYS, counted since at least DEAD_DAYS ago, with 0
+    postings in them; and, with features.market, an enabled Apify board (apify.boards) with no posting in them (a run that
+    gives nothing is not counted: extract_apify loads only the boards that gave rows). None when the counts cover under
+    DEAD_DAYS (a fresh warehouse, as on GitHub): nothing can be judged yet. Your career sites are only counted together
+    (company_sites): core.company keeps no count per site."""
+    today = conn.execute("SELECT current_date").fetchone()[0]
+    counts = {board: (last, first, read) for board, last, first, read in conn.execute(
+        "SELECT board, max(day) FILTER (WHERE postings > 0), min(day), max(day) FROM core.extract_count GROUP BY board")}
+    since = today - timedelta(DEAD_DAYS)  # the window is the days after it
+    if not counts or min(first for _, first, _ in counts.values()) > since:
+        return None
+    dead = {board: (last, first) for board, (last, first, read) in counts.items()
+            if read > since and first <= since and (last is None or last <= since)}
+    if FEATURES.get("market"):
+        began = min(first for _, first, _ in counts.values())
+        for name, board in ((SETTINGS.get("apify") or {}).get("boards") or {}).items():
+            last, first, _ = counts.get(f"apify:{name}", (None, began, None))
+            if board.get("enabled") and (last is None or last <= since):
+                dead[f"apify:{name}"] = (last, first)
+    return [f"{board}: 0 postings for {(today - (last or first)).days} days"
+            + (f" (last on {last})" if last else " (none since counting began)") for board, (last, first) in sorted(dead.items())]
+
+
 def run_report(conn) -> None:
     """The collect's last step (after publish): when a step failed, or was killed and left 'running', email Omar one alert
     that says so, and whether the website was still published ("published with 2 steps failing"); warnings alone go to
-    the Egypt email's "Problems in this run", not here. Each failed task has already sent its own alert (alert.py)."""
+    the Egypt email's "Problems in this run", not here. Each failed task has already sent its own alert (alert.py).
+    Once a Cairo month (its first run that can judge them) it prints a WARNING dead_boards: line per dead board (dead_boards)."""
     from .alert import send
+    marker = OUTPUT / f"dead-boards-{cairo_today():%Y-%m}"  # the month the dead boards were listed: once a month
+    if not marker.exists() and (dead := dead_boards(conn)) is not None:
+        for line in dead:
+            print(f"WARNING dead_boards: {line}")
+        print(f"dead_boards: {len(dead)} boards read without a posting in {DEAD_DAYS} days, listed once this month")
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.touch()
     rows = problems(conn)
     failing = [(step, status, summary) for step, status, summary in rows if status != "warn"]
     # sources gone quiet or refusing us, inside extract steps that still ended (warn): many at once is a run that failed

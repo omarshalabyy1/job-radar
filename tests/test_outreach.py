@@ -31,8 +31,13 @@ class Result:
 
 
 class FakeConn:
+    def __init__(self, applied=()):
+        self.applied = list(applied)  # the jobs you marked applied: (job_id, title, company, description, score)
+
     def execute(self, sql, params=()):
         sql = " ".join(sql.split())
+        if "s.status = 'applied'" in sql:
+            return Result([j for j in self.applied if j[4] >= params[0]])
         if "FROM mart.job_status" in sql:
             return Result(JOBS)
         if "core.cv" in sql:
@@ -70,7 +75,9 @@ def setup(monkeypatch, tmp_path, claude, on=True):
         "company,side,name,title,location,linkedin,email,why\n"
         "Nile AI,Founder,Mona Adel,CEO and co-founder,Cairo,,mona@nile.ai,Runs hiring (https://nile.ai/team)\n"
         "Delta Data,Founder,Omar Ali,CEO,Cairo,,,No published email\n"
-        "Big Bank,Recruiting,Sara,Recruiter,Cairo,,sara@bank.com,Recruiter\n", encoding="utf-8")
+        "Big Bank,Recruiting,Sara,Recruiter,Cairo,,sara@bank.com,Recruiter\n"
+        "Acme Corp,Hiring,Lina Samir,Head of Data,Cairo,,lina@acme.example,Leads the data team (https://acme.example/team)\n",
+        encoding="utf-8")
     monkeypatch.setattr(outreach, "STARTUPS", tmp_path / "startups.csv")
     monkeypatch.setattr(outreach, "CONTACTS", tmp_path / "contacts.csv")
     monkeypatch.setattr(outreach, "OUTPUT", tmp_path / "output")
@@ -131,3 +138,21 @@ def test_a_draft_too_long_or_naming_a_gap_is_thrown_away(monkeypatch, tmp_path):
 def test_the_founders_research_asks_only_for_startups_with_a_role_and_no_email(monkeypatch, tmp_path):
     setup(monkeypatch, tmp_path, FakeClaude(GOOD))
     assert outreach.without_contact(FakeConn()) == ["Delta Data"]
+
+
+def test_a_job_you_applied_to_scored_8_or_more_gets_one_note_to_its_contact(monkeypatch, tmp_path):
+    """Any company, startup or not, with a Founder or Hiring email; once per job, even when it is also a startup role."""
+    claude = FakeClaude(GOOD, pauses=0)
+    setup(monkeypatch, tmp_path, claude)
+    applied = [(10, "BI Developer", "Acme Corp", "Power BI.", 9),   # not a startup: a note to its Hiring contact
+               (11, "Data Analyst", "Acme Corp", "SQL.", 7),        # scored under 8: none
+               (12, "Analytics Engineer", "Big Bank", "dbt.", 9),   # only a Recruiting row: none
+               (1, "Data Engineer", "Nile AI", "Airflow.", 8)]      # also a startup role: still one draft
+    outreach.outreach_drafts(FakeConn(applied))
+    files = sorted(f.name for f in (tmp_path / "output" / "outreach").glob("*.md"))
+    assert files == ["acme-corp-bi-developer.md", "nile-ai-data-engineer.md"] and claude.calls == 2
+    text = (tmp_path / "output" / "outreach" / "acme-corp-bi-developer.md").read_text(encoding="utf-8")
+    assert text.startswith("To: Lina Samir <lina@acme.example>\n") and "Not sent." in text
+    assert "Sound like a person" in claude.kwargs["system"][0]["text"]  # the same brand and humanizer rules
+    outreach.outreach_drafts(FakeConn(applied))  # the next run: the files are the record
+    assert claude.calls == 2

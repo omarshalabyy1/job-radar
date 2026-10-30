@@ -189,3 +189,91 @@ def test_a_cover_letter_that_names_a_gap_is_thrown_away(capsys):
     assert tailor.ask(Client(sample_draft(form_answers_md="I have no experience with Kafka.")), {"cv": "text"}, job) is None
     assert "names a gap" in capsys.readouterr().out
     assert tailor.ask(Client(sample_draft()), {"cv": "text"}, job) is not None
+
+
+# ---- the page is read again before a draft: a closed job is not drafted (fetch mocked, no network) ----
+
+class Page:
+    def __init__(self, text, url="https://jobs.example/1"):
+        self.text, self.url = text, url
+
+
+def gone(status):
+    import requests
+    return requests.HTTPError(response=type("R", (), {"status_code": status})())
+
+
+def test_a_page_that_says_closed_or_is_gone_is_closed_and_a_failure_or_a_hold_is_not(monkeypatch):
+    from job_radar.sources import Held
+    asked = []
+
+    def fetch_with(answer):
+        def fake(method, url, **kwargs):
+            asked.append(url)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+        monkeypatch.setattr(tailor, "fetch", fake)
+
+    fetch_with(Page("<h1>This job is no longer available</h1>"))
+    assert tailor.closed_now("https://jobs.example/1") == "no longer available"
+    fetch_with(Page("ok", url="https://boards.greenhouse.io/acme/jobs/1?error=true"))  # Greenhouse's closed redirect
+    assert tailor.closed_now("https://boards.greenhouse.io/acme/jobs/1") == "no longer open"
+    for status in (404, 410):
+        fetch_with(gone(status))
+        assert tailor.closed_now("https://jobs.example/1") == "page gone"
+    for answer in (Page("<h1>Data Engineer</h1> Apply now"), gone(500), Held("jobs.example is held"),
+                   __import__("requests").ConnectionError("down")):
+        fetch_with(answer)
+        assert tailor.closed_now("https://jobs.example/1") is None  # open, or not known: the draft goes ahead
+    asked.clear()
+    for url in ("https://www.linkedin.com/jobs/view/1", "https://eg.indeed.com/viewjob?jk=1", "https://dailyremote.com/x", None):
+        assert tailor.closed_now(url) is None
+    assert asked == []  # never read
+
+
+class NoCommit:
+    """The fixture's connection with commit turned into nothing: the fixture rolls everything back."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    def __getattr__(self, name):
+        return getattr(self.conn, name)
+
+    def commit(self):
+        pass
+
+
+def test_a_job_closed_before_drafting_is_ignored_and_not_drafted(conn, monkeypatch, capsys):
+    closed, open_ = add_graded_job(conn, "closed", 10), add_graded_job(conn, "open", 9)
+    conn.execute("INSERT INTO core.cv (label, filename, text) VALUES ('zz-tailor-cv', 'cv.pdf', 'text')")
+    mine = [j for j in tailor.jobs_to_tailor(conn) if j[0] in (closed, open_)]  # the warehouse's own jobs left out
+    monkeypatch.setattr(tailor, "jobs_to_tailor", lambda c: mine)
+    pages = {"https://test.example/closed": Page("<p>This position has been filled</p>"), "https://test.example/open": Page("Apply")}
+    monkeypatch.setattr(tailor, "fetch", lambda method, url, **kw: pages[url])
+    drafted = []
+    monkeypatch.setattr(tailor, "ask", lambda client, cvs, job: drafted.append(job[0]))  # None: nothing written
+    monkeypatch.setattr(tailor.claude, "client", lambda: object())
+    monkeypatch.setitem(tailor.SETTINGS, "features", {"tailor": True})
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    tailor.tailor(NoCommit(conn))
+    assert drafted == [open_]  # the open job only: no Claude call for the closed one
+    row = conn.execute("SELECT status, note FROM core.application WHERE job_id = %s", (closed,)).fetchone()
+    assert row[0] == "ignored" and row[1].startswith("closed before drafting ")
+    assert conn.execute("SELECT count(*) FROM core.application WHERE job_id = %s", (open_,)).fetchone()[0] == 0
+    assert f"tailor: job {closed} (Acme) is closed (" in capsys.readouterr().out
+
+
+def test_the_ready_page_lists_apply_today_first_then_the_rest_by_score(conn):
+    """Apply today: scored 8+ and posted within 48 hours (mart.job_status.fresh_level 1-3); then the rest, best score first."""
+    from tracker.ready_tab import DRAFTS
+    mine = {}
+    for name, score, hours in (("old_ten", 10, 100), ("fresh_eight", 8, 30), ("fresh_nine", 9, 2), ("fresh_seven", 7, 1),
+                               ("old_nine", 9, 60)):
+        mine[name] = add_graded_job(conn, name, score)
+        conn.execute("UPDATE core.job SET posted_at = now() - make_interval(hours => %s) WHERE job_id = %s", (hours, mine[name]))
+        conn.execute("INSERT INTO core.application (job_id, status, note) VALUES (%s, 'saved', 'draft ready 2026-10-30')", (mine[name],))
+    names = {job_id: name for name, job_id in mine.items()}
+    rows = [(names[r[0]], r[-1]) for r in conn.execute(DRAFTS).fetchall() if r[0] in names]
+    assert rows == [("fresh_nine", True), ("fresh_eight", True), ("old_ten", False), ("old_nine", False), ("fresh_seven", False)]

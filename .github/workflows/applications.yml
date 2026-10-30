@@ -85,6 +85,8 @@ jobs:
         run: pip install -r requirements.txt
       - if: steps.budget.outputs.read == 'true'
         name: Schema and seed from Neon
+        env:
+          SEED_DESCRIPTIONS: "0"  # no job is published here: descriptions would only use up Neon's free transfer
         run: |
           python -m job_radar schema
           python -m job_radar.seed

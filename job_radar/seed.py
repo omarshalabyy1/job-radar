@@ -38,7 +38,11 @@ def main() -> None:
     with neon:
         have = {c for (c,) in neon.execute("SELECT column_name FROM information_schema.columns WHERE table_schema = 'jobs' AND table_name = 'job'")}
         kept = tuple(c for c in KEPT if c in have)
-        jobs = neon.execute(f"SELECT {', '.join(COLUMNS + kept)} FROM jobs.job ORDER BY job_key").fetchall()
+        # SEED_DESCRIPTIONS=0 (the hourly applications workflow, which publishes no job): no descriptions, the bulk of what
+        # a seed reads out of Neon; its free plan counts every byte read out, and the seeds used up the month on 2026-10-25
+        light = os.environ.get("SEED_DESCRIPTIONS", "1").strip() == "0"
+        select = ", ".join("NULL AS description" if light and c == "description" else c for c in COLUMNS + kept)
+        jobs = neon.execute(f"SELECT {select} FROM jobs.job ORDER BY job_key").fetchall()
         mails = neon.execute("SELECT e.message_id, e.received_at, e.sender, e.subject, e.company, e.title, e.kind, j.job_key"
                              " FROM tracker.application_email e LEFT JOIN jobs.job j USING (job_id)").fetchall()
     if any(j[0] is None for j in jobs):

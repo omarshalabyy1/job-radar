@@ -340,6 +340,33 @@ def test_channel_from_the_sender(sender, expected):
     assert channel(sender, ME) == expected
 
 
+def test_a_follow_up_counts_as_answered_only_by_news_after_its_day(monkeypatch, tmp_path):
+    """The drafts are found by their file name (slug of the first confirmation's company and title), so a draft you edited
+    still counts; news on the follow-up's own Cairo day or before it is not an answer; the 14th day's draft is the same
+    application as the 7th's; an email naming no company answers by its title."""
+    day7 = at(7).astimezone(applications.CAIRO).date() + timedelta(days=7)  # TODAY
+    rows = [("Zz Acme, Ltd.", "Data Engineer", "applied", at(14)), ("ZZ ACME LTD", None, "viewed", at(-1)),    # viewed after
+            ("Zz Globex", "BI Developer", "applied", at(7)), (None, "BI Developer", "rejected", at(-2)),       # by its title
+            ("Zz Initech", "Data Analyst", "applied", at(14)), ("Zz Initech", None, "rejected", at(0)),         # on the day: no
+            ("Zz Umbrella", "Data Engineer", "applied", at(7)),                                                 # no draft: left out
+            ("Zz Hooli", "AI Engineer", "applied", at(14))]                                                     # nothing since
+    for day, name in ((day7 - timedelta(days=7), "zz-acme-ltd-data-engineer"), (day7, "zz-acme-ltd-data-engineer"),
+                      (day7, "zz-globex-bi-developer"), (day7, "zz-initech-data-analyst"), (day7, "zz-hooli-ai-engineer")):
+        folder = tmp_path / "followups" / str(day)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{name}.md").write_text("Subject: changed by you\n\nno footer", encoding="utf-8")
+    monkeypatch.setattr(applications, "OUTPUT", tmp_path)
+
+    class Conn:
+        def execute(self, sql, params=()):
+            assert "core.application_email" in sql
+            return type("R", (), {"fetchall": lambda _: rows})()
+
+    replies = {(r["company"], r["answer"], r["followed_up"]) for r in applications.follow_up_answers(Conn())}
+    assert replies == {("Zz Acme, Ltd.", "viewed", day7 - timedelta(days=7)), ("Zz Globex", "rejected", day7),
+                       ("Zz Initech", None, day7), ("Zz Hooli", None, day7)}
+
+
 # ---- against the warehouse: every row is written in a transaction that is rolled back; skipped without it ----
 from pathlib import Path  # noqa: E402
 

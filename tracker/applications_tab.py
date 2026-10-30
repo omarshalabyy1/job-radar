@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from job_radar.applications import application_stages, due_now, funnel_counts
+from job_radar.applications import application_stages, due_now, follow_up_answers, funnel_counts
 from job_radar.config import OUTPUT
 from job_radar.db import connect
 
@@ -122,12 +122,27 @@ def render(query) -> None:
                "The Applications table below shows each company's latest news.")
     with connect() as conn:
         due = follow_ups(conn)
+        replies = pd.DataFrame(follow_up_answers(conn), columns=["company", "title", "followed_up", "answer", "answered_on"])
     if due.empty:
         st.write("Nothing to follow up today.")
     else:
         st.dataframe(due, hide_index=True, column_config={
             "company": "Company", "title": "Title", "applied": st.column_config.DateColumn("Applied", format="D MMM YYYY"),
             "days": "Days ago"})
+
+    st.subheader("Follow-up replies", icon=":material/mark_email_read:")
+    st.caption("Each application a follow-up was drafted for (output/followups), and the first news after the draft's Cairo "
+               "day: a view, a rejection, an interview or an offer. A draft counts whether or not you sent it.")
+    if replies.empty:
+        st.write("No follow-up drafts yet.")
+    else:
+        answered = int(replies["answer"].notna().sum())
+        st.metric("Answered after a follow-up", f"{answered} of {len(replies)} ({round(100 * answered / len(replies), 1)}%)",
+                  border=True, width=260)
+        replies["answer"] = replies["answer"].str.capitalize().fillna("None yet")
+        st.dataframe(replies, hide_index=True, column_config={
+            "company": "Company", "title": "Title", "followed_up": st.column_config.DateColumn("Followed up", format="D MMM YYYY"),
+            "answer": "Answer", "answered_on": st.column_config.DateColumn("Answered on", format="D MMM YYYY")})
 
     st.subheader("Applications", icon=":material/list_alt:")
     latest = query(APPLICATIONS)

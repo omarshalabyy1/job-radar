@@ -37,8 +37,14 @@ embed also embeds each sentence of his CVs' experience and projects (core.cv_lin
 whole CV + 0.45 x the closest line, that line is core.job.cv_evidence ("Closest CV line" in the emails and the Jobs
 page), and each card lists the job's skills his best CV shows and the ones it misses (mart.job_status skills_on_cv,
 skills_missing).
-The Today page lists his next three deadlines (core.deadline, edited
-there) above the follow-ups. With the warehouse down every step exits 99 (skipped, not red). The job_radar_backup DAG
+The Today page lists every overdue deadline, then the next three (core.deadline, edited
+there), above the follow-ups. Jobs stay 5 days (KEEP_DAYS); older ones go to core.job_archive. The Insights page shows
+the interview rate by source, role, Claude score band and posting age (ranking is not reweighted: too few interviews
+yet); the Ready page puts "Apply today" (8+, under 48 hours) first; tailor re-checks a job's page and marks a closed
+one ignored before drafting; outreach_drafts also writes one cold note for a job he applied to that scored 8+; the
+Applications page shows the reply rate after follow-ups; run_report lists dead boards once a month. publish sends only
+the jobs that changed since the last publish (core.published; PUBLISH_ALL=1 or GitHub sends all), and the hourly
+applications workflow seeds without descriptions (SEED_DESCRIPTIONS=0): Neon's free plan counts bytes read out. With the warehouse down every step exits 99 (skipped, not red). The job_radar_backup DAG
 dumps core and raw at 3am to output/backups/nightly-<day>.dump and keeps the newest 14. LinkedIn's search (Apify) reads APIFY_TOKENS in .env, several
 accounts comma-separated, and moves to the next when one answers 402 or 403 (its usage limit); else APIFY_TOKEN.
 

@@ -13,6 +13,12 @@ radar-web/db/schema.sql (jobs.job, jobs.skill, jobs.job_skill, app.job_grade), i
 Idempotent: all seven are upserts on their key (jobs.source_count: source; jobs.skill_day: day, skill; jobs.startup: domain) whose
 UPDATE has a WHERE (old columns) IS DISTINCT FROM (new columns) (jobs.job_skill has no other column, so its conflict does
 nothing), so a second run changes nothing and writes nothing; the summary line says how many rows each step changed.
+Only what changed is sent: core.published holds the md5 of each job row, each job's set of job skills and each grade as
+last sent, and a row whose md5 is the same is not sent again (a line says how many). It is written after Neon commits
+(a failure in between only sends those rows again) and keeps only the ids of the jobs read. The prunes still see every job
+read: the Gmail alert prune keeps every job read, sent or not, and the job skills prune touches only the jobs sent with
+pairs. A new column on Neon changes every row sent, so that run sends everything once. PUBLISH_ALL=1 (a fresh or reset
+Neon) and a GitHub run (GITHUB_ACTIONS: a fresh warehouse, no record) send everything.
 counted_at is the start of the day, so a rerun on the same day changes nothing. A track outside Neon's closed list of twelve
 (the warehouse's 'Not tech') goes as NULL, a startup team_size under 1 as NULL and a startup location is cut at 200 characters,
 the three values Neon's CHECKs would otherwise refuse. The source counts are pruned to this run's sources; skill days and
@@ -184,6 +190,18 @@ def upsert(cur, table: str, columns: tuple, key: tuple, rows: list) -> int:
     return changed
 
 
+def fresh(kind: str, rows: dict, published: dict, record: list) -> list:
+    """The rows (id on Neon -> what is sent for it) whose md5 differs from core.published's for (kind, id); each one's
+    (kind, id, md5) is added to `record`, written to core.published once Neon has committed."""
+    out = []
+    for i, row in rows.items():
+        digest = hashlib.md5(repr(row).encode()).hexdigest()
+        if published.get((kind, str(i))) != digest:
+            out.append(row)
+            record.append((kind, str(i), digest))
+    return out
+
+
 def columns(cur, schema: str, table: str) -> set:
     """The column names of a table on Neon (empty when the table is not there)."""
     return {c for (c,) in cur.execute("SELECT column_name FROM information_schema.columns WHERE table_schema = %s AND table_name = %s",
@@ -266,6 +284,11 @@ def publish_once(conn) -> None:
                         " ORDER BY day, skill").fetchall()
     startups = conn.execute(f"SELECT {', '.join(STARTUP_SQL.get(c, c) + ' AS ' + c for c in STARTUP)} FROM core.startup ORDER BY domain").fetchall()
     keys = keys_by_id(conn)  # read before Neon is touched, for the remap
+    # What this warehouse last published (core.published): an unchanged row is not sent again. PUBLISH_ALL=1 (a fresh or
+    # reset Neon) and a GitHub run (a fresh warehouse: it has no record, and sends everything) send everything.
+    everything = os.environ.get("PUBLISH_ALL", "").strip() == "1" or bool(os.environ.get("GITHUB_ACTIONS"))
+    published = {} if everything else {(kind, i): h for kind, i, h in conn.execute("SELECT kind, id, hash FROM core.published")}
+    record: list = []  # (kind, id, md5) of each row sent, written once Neon has committed
     try:
         neon = psycopg.connect(url, connect_timeout=30)  # Neon wakes slowly
     except psycopg.Error as e:
@@ -289,16 +312,26 @@ def publish_once(conn) -> None:
             new = {row[0]: nat_id(row[-1]) for row in jobs}  # warehouse job_id -> the id on Neon
             job_skills = [(new[j], s) for j, s in job_skills]
             grades = [(new[g[0]], *g[1:]) for g in grades if g[0] in new]
-            changed = upsert(cur, "jobs.job", cols + ("job_key",), ("job_id",), [(new[row[0]], *row[1:]) for row in jobs])
-            ids = set(new.values())  # the ids on Neon of the jobs sent: a Gmail alert job not among them is pruned below
+            sent = fresh("job", {new[row[0]]: (new[row[0]], *row[1:]) for row in jobs}, published, record)
+            changed = upsert(cur, "jobs.job", cols + ("job_key",), ("job_id",), sent)
+            ids = set(new.values())  # the ids on Neon of every job read, sent or unchanged: a Gmail alert job not among them is pruned below
         else:
             grades = [g for g in grades if g[0] in ids]
-            changed = upsert(cur, "jobs.job", cols, ("job_id",), [row[:-1] for row in jobs])
+            sent = fresh("job", {row[0]: row[:-1] for row in jobs}, published, record)
+            changed = upsert(cur, "jobs.job", cols, ("job_id",), sent)
         skilled = upsert(cur, "jobs.skill", SKILL, ("skill",), skills)
         # Remove this check once radar-db's schema (jobs.job_skill) is applied everywhere.
         has_job_skill = cur.execute("SELECT to_regclass('jobs.job_skill') IS NOT NULL").fetchone()[0]
+        unchanged_skills = unchanged_grades = 0
+        sent_skills: list = []  # the pairs of the jobs whose set of skills changed: the job skills prune touches only those jobs
         if has_job_skill:
-            job_skilled = upsert(cur, "jobs.job_skill", JOB_SKILL, JOB_SKILL, job_skills)
+            by_job: dict = {}
+            for pair in job_skills:
+                by_job.setdefault(pair[0], []).append(pair)
+            changed_sets = fresh("job_skill", {j: tuple(pairs) for j, pairs in by_job.items()}, published, record)
+            unchanged_skills = len(by_job) - len(changed_sets)
+            sent_skills = [pair for pairs in changed_sets for pair in pairs]
+            job_skilled = upsert(cur, "jobs.job_skill", JOB_SKILL, JOB_SKILL, sent_skills)
         else:
             job_skilled = 0
             print("WARNING publish: job skills skipped: jobs.job_skill not on Neon yet")
@@ -333,8 +366,9 @@ def publish_once(conn) -> None:
         if not owner and email:
             owner = cur.execute("SELECT user_id FROM app.app_user WHERE lower(email) = lower(%s) ORDER BY created_at LIMIT 1", (email,)).fetchone()
         if owner:
-            graded = upsert(cur, "app.job_grade", GRADE, ("user_id", "job_id"),
-                            [(owner[0], *g) for g in grades])
+            sent_grades = fresh("grade", {g[0]: (owner[0], *g) for g in grades}, published, record)
+            unchanged_grades = len(grades) - len(sent_grades)
+            graded = upsert(cur, "app.job_grade", GRADE, ("user_id", "job_id"), sent_grades)
         else:
             graded = 0
             print("WARNING publish: grades skipped: no app.app_user row with is_owner and no OWNER_EMAIL match")
@@ -358,7 +392,7 @@ def publish_once(conn) -> None:
             if has_job_skill:  # only the jobs sent with pairs: a job sent with none keeps Neon's pairs
                 cur.execute("DELETE FROM jobs.job_skill t WHERE t.job_id = ANY(%s) AND NOT EXISTS (SELECT 1 FROM"
                             " unnest(%s::bigint[], %s::text[]) AS s(job_id, skill) WHERE s.job_id = t.job_id AND s.skill = t.skill)",
-                            (list({p[0] for p in job_skills}), [p[0] for p in job_skills], [p[1] for p in job_skills]))
+                            (list({p[0] for p in sent_skills}), [p[0] for p in sent_skills], [p[1] for p in sent_skills]))
                 job_skills_deleted = cur.rowcount
             cur.execute("DELETE FROM jobs.skill WHERE skill <> ALL(%s)", ([s[0] for s in skills],))
             skills_deleted = cur.rowcount
@@ -370,6 +404,15 @@ def publish_once(conn) -> None:
         # still moves it, which jobs.job.first_seen (a date) does not.
         cur.execute("INSERT INTO tracker.step_run (step, started_at, finished_at, status, summary) VALUES ('publish', %s, now(), 'ok', %s)",
                     (started, "github-actions" if os.environ.get("GITHUB_ACTIONS") else "airflow"))
+    # Neon has committed: record what it now holds. A failure here only means those rows are sent again next run. The
+    # ids no job read has any more (aged out of the window) are dropped, so the record stays the window's size.
+    conn.execute("INSERT INTO core.published (kind, id, hash) SELECT * FROM unnest(%s::text[], %s::text[], %s::text[])"
+                  " ON CONFLICT (kind, id) DO UPDATE SET hash = excluded.hash, published_at = now()",
+                  tuple(map(list, zip(*record))) if record else ([], [], []))
+    conn.execute("DELETE FROM core.published WHERE id <> ALL(%s)", ([str(i) for i in ids],))
+    conn.commit()
+    print(f"publish: {len(jobs) - len(sent)} jobs, {unchanged_skills} job skill sets and {unchanged_grades} grades unchanged, not sent"
+          + (" (PUBLISH_ALL or GitHub: everything sent)" if everything else ""))
     print(f"publish: {len(jobs)} jobs read, {changed} upserted (changed), {graded} grades upserted (changed), {deleted} deleted;"
           f" {len(skills)} skills read, {skilled} skills upserted (changed), {skills_deleted} skills deleted;"
           f" {len(job_skills)} job skills read, {job_skilled} job skills upserted (changed), {job_skills_deleted} job skills deleted;"

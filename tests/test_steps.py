@@ -787,3 +787,45 @@ def test_a_short_snippet_is_read_in_full_and_a_page_without_text_keeps_it(conn, 
     steps.describe(RolledBack(conn))
     got = dict(conn.execute("SELECT job_id, description FROM core.job WHERE job_id = ANY(%s)", ([full, empty],)).fetchall())
     assert got[full].startswith("Build pipelines") and got[empty] == "Data role in Doha."
+
+
+def test_dead_boards_lists_each_board_read_30_days_without_a_posting_once_a_month(conn, monkeypatch, tmp_path, capsys):
+    """dead_boards (rolled back): a board read in the last 30 days that gave no posting in them, counted for 30 days or more,
+    is one line with how long; a live board, one counted under 30 days and one no longer read are not. An enabled Apify
+    board with no posting in 30 days is one too (a run that gives nothing is not counted). Under 30 days of counts in
+    all (a fresh warehouse, as on GitHub) nothing is judged. run_report prints it once a Cairo month."""
+    conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date, 'zz_young', 0, 0)")
+    assert steps.dead_boards(conn) is None  # under 30 days of counts: not judged
+    for days_ago in range(0, 41, 5):
+        conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %(d)s, 'zz_dead', 0, 0),"
+                     " (current_date - %(d)s, 'zz_live', 5, 0), (current_date - %(d)s, 'zz_was', %(was)s, 0)",
+                     {"d": days_ago, "was": 3 if days_ago >= 35 else 0})
+    for days_ago in (40, 35):
+        conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %s, 'zz_gone', 0, 0),"
+                     " (current_date - %s, 'apify:zzold', 4, 0)", (days_ago, days_ago))
+    monkeypatch.setitem(steps.FEATURES, "market", True)
+    monkeypatch.setitem(steps.SETTINGS, "apify", {"boards": {"zzold": {"enabled": True}, "zznever": {"enabled": True},
+                                                             "zzoff": {"enabled": False}}})
+    day = conn.execute("SELECT current_date - 35").fetchone()[0]
+    assert steps.dead_boards(conn) == ["apify:zznever: 0 postings for 40 days (none since counting began)",
+                                       f"apify:zzold: 0 postings for 35 days (last on {day})",
+                                       "zz_dead: 0 postings for 40 days (none since counting began)",
+                                       f"zz_was: 0 postings for 35 days (last on {day})"]
+    monkeypatch.setattr(steps, "OUTPUT", tmp_path)
+    monkeypatch.setattr(steps, "problems", lambda conn: [])
+    steps.run_report(RolledBack(conn))
+    assert capsys.readouterr().out.count("WARNING dead_boards: ") == 4
+    steps.run_report(RolledBack(conn))  # a second collect the same month: not again
+    assert "dead_boards" not in capsys.readouterr().out
+
+
+def test_the_same_job_on_linkedin_and_indeed_is_one_job(conn):
+    """transform (rolled back): one title at one company from two boards (two links, the company written two ways) is one
+    core.job row, keyed by steps.job_key."""
+    for source, company in (("linkedin", "Zzdupco"), ("indeed", "ZZDUPCO Ltd.")):
+        conn.execute("INSERT INTO raw.job_posting (run_date, source, title, company, location, searched_for, job_url, payload,"
+                     " last_seen) VALUES (current_date, %s, 'Data Engineer', %s, 'Cairo', 'Egypt', %s, '{}', current_date)",
+                     (source, company, f"https://test.example/dup-{source}"))
+    steps.transform(RolledBack(conn))
+    assert conn.execute("SELECT count(*), min(job_key) FROM core.job WHERE company ILIKE 'zzdupco%%'").fetchone() == (
+        1, steps.job_key("Data Engineer", "Zzdupco", "https://test.example/dup-linkedin"))

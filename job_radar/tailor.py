@@ -8,7 +8,11 @@ out is skipped and tried again next run. A restriction counts only with features
 
 Two checks, in code: a CV, cover letter or form answer that names a gap ("I have not", "no experience" ...) is thrown away and tried
 again next run; a CV PDF that is not one page, lost its links or has a heading an ATS cannot read leaves the files for you to look at, is not marked
-ready, and turns the task red. tailor_job(conn, job_id) drafts one job you name (in /job-radar)."""
+ready, and turns the task red. tailor_job(conn, job_id) drafts one job you name (in /job-radar).
+
+Before each draft tailor reads the job's page again (sources.fetch: its pace and holds), never a NO_FETCH, Indeed or
+LinkedIn page: a page that says the job is closed (steps.closed_reason) or is gone (404, 410) gets no draft, and the job
+is set to ignored ("closed before drafting <day>"). A page that fails or a held site never blocks the draft."""
 
 from __future__ import annotations
 
@@ -22,8 +26,8 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from . import claude
-from .config import FEATURES, OUTPUT, SETTINGS
-from .sources import time_left
+from .config import FEATURES, NO_FETCH, OUTPUT, SETTINGS
+from .sources import ERRORS, Held, fetch, time_left
 
 TAILOR_SECONDS = 300  # the DAG gives the task 300 s; a new draft (two calls) starts only with 120 s left
 MIN_SCORE = 8
@@ -368,6 +372,22 @@ def ask(client, cvs: dict[str, str], job: tuple) -> Draft | None:
     return d
 
 
+def closed_now(url: str | None) -> str | None:
+    """Why the job's page says it is closed now (steps.closed_reason, or "page gone" for a 404 or 410), else None. A
+    NO_FETCH, Indeed or LinkedIn page is never read; a held site or any other error is None: the draft goes ahead."""
+    from .steps import closed_reason  # steps imports this module
+
+    if not (url or "").startswith("http") or re.search(rf"{NO_FETCH}|indeed\.|linkedin\.com", url):
+        return None
+    try:
+        r = fetch("GET", url, hold_on_403=False, timeout=max(5, min(30, time_left(TAILOR_SECONDS) - 120)))
+    except Held:
+        return None
+    except ERRORS as e:
+        return "page gone" if getattr(getattr(e, "response", None), "status_code", None) in (404, 410) else None
+    return closed_reason(r.url, r.text)
+
+
 def tailor_job(conn, job_id: int, day: str | None = None) -> Path:
     """Draft one job you name, whatever its score or status (the tracker's row is left as it is); the folder it wrote.
     Raises when Claude gives no draft or the CV's PDF fails its checks."""
@@ -406,6 +426,13 @@ def tailor(conn) -> None:
         job_id, title, company = job[:3]
         if time_left(TAILOR_SECONDS) < 120:
             break
+        url = conn.execute("SELECT job_url FROM core.job WHERE job_id = %s", (job_id,)).fetchone()[0]
+        if why := closed_now(url):  # the posting closed since it was graded: no draft, and it leaves your lists
+            conn.execute("INSERT INTO core.application (job_id, status, note) VALUES (%s, 'ignored', %s)"
+                         " ON CONFLICT (job_id) DO NOTHING", (job_id, f"closed before drafting {today}"))
+            conn.commit()
+            print(f"tailor: job {job_id} ({company}) is closed ({why}), set to ignored, not drafted")
+            continue
         try:
             d = ask(client, cvs, job)
         except (anthropic.APIStatusError, anthropic.APIConnectionError) as e:  # a timeout is a connection error

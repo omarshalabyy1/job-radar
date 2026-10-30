@@ -95,12 +95,26 @@ class Rows(list):
 
 
 class Warehouse:
-    """core.* as publish_once reads it: `jobs` (job_id -> job_key, all source 'greenhouse') and `pairs` (job_id, skill)."""
+    """core.* as publish_once reads it: `jobs` (job_id -> job_key, all source 'greenhouse', titled from `titles`), `pairs`
+    (job_id, skill) and `grades` (core.claude_grade rows); `published` is core.published, (kind, id) -> hash."""
 
-    def __init__(self, jobs: dict, pairs: list):
-        self.jobs, self.pairs = jobs, pairs
+    def __init__(self, jobs: dict, pairs: list, grades: list = ()):
+        self.jobs, self.pairs, self.grades, self.titles, self.published = jobs, pairs, list(grades), {}, {}
+
+    def commit(self):
+        pass
 
     def execute(self, sql, params=None):
+        if "core.published" in sql:
+            if sql.startswith("SELECT"):
+                return Rows((kind, i, h) for (kind, i), h in self.published.items())
+            if sql.startswith("INSERT"):
+                self.published.update(((kind, i), h) for kind, i, h in zip(*params))
+            else:  # the DELETE of the ids not read
+                self.published = {k: h for k, h in self.published.items() if k[1] in params[0]}
+            return Rows()
+        if "core.claude_grade" in sql:
+            return Rows(self.grades)
         if "core.job_archive" in sql:
             return Rows()
         if sql.startswith("SELECT job_id, job_key FROM core.job"):
@@ -109,15 +123,15 @@ class Warehouse:
             return Rows(self.pairs)
         if "core.skill_day" in sql:
             return Rows([(datetime.now(timezone.utc).date(), "Python", 1, 1)])
-        if "core.startup" in sql or "core.claude_grade" in sql:
+        if "core.startup" in sql:
             return Rows()
         if "GROUP BY source" in sql:
             return Rows([("greenhouse", len(self.jobs), True, None, datetime.now(timezone.utc))])
         if "FROM core.skill" in sql:
             return Rows([("Python", "Data & Analytics", "python")])
         row = dict.fromkeys(COLS)
-        return Rows(tuple({**row, "job_id": i, "source": "greenhouse", "job_url": f"https://x/{i}"}[c] for c in COLS) + (key,)
-                    for i, key in self.jobs.items())
+        return Rows(tuple({**row, "job_id": i, "source": "greenhouse", "job_url": f"https://x/{i}", "title": self.titles.get(i, "Data Engineer")}[c]
+                          for c in COLS) + (key,) for i, key in self.jobs.items())
 
 
 class Neon:
@@ -155,8 +169,8 @@ class Neon:
         return self.rows.fetchall()
 
 
-def publish_once(monkeypatch, pairs, github=False) -> Neon:
-    """publish_once on two jobs (1 and 2) and `pairs`; returns the fake Neon with what was sent to it."""
+def publish_once(monkeypatch, pairs, github=False, warehouse=None, every=False) -> Neon:
+    """publish_once on two jobs (1 and 2) and `pairs`, or on `warehouse`; returns the fake Neon with what was sent to it."""
     neon = Neon()
     monkeypatch.setenv("NEON_DATABASE_URL", "postgresql://fake")  # the fake below is all it reaches
     monkeypatch.delenv("PUBLISH_PRUNE", raising=False)
@@ -164,13 +178,63 @@ def publish_once(monkeypatch, pairs, github=False) -> Neon:
         monkeypatch.setenv("GITHUB_ACTIONS", "true")
     else:
         monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    if every:
+        monkeypatch.setenv("PUBLISH_ALL", "1")
+    else:
+        monkeypatch.delenv("PUBLISH_ALL", raising=False)
     monkeypatch.setattr(publish.psycopg, "connect", lambda *a, **kw: neon)
-    publish.publish_once(Warehouse({1: "key one", 2: "key two"}, pairs))
+    publish.publish_once(warehouse or Warehouse({1: "key one", 2: "key two"}, pairs))
     return neon
 
 
 def sent(neon: Neon, start: str) -> list:
     return [(sql, params) for sql, params in neon.sent if sql.startswith(start)]
+
+
+def rows_sent(neon: Neon, table: str) -> list:
+    """Every row an upsert sent to `table` (all its batches)."""
+    return [row for _, rows in sent(neon, f"INSERT INTO {table} ") for row in rows]
+
+
+def test_a_second_publish_sends_only_what_changed_and_publish_all_sends_everything(monkeypatch, capsys):
+    """core.published: an unchanged job, job skill set or grade is not sent again; a changed title sends that job alone;
+    PUBLISH_ALL=1 and a GitHub run send everything. The jobs prune still knows every job read (a Gmail alert job not
+    sent because unchanged must not be pruned), and the job skills prune touches only the jobs sent with pairs."""
+    graded = datetime(2026, 10, 30, tzinfo=timezone.utc)
+    warehouse = Warehouse({1: "key one", 2: "key two"}, [(1, "Python"), (2, "Python")], [(1, 7, "cv", "a fit", None, graded)])
+    first = publish_once(monkeypatch, None, warehouse=warehouse)
+    assert len(rows_sent(first, "jobs.job")) == 2 and len(rows_sent(first, "jobs.job_skill")) == 2
+    assert len(rows_sent(first, "app.job_grade")) == 1 and len(warehouse.published) == 5
+    capsys.readouterr()
+    second = publish_once(monkeypatch, None, warehouse=warehouse)
+    assert not rows_sent(second, "jobs.job") and not rows_sent(second, "jobs.job_skill") and not rows_sent(second, "app.job_grade")
+    assert "publish: 2 jobs, 2 job skill sets and 1 grades unchanged, not sent" in capsys.readouterr().out
+    (sql, params), = sent(second, "DELETE FROM jobs.job j")
+    assert set(params[0]) == {publish.nat_id("key one"), publish.nat_id("key two")}  # every job read, not only the sent
+    (sql, params), = sent(second, "DELETE FROM jobs.job_skill")
+    assert params[0] == []  # no job sent with pairs: Neon's pairs all stay
+    warehouse.titles[2] = "Senior Data Engineer"
+    third = publish_once(monkeypatch, None, warehouse=warehouse)
+    assert [row[0] for row in rows_sent(third, "jobs.job")] == [publish.nat_id("key two")]
+    assert len(rows_sent(publish_once(monkeypatch, None, warehouse=warehouse, every=True), "jobs.job")) == 2
+    assert len(rows_sent(publish_once(monkeypatch, None, warehouse=warehouse, github=True), "jobs.job")) == 2
+    del warehouse.jobs[2]  # aged out of the window: its record goes, so the table stays the window's size
+    warehouse.pairs.remove((2, "Python"))
+    publish_once(monkeypatch, None, warehouse=warehouse)
+    assert {i for _, i in warehouse.published} == {str(publish.nat_id("key one"))}
+
+
+def test_the_record_moves_only_after_neon_commits(monkeypatch):
+    """A Neon transaction that fails writes nothing to core.published: the next run sends those rows again."""
+    warehouse = Warehouse({1: "key one"}, [(1, "Python")])
+
+    def refuse(sql, rows):
+        raise psycopg.errors.DeadlockDetected("x")
+
+    monkeypatch.setattr(Neon, "executemany", lambda self, sql, rows: refuse(sql, rows))
+    with pytest.raises(psycopg.errors.DeadlockDetected):
+        publish_once(monkeypatch, None, warehouse=warehouse)
+    assert warehouse.published == {}
 
 
 def test_the_jobs_prune_deletes_by_age_not_what_this_warehouse_holds(monkeypatch):

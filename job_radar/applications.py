@@ -21,7 +21,8 @@ read-only, BODY.PEEK) and the matching job's description, never anything else, a
 are not written yet is tried again on the next run (notes the checks threw away: tomorrow). Claude writes both in
 your voice from your CV (tailor's rules);
 they are drafts in files, nothing is sent. funnel_counts and
-application_stages feed the tracker's funnel."""
+application_stages feed the tracker's funnel, job_outcomes its Insights page and follow_up_answers its follow-up
+replies."""
 
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ import imaplib
 import os
 import re
 from email.utils import parseaddr, parsedate_to_datetime
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -53,7 +54,10 @@ LADDER = ["new", "saved", "applied", "interview", "rejected", "offer"]
 FOLLOW_UP_DAYS = (7, 14)  # days after the first confirmation email on which a follow-up is drafted
 FOLLOW_UP_WORDS = 120  # the most words in a follow-up's body
 ANSWERS = ("rejected", "interview", "offer", "hired")  # news that an application was answered
+REPLIES = ("viewed", *ANSWERS)  # any news after a follow-up, a view included
 FUNNEL = ["applied", "viewed", "interview", "offer", "hired"]  # the stages, in order
+# the furthest an application went, lowest first: a rejection after an interview is still an interview
+OUTCOMES = ["applied", "viewed", "ghosted", "rejected", "interview", "offer", "hired"]
 # the voice lines of tailor's RULES (after "Voice, in all three:"), so these drafts sound like the CV drafts
 VOICE = next(p for p in RULES.split("\n\n") if p.startswith("Voice")).split(":", 1)[1].strip()
 SAFETY = ("Never invent an employer, job title, date, degree, certification, skill, client or number: every one must be "
@@ -355,6 +359,35 @@ def due_now(conn, today: date | None = None) -> list[tuple[str, str | None, date
                           today or cairo_today())
 
 
+def follow_up_replies(drafts: list[tuple[date, str]], rows: list[tuple]) -> list[dict]:
+    """One dict per application with a follow-up draft: its company and title, the day of its first draft and the first
+    news (REPLIES) on a later Cairo day, else None. `drafts` are (day, name) of output/followups/<day>/<name>.md, the name
+    slug(company, title) of its first confirmation email, as follow_up_drafts names it (the text is yours to change, so it
+    is not read); `rows` (company, title, kind, received_at) of core.application_email, as due_now reads them."""
+    first: dict[str, date] = {}
+    for day, name in drafts:
+        first[name] = min(day, first.get(name, day))
+    applied: dict[tuple[str, str], tuple] = {}
+    for company, title, kind, at in sorted(rows, key=lambda r: r[3]):
+        if kind == "applied" and company and (name := slug(company, title) or "follow-up") in first:
+            applied.setdefault((name_key(company), (title or "").lower()), (company, title, first[name]))
+    out = []
+    for (company_key, title_key), (company, title, day) in applied.items():
+        news = sorted((at, kind) for c, t, kind, at in rows if kind in REPLIES and at.astimezone(CAIRO).date() > day
+                      and (name_key(c) == company_key or (not c and title_key and (t or "").lower() == title_key)))
+        out.append({"company": company, "title": title, "followed_up": day, "answer": news[0][1] if news else None,
+                    "answered_on": news[0][0].astimezone(CAIRO).date() if news else None})
+    return sorted(out, key=lambda a: (a["followed_up"], a["company"].lower()), reverse=True)
+
+
+def follow_up_answers(conn) -> list[dict]:
+    """follow_up_replies of the follow-up drafts on disk and the mailbox, the newest draft first."""
+    drafts = [(date.fromisoformat(f.parent.name), f.stem) for f in (OUTPUT / "followups").glob("????-??-??/*.md")]
+    return follow_up_replies(drafts, conn.execute("SELECT coalesce(j.company, e.company), e.title, e.kind, e.received_at"
+                                                  " FROM core.application_email e LEFT JOIN core.job j USING (job_id)"
+                                                  " WHERE e.kind <> 'other'").fetchall())
+
+
 CHANNELS = [("LinkedIn", "linkedin"), ("Workable", "workable"), ("iCIMS", "icims"), ("Workday", "myworkday"),
             ("SmartRecruiters", "smartrecruiters"), ("Recruitera", "recruitera"), ("Wuzzuf", "wuzzuf")]
 
@@ -395,6 +428,41 @@ def application_stages(rows: list[tuple], me: str = "") -> list[dict]:
 def funnel_counts(applications: list[dict]) -> dict[str, int]:
     """How many of `applications` (application_stages) reached each stage, applied first."""
     return {stage: sum(a[stage] for a in applications) for stage in FUNNEL}
+
+
+def job_outcomes(mail: list[tuple], statuses: list[tuple], now: datetime, ghosted_days: int) -> dict[int, tuple[str, datetime | None]]:
+    """job_id -> (outcome, applied_at) for each job you applied to. An application is a company (an email naming none: its
+    title), as application_stages and the Applications page have it; its jobs are the ones its emails were matched to and
+    the ones you set a status for at that company. Its outcome is the furthest stage reached (OUTCOMES): hired, offer,
+    interview, else rejected, else ghosted (its first confirmation ghosted_days or more before `now`), else viewed, else
+    applied; your own status (applied, interview, offer, rejected) counts too, whichever went further. applied_at is the
+    first confirmation email's time, None without one. `mail`: (company, title, kind, received_at, job_id) of
+    core.application_email, the company the matched job's; `statuses`: (job_id, company, status) of core.application."""
+    groups: dict[str, dict] = {}
+    for company, title, kind, at, job_id in sorted(mail, key=lambda r: r[3]):
+        key = name_key(company) or (title or "").lower()
+        if not key or kind not in OUTCOMES:
+            continue
+        g = groups.setdefault(key, {"kinds": set(), "applied": None, "jobs": set()})
+        g["kinds"].add(kind)
+        if kind == "applied" and g["applied"] is None:
+            g["applied"] = at
+        if job_id is not None:
+            g["jobs"].add(job_id)
+    for job_id, company, _ in statuses:
+        if g := groups.get(name_key(company)):
+            g["jobs"].add(job_id)
+    out = {}
+    for g in groups.values():
+        outcome = next((k for k in ("hired", "offer", "interview", "rejected") if k in g["kinds"]), None) or (
+            "ghosted" if g["applied"] and g["applied"] < now - timedelta(days=ghosted_days)
+            else "viewed" if "viewed" in g["kinds"] else "applied")
+        for job_id in g["jobs"]:
+            out[job_id] = (outcome, g["applied"])
+    for job_id, _, status in statuses:
+        outcome, applied_at = out.get(job_id, ("applied", None))
+        out[job_id] = (max(outcome, status, key=OUTCOMES.index), applied_at)
+    return out
 
 
 def ask_for_draft(client, system: list, user: str, fmt, effort: str, max_tokens: int, what: str) -> tuple:

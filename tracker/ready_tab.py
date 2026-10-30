@@ -7,6 +7,20 @@ from job_radar.db import connect
 from job_radar.tailor import draft_day, draft_folder
 
 FILES = [("cv.md", "CV"), ("cover-letter.md", "Cover letter"), ("notes.md", "Notes"), ("forms.md", "Form answers")]
+# the apply page: the employer's or original board's own (core.job.apply_url), else the careers page of a company
+# you track when the job's link is only a board's listing, else the job's link
+NAME = r"regexp_replace(lower({}), '[\W_]+', '', 'g')"
+BOARDS = "|".join(BOARD_HOSTS).replace(".", r"\.")
+# the drafts ready: Apply today first (scored 8+ and posted within 48 hours, mart.job_status.fresh_level 1-3), then
+# the rest, best score first
+DRAFTS = ("SELECT j.job_id, j.title, j.company, g.score, a.note,"
+          f" coalesce(j.apply_url, CASE WHEN j.job_url ~* '{BOARDS}' THEN c.careers_url END, j.job_url) AS apply_link,"
+          " coalesce(g.score >= 8 AND s.fresh_level <= 3, false) AS apply_today"
+          " FROM core.application a JOIN core.job j USING (job_id) LEFT JOIN core.claude_grade g USING (job_id)"
+          " LEFT JOIN mart.job_status s USING (job_id)"
+          f" LEFT JOIN core.company c ON {NAME.format('c.company')} = {NAME.format('j.company')}"
+          " WHERE a.status = 'saved' AND a.note LIKE 'draft ready%'"
+          " ORDER BY apply_today DESC, g.score DESC NULLS LAST, a.updated_at DESC")
 
 
 def mark_applied(query, job_id: int) -> None:
@@ -18,22 +32,16 @@ def mark_applied(query, job_id: int) -> None:
 
 
 def render(query) -> None:
-    # the apply page: the employer's or original board's own (core.job.apply_url), else the careers page of a company
-    # you track when the job's link is only a board's listing, else the job's link
-    name = r"regexp_replace(lower({}), '[\W_]+', '', 'g')"
-    boards = "|".join(BOARD_HOSTS).replace(".", r"\.")
-    drafts = query("SELECT j.job_id, j.title, j.company, g.score, a.note,"
-                   f" coalesce(j.apply_url, CASE WHEN j.job_url ~* '{boards}' THEN c.careers_url END, j.job_url) AS apply_link"
-                   " FROM core.application a JOIN core.job j USING (job_id) LEFT JOIN core.claude_grade g USING (job_id)"
-                   f" LEFT JOIN core.company c ON {name.format('c.company')} = {name.format('j.company')}"
-                   " WHERE a.status = 'saved' AND a.note LIKE 'draft ready%'"
-                   " ORDER BY g.score DESC NULLS LAST, a.updated_at DESC")
-    shown = 0
-    for d in drafts.itertuples():
+    shown, group = 0, None
+    for d in query(DRAFTS).itertuples():
         folder = draft_folder(day, d.company, d.title, d.job_id) if (day := draft_day(d.note)) else None
         if folder is None or not folder.is_dir():
             continue
         shown += 1
+        if d.apply_today != group:  # a heading over each group; the rest gets one only under an Apply today group
+            if d.apply_today or group is not None:
+                st.subheader("Apply today" if d.apply_today else "More drafts, best score first")
+            group = d.apply_today
         score = "n/a" if d.score is None else f"{int(d.score)}/10"
         with st.expander(f"{score} · {d.title} @ {d.company}"):
             st.markdown(f"[Apply]({d.apply_link})")

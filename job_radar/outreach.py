@@ -9,7 +9,10 @@ company's own site and in the press, never on LinkedIn, and adds the people it f
 Before the first draft for a startup, Claude researches it on the web (web search and fetch: what it sells and to whom,
 its stage and news, what the hire says about its data) into output/outreach/briefs/<company>.md, once per startup; the
 draft then pitches what Omar would do for them in their own terms. No brief, no draft: it is tried again next run.
-The file is the record: a draft already there is not asked for again. Switched by features.outreach_drafts."""
+The file is the record: a draft already there is not asked for again. Switched by features.outreach_drafts.
+
+A job you marked applied that Claude scored APPLIED_SCORE or more gets the same cold note, startup or not, when its
+company has such a Founder or Hiring row with an email: one per job (the same file), on the same path and rules."""
 
 from __future__ import annotations
 
@@ -24,6 +27,7 @@ from .tailor import GAP_WORDS, slug
 STARTUPS = OUTPUT / "startups" / "startups.csv"
 CONTACTS = ROOT / "data" / "contacts.csv"
 MIN_SCORE = 7
+APPLIED_SCORE = 8  # a job you applied to with this score gets a note to its founder too
 WORDS = 120  # the most words in a draft's body
 SIDES = ("Founder", "Hiring")  # who a cold email goes to, in this order
 # Omar's brand voice (omar-brand skill: identity-and-voice.md, content-rules.md) for a founder; VOICE adds the shared bans
@@ -54,6 +58,9 @@ RESEARCH = ("You research one startup for a cold email from a data and AI engine
 JOBS = ("SELECT s.job_id, s.title, s.company, j.description, s.score FROM mart.job_status s JOIN core.job j USING (job_id)"
         " WHERE s.score >= %s AND s.status IN ('new', 'saved') AND s.first_seen >= current_date - %s"
         " ORDER BY s.score DESC, s.first_seen DESC")
+# the jobs you marked applied, any company, whatever their age
+APPLIED = ("SELECT s.job_id, s.title, s.company, j.description, s.score FROM mart.job_status s JOIN core.job j USING (job_id)"
+           " WHERE s.score >= %s AND s.status = 'applied' ORDER BY s.score DESC, s.first_seen DESC")
 
 
 def startups() -> dict[str, dict]:
@@ -80,6 +87,11 @@ def startup_jobs(conn) -> list[tuple]:
     description, score)."""
     names = startups()
     return [j for j in conn.execute(JOBS, (MIN_SCORE, HOURS_OLD // 24)).fetchall() if name_key(j[2]) in names]
+
+
+def applied_jobs(conn) -> list[tuple]:
+    """The jobs you marked applied that Claude scored APPLIED_SCORE or more: (job_id, title, company, description, score)."""
+    return conn.execute(APPLIED, (APPLIED_SCORE,)).fetchall()
 
 
 def without_contact(conn) -> list[str]:
@@ -128,10 +140,14 @@ def outreach_drafts(conn) -> None:
         print("outreach_drafts: off in settings.yaml (features.outreach_drafts), or no ANTHROPIC_API_KEY")
         return
     people, known, written, missing = contacts(), startups(), 0, set()
-    for job_id, title, company, description, score in startup_jobs(conn):
+    jobs = startup_jobs(conn)
+    ids = {j[0] for j in jobs}
+    jobs += [j for j in applied_jobs(conn) if j[0] not in ids]  # a startup role you applied to: once
+    for job_id, title, company, description, score in jobs:
         person = people.get(name_key(company))
         if person is None:
-            missing.add(company)
+            if name_key(company) in known:  # the founders research looks for startups only
+                missing.add(company)
             continue
         path = OUTPUT / "outreach" / f"{slug(company, title) or 'outreach'}.md"
         if path.exists():
