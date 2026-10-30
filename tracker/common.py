@@ -1,5 +1,7 @@
 """What the tracker's pages share: the warehouse query, the jobs, the sidebar filters and the chart colors."""
 
+import re
+
 import pandas as pd
 import streamlit as st
 
@@ -43,10 +45,12 @@ def plural(n: int, word: str) -> str:
 
 
 def most_employees(size: str | None) -> float | None:
-    """The top of a company size ('51-200' -> 200, '251' -> 251); '1,000+' has no top."""
-    if not size:
+    """The top of a company size ('51-200' -> 200, '251' -> 251, '200 Employees' -> 200); '1,000+' has no top, and a
+    size with no number ('Unknown') is unknown."""
+    numbers = re.findall(r"\d+", (size or "").replace(",", ""))
+    if not numbers:
         return None
-    return float("inf") if size.endswith("+") else float(size.replace(",", "").split("-")[-1])
+    return float("inf") if "+" in size else float(numbers[-1])
 
 
 @st.cache_data(ttl=60)  # every click reruns the page: the same query within a minute is not asked again (query.clear() after a write)
