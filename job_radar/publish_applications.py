@@ -46,9 +46,10 @@ def publish_applications(conn) -> None:
     rows = [(*r[:7], nat_id(keys[r[7]]) if r[7] in keys else None) for r in rows]
     try:
         neon = psycopg.connect(url, connect_timeout=30)  # Neon wakes slowly
-    except psycopg.Error as e:
-        raise RuntimeError(f"publish_applications: cannot connect to Neon ({neon_error(e)}); check NEON_DATABASE_URL"
-                           " and the Neon quota") from None
+    except psycopg.Error as e:  # every email goes again next hour, so a Neon outage is a warning, not a red task an hour
+        print(f"WARNING publish_applications: cannot connect to Neon ({neon_error(e)}); check NEON_DATABASE_URL and the"
+              f" Neon quota. {len(rows)} emails wait for the next run")
+        return
     with neon, neon.cursor() as cur:
         on_neon = {j for (j,) in cur.execute("SELECT job_id FROM jobs.job WHERE job_id = ANY(%s)",
                                              ([r[7] for r in rows if r[7]],)).fetchall()}
