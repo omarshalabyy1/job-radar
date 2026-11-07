@@ -8,12 +8,9 @@ Finds remote and Egypt jobs, grades them against Omar's CV, tailors CVs and cove
 - `sql/`: local warehouse (raw / core / mart). `settings.yaml`: features and caps. `docs/architecture.md`: the long description (check it against the code).
 - `scripts/idempotency_check.py`: proves a rerun changes nothing.
 
-## Commands
-- Tests: `python -m pytest tests`.
-- Idempotency: `python scripts/idempotency_check.py`.
-
 ## Done when
-`python -m pytest tests` passes and the output is pasted in the report. A change to loading or publishing also passes the idempotency check.
+`bash check.sh` prints `GATE: PASS` (all tests; about 3 minutes). Paste the last lines in the report.
+A change to loading or publishing also passes `python scripts/idempotency_check.py`.
 
 ## Rules
 - Tailored CVs use only facts from the master CV. Never invent employers, dates, metrics or skills.
