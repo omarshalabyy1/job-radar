@@ -94,6 +94,7 @@ class Adapter:
     def fill(self, page, job, resolve) -> list[Field]:
         forms.refuse_if_human(page)
         controls = page.evaluate(SCAN)
+        forms.require_form(controls)
         for c in controls:
             c["label"] = forms.clean_label(c["label"])
         unanswered: list[tuple[int, Field]] = []

@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from apply_form_helpers import (CONFIRMATIONS, LEVER_SHIM, Asked, browser, load, make_job, page,  # noqa: F401  (fixtures)
-                                strip_captcha, values)
+from apply_form_helpers import (CONFIRMATIONS, FIXTURES, LEVER_SHIM, Asked, browser, load, make_job, page,  # noqa: F401  (fixtures)
+                                serve, strip_captcha, values)
 from job_radar.apply.adapters import lever
 from job_radar.apply.queue import board_of
 
@@ -250,3 +250,48 @@ def test_a_confirmation_element_next_to_a_form_that_is_still_showing_is_not_a_re
     open_form(page, "lever_spotify", after=both)
     receipt = adapter.submit(page)
     assert receipt.confirmed is False and "still showing" in receipt.text
+
+
+# ---- the runner opens the posting url; the form is one page further ---------------------------------------------------------------
+
+POSTING = "https://jobs.lever.co/spotify/2a55d6c9-c564-443a-be3e-a3851db5a93b"
+POSTING_HTML = "<html><body><h1>Account Executive</h1><a href='" + POSTING + "/apply'>Apply for this job</a></body></html>"
+
+
+def apply_html(without_captcha: bool) -> str:
+    html = (FIXTURES / "lever_spotify.html").read_text(encoding="utf-8")
+    if without_captcha:
+        html = html.replace('<div id="h-captcha" class="h-captcha" data-sitekey="e33f87f8-88ec-4e1a-9a13-df9bbb1d8120"></div>', "")
+        html = html.replace('<input id="hcaptchaResponseInput" type="hidden" name="h-captcha-response" value="">', "")
+        html = html.replace('<script type="text/javascript" src="https://js.hcaptcha.com/1/secure-api.js?host=jobs.lever.co&amp;onload=onLoad" async defer></script>', "")
+    return html
+
+
+def test_a_posting_page_is_followed_to_its_apply_form_before_the_human_check(page, adapter):
+    """job.url is the posting; Lever's form is at <posting>/apply. Without this the adapter would see no form and 'fill' nothing."""
+    asked = serve(page, {POSTING: POSTING_HTML, POSTING + "/apply": apply_html(without_captcha=False)})
+    page.goto(POSTING)
+    assert adapter.needs_human(page) is True  # the hCaptcha is on the apply page, not the posting
+    assert page.url == POSTING + "/apply" and [u for u in asked if "hcaptcha" not in u] == [POSTING, POSTING + "/apply"]  # the page only moved on
+
+
+def test_a_posting_page_whose_apply_form_has_no_captcha_is_filled_there(page, adapter, tmp_path):
+    serve(page, {POSTING: POSTING_HTML, POSTING + "/apply": apply_html(without_captcha=True)})
+    page.goto(POSTING)
+    assert adapter.needs_human(page) is False
+    adapter.fill(page, make_job(tmp_path, "lever"), Asked({**ME}))
+    assert page.url == POSTING + "/apply" and page.locator("input[name=name]").input_value() == "Omar Shalaby"
+
+
+def test_it_never_leaves_a_page_that_is_not_a_lever_posting(page, adapter):
+    asked = serve(page, {"https://example.invalid/x": "<p>not lever</p>"})
+    page.goto("https://example.invalid/x")
+    assert adapter.needs_human(page) is False
+    assert asked == ["https://example.invalid/x"]
+
+
+def test_a_page_with_no_application_form_is_an_error_not_an_empty_list_of_missing_fields(page, adapter, tmp_path):
+    """An empty list means 'ready to submit'; on a page with no form that would be a dry run or a submit of nothing."""
+    page.set_content("<html><body><h1>This job is no longer open</h1></body></html>")
+    with pytest.raises(RuntimeError, match="no application form"):
+        adapter.fill(page, make_job(tmp_path, "lever"), Asked(ME))

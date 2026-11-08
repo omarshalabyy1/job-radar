@@ -243,3 +243,10 @@ def test_confirmation_words_inside_the_form_itself_are_not_a_receipt(page, adapt
 def test_submit_without_a_submit_button_clicks_nothing_and_is_not_a_receipt(page, adapter):
     page.set_content("<form id='application-form'><input id='x'></form>")
     assert adapter.submit(page).confirmed is False
+
+
+def test_a_page_with_no_application_form_is_an_error_not_an_empty_list_of_missing_fields(page, adapter, tmp_path):
+    """An empty list means 'ready to submit'; on a closed posting, or a legacy embed this adapter does not know, that would be a lie."""
+    page.set_content("<html><body><h1>The job you are looking for is no longer open.</h1></body></html>")
+    with pytest.raises(RuntimeError, match="no application form"):
+        adapter.fill(page, make_job(tmp_path), Asked(GITLAB))

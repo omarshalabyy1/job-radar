@@ -36,3 +36,10 @@ def refuse_if_human(page) -> None:
     from .human_check import needs_human
     if needs_human(page):
         raise RuntimeError("this page needs a human (CAPTCHA, login wall or human check): the adapter must not fill or submit it")
+
+
+def require_form(controls) -> None:
+    """An empty list from `fill` means "ready to submit". A page with no form at all (closed posting, an embed this adapter does not know)
+    must be an error, never that."""
+    if not controls:
+        raise RuntimeError("no application form on this page")

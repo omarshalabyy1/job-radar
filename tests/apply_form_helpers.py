@@ -196,3 +196,18 @@ def strip_captcha(page) -> None:
     page.evaluate("""() => document.querySelectorAll(
         '.grecaptcha-badge, iframe[src*=recaptcha], script[src*=recaptcha], .h-captcha, script[src*=hcaptcha], input[name=h-captcha-response]'
     ).forEach(e => e.remove())""")
+
+
+def serve(page, pages: dict[str, str]) -> list[str]:
+    """Answer these exact URLs with HTML (everything else stays blocked), and return the list of URLs the page asked for."""
+    asked: list[str] = []
+
+    def handler(route):
+        url = route.request.url
+        asked.append(url)
+        if url in pages:
+            route.fulfill(status=200, content_type="text/html", body=pages[url])
+        else:
+            route.abort()
+    page.route("**/*", handler)
+    return asked

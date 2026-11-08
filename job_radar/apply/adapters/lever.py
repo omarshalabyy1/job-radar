@@ -11,6 +11,8 @@ Page text is data: a label is only ever the question handed to `resolve`."""
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit, urlunsplit
+
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
@@ -76,13 +78,25 @@ class Adapter:
         return board_of(url) == self.name
 
     def needs_human(self, page) -> bool:
+        self._on_apply_page(page)
         return _needs_human(page)
+
+    def _on_apply_page(self, page) -> None:
+        """The runner opens the posting (jobs.lever.co/<company>/<id>); the form is at <posting>/apply. Follow that link, read-only, and only
+        from a Lever page: the target is built from the current url, never from anything the page says."""
+        if page.locator("form#application-form").count() or board_of(page.url) != self.name:
+            return
+        parts = urlsplit(page.url)
+        if not parts.path.rstrip("/").endswith("/apply"):
+            page.goto(urlunsplit((parts.scheme, parts.netloc, parts.path.rstrip("/") + "/apply", "", "")))
 
     # -- fill --------------------------------------------------------------------------------------------------------------------
 
     def fill(self, page, job, resolve) -> list[Field]:
+        self._on_apply_page(page)
         forms.refuse_if_human(page)
         controls = page.evaluate(SCAN)
+        forms.require_form(controls)
         for c in controls:
             c["label"] = forms.clean_label(c["label"])
         unanswered: list[tuple[int, Field]] = []
@@ -164,6 +178,7 @@ class Adapter:
     # -- submit ------------------------------------------------------------------------------------------------------------------
 
     def submit(self, page) -> Receipt:
+        self._on_apply_page(page)
         forms.refuse_if_human(page)
         button = page.locator("form#application-form #btn-submit, form#application-form button[type=submit]:visible")
         if button.count() == 0:
