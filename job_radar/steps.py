@@ -109,7 +109,9 @@ DROP_MIN = 10  # postings a day before a board's drop rate is judged
 SILENT_DAYS = 7  # days in a row with no posting at all, since its last, before a board is called dead
 # Boards that give no posting by design, so their zero is not a dead board: Remote.co's data jobs are US and Canada only
 # (it drops everything it reads), and Dubizzle and NaukriGulf are Gulf boards, whose jobs are onsite or for a Gulf resident.
-EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf"}
+# Remotive and Working Nomads work, but their public feeds are tiny (13 and 17 jobs, checked 2026-11-08) and rarely hold a
+# role of yours: Omar chose not to watch them (2026-11-08). Their "0 postings today, N in the last 7 days" warning stays.
+EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads"}
 
 
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
