@@ -3,6 +3,8 @@ r"""The CV-match math of embed, without Ollama or the warehouse. Run on the lapt
     .venv\Scripts\python -m pytest tests/test_embed.py
 """
 
+import urllib.error
+
 import pytest
 
 from job_radar.embed import cosine
@@ -84,3 +86,15 @@ def test_embed_stops_at_its_switch_before_touching_the_warehouse_or_ollama(monke
     monkeypatch.setattr(embed, "vectors_of", lambda texts: pytest.fail("Ollama was called"))
     embed.embed(Untouched())
     assert capsys.readouterr().out.strip() == "embed: off in settings.yaml (features.embeddings)"
+
+
+def test_embed_fails_when_ollama_is_unreachable_and_a_cv_waits(conn, monkeypatch):
+    conn.execute("INSERT INTO core.cv (label, filename, text) VALUES ('zz_embed', 'zz.pdf', 'Data engineer. Built pipelines.')")
+    monkeypatch.setitem(embed.FEATURES, "embeddings", True)
+
+    def refused(texts):
+        raise urllib.error.URLError("refused")
+
+    monkeypatch.setattr(embed, "vectors_of", refused)
+    with pytest.raises(RuntimeError, match="Ollama not reachable"):
+        embed.embed(conn)

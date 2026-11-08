@@ -8,7 +8,7 @@ core.cv_vector. Each sentence of your CVs' experience and projects (cv_lines) is
 core.job.cv_similarity = 0.55 x how close the job is to your closest CV + 0.45 x how close it is to your closest single CV
 line (cosine, 0-1), so one strong project counts even inside an unrelated CV, and core.job.cv_evidence = that line.
 The job_radar DAG runs it after match_skills. With features.embeddings false,
-or Ollama not running or without the model, it prints why and stops green (a WARNING line when jobs or CVs were waiting)."""
+or no job or CV waiting, it stops green; with Ollama not running while jobs or CVs wait, the task fails (red) and the run_failed email says so; a model not pulled prints a WARNING and stops green."""
 
 from __future__ import annotations
 
@@ -142,8 +142,8 @@ def embed(conn) -> None:
               + (f" - run `ollama pull {model}` on the laptop" if e.code == 404 else ""))
         return
     except urllib.error.URLError as e:
-        print(f"WARNING embed: Ollama not reachable at {cfg['url']} ({e.reason}), skipped: {len(jobs)} jobs and {len(cvs)} CVs wait")
-        return
+        message = f"embed: Ollama not reachable at {cfg['url']} ({e.reason}): {len(jobs)} jobs and {len(cvs)} CVs wait without a CV match"
+        raise RuntimeError(message) from None  # red, not a quiet warning: every task after embed runs on all_done, so nothing else stops
 
     cv_vectors = [v for v, in conn.execute("SELECT vector FROM core.cv_vector WHERE model = %s", (model,))]
     vectors = conn.execute("SELECT job_id, vector FROM core.job_vector WHERE model = %s", (model,)).fetchall()
