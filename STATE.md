@@ -12,7 +12,7 @@ Read first, update last. One fact per line, dated. Newest first in the Log.
 
 ## Open
 
-- Branch `radar-fixes-2026-11-08` pushed, no PR, not merged.
+- Merged to `main` 2026-11-08 (PR #2). fennec PR #2 and client-radar `main` also pushed. fennec CI `check` (db-down smoke tests expect 500, get 404) was already failing before the merge; its `Apply schema to Neon` workflow fails until the repo secret `NEON_OWNER_URL` is added (Omar's to add).
 - Not scheduled yet (Omar's OS settings): Docker Desktop autostart, Ollama autostart, Task Scheduler running `python scripts/heartbeat.py` daily.
 - client-radar containers stopped since mid-October; the heartbeat only covers job-radar.
 - Neon (read-only, 2026-11-08): `jobs.job` 2303 rows, 2286 in the last 5 days, against 428 in the warehouse. The gap is rows other publishers added (the publish docs say GitHub runs do this); not verified which publisher.
