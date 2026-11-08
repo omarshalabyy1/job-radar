@@ -14,7 +14,7 @@ A change to loading or publishing also passes `python scripts/idempotency_check.
 
 ## Rules
 - Tailored CVs use only facts from the master CV. Never invent employers, dates, metrics or skills.
-- Email goes only to Omar (MAIL_TO). Outreach to founders and recruiters is drafts only.
+- Radar emails (digests, alerts, errors) go only to Omar (MAIL_TO). Outreach to founders and recruiters: Omar authorised auto-send on 2026-11-08 from his own three mailboxes, only under the "Outreach sender" guardrails in the auto-apply plan; until that sender is built and tested, outreach stays drafts.
 - Job applications: Omar authorised auto-submit on 2026-11-08, under the guardrails in `docs/superpowers/plans/2026-11-08-auto-apply.md` (score floor, daily cap, allow-list, audit log, kill switch). Never outside those guardrails; never invent an answer (unknown questions go to Omar); Omar passes logins and CAPTCHAs himself, the agent never does.
 - Never DROP or TRUNCATE Neon tables from here; radar-web owns the schema.
 - Never edit `.env` files or print secret values.

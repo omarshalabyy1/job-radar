@@ -133,6 +133,25 @@
 - [ ] Rollout, each step needs Omar's explicit go: week 1 dry run on ATS boards only (read every screenshot); week 2 live on Greenhouse and Lever with cap 5; week 3 widen the allow-list; LinkedIn and Indeed last, after he has logged in.
 - [ ] `bash check.sh` prints `GATE: PASS`; update `STATE.md` and `docs/architecture.md`.
 
+## Outreach sender (authorised 2026-11-08; built after Task 7, dry run first)
+
+Sends the cold emails `outreach_drafts` already writes (`output/outreach/<company>-<title>.md`) from Omar's own three mailboxes. **Honest limit:** nothing guarantees inbox placement. What keeps mail out of spam is low volume, a real personal message, no attachment or tracking links in the first email, a verified published address, and not mailing people twice. Using three mailboxes only spreads a small daily cap; it must never be used to hide a problem.
+
+| Guard | Value | Why |
+|---|---|---|
+| Recipients | Only addresses in `data/contacts.csv` that came from the company's own site or press (never LinkedIn, never guessed or bought) | Real, published contacts only |
+| One recipient, one mailbox | The first mailbox that wrote to a person writes every follow-up to them, in the same thread | Never looks like several people mailing one person |
+| Volume | 10 a day per mailbox, 20 a day in total, 5 an hour, random 2-10 minute gaps, working hours in the recipient's time zone | Looks like a person, not a blast |
+| Follow-ups | At most two (day 7 and day 14), then stop for good | Respect |
+| Suppression | A reply, "no", "unsubscribe", out-of-office with a new contact, or a bounce adds the address to `core.suppression` forever; every email ends with one plain line saying how to opt out by replying | Truthful, honours opt-out |
+| Mailbox health | A bounce rate over 3% or any spam complaint pauses that mailbox for 7 days and sends ntfy; its volume is **not** moved to the other two | No evasion by rotation |
+| Content | Drafts follow the cold-email skill and Omar's voice; facts only from the master CV; the humanizer pass runs; a draft naming a gap is dropped | Same honesty rules as applications |
+| Mode | `outreach.mode: dry_run` first: write what would be sent to `output/outreach/outbox/`, send nothing | Crawl, walk, run |
+| Kill switch | `outreach.enabled`, `output/outreach.stop`, same as apply | Stops within one tick |
+| Proof | Every send is a row in `core.outreach_send` (mailbox, recipient, message id, thread id, time) | Audit |
+
+Sending goes through each mailbox's own Gmail account with the send permission only (no password in chat or in the repo; credentials in `.env` or the connector, set up by Omar). Replies are read by the existing `track_applications` mailbox reader, which also feeds the suppression list.
+
 ## Adopted from the Grok Bot field notes (reviewed 2026-11-08)
 
 Source: github.com/unicodef1wn/grokbot-field-notes (third-party notes; claims about the product itself are unverified, the general practices match this repo's own rules). Adopted: verification as the job (a machine-readable success signal, here the confirmation email); the autopilot ladder (investigate, draft, autopilot = dry run, queue, live); a fixed deterministic tool instead of per-run scripts (the adapters, with fixtures); principles in rules, not incidents; one source of truth the agent reads and cannot edit (the answers file); ask-first for money, permissions, destructive actions and anything that leaves the team; routines no more often than needed and silent when idle; crawl, walk, run for anything touching real people. Not adopted: importing marketplace bots, adding the nopaywall MCP server, multi-bot group chats.
