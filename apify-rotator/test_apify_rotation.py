@@ -5,7 +5,7 @@ import pytest
 
 import apify_rotation as ar
 
-TOKEN = "apify_api_SECRET123"
+TOKEN = "apify_test_token"
 
 
 @pytest.fixture(autouse=True)
