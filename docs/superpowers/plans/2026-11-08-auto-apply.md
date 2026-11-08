@@ -134,6 +134,18 @@
 - [ ] Rollout, each step needs Omar's explicit go: week 1 dry run on ATS boards only (read every screenshot); week 2 live on Greenhouse and Lever with cap 5; week 3 widen the allow-list; LinkedIn and Indeed last, after he has logged in.
 - [ ] `bash check.sh` prints `GATE: PASS`; update `STATE.md` and `docs/architecture.md`.
 
+### Task 8: Daily triage report (read-only)
+
+**Files:** Create `job_radar/apply/triage.py`; Test `tests/test_apply_triage.py`
+
+**Interfaces:**
+- Produces: `classify(conn, now) -> Triage(fine, needs_you, broken, can_wait)` (each a list of items with job, board, reason, what Omar must do); `render(triage) -> str` (the daily message); `main()` writes `output/triage/<date>.md` and sends one ntfy line ("37 submitted, 3 need you, 1 broken").
+
+- [ ] Failing tests (fixtures only, no network, no LLM): `fine` = submitted with a confirmation email or receipt; `needs_you` = parked questions, a board stopped by a CAPTCHA/login/checkpoint, an expired session; `broken` = `unconfirmed` older than 24 h, a board with zero postings for 7 days, an adapter exception streak; `can_wait` = closed-page skips; an empty day renders one line and sends nothing; it never writes to the warehouse (assert no INSERT/UPDATE/DELETE).
+- [ ] Implement `classify` and `render` as plain SQL plus rules.
+- [ ] Optional second step, after the rules work: the Claude Agent SDK reads the `broken` pile with read-only tools and writes a proposed fix into the report. It cannot edit files, submit, or change settings or answers; its text is labelled a proposal.
+- [ ] Add it as a task after `apply_tick` in the hourly DAG (daily at 20:00 Cairo), silent when nothing happened. `bash check.sh` prints `GATE: PASS`.
+
 ## Outreach sender (authorised 2026-11-08; built after Task 7, dry run first)
 
 Sends the cold emails `outreach_drafts` already writes (`output/outreach/<company>-<title>.md`) from Omar's own three mailboxes. **Honest limit:** nothing guarantees inbox placement. What keeps mail out of spam is low volume, a real personal message, no attachment or tracking links in the first email, a verified published address, and not mailing people twice. Using three mailboxes only spreads a small daily cap; it must never be used to hide a problem.
