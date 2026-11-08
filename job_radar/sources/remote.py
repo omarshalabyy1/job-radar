@@ -57,15 +57,21 @@ def weworkremotely() -> list[dict]:
     return rows
 
 
-def remote_board(source: str, jobs: list, title, company, where, url, posted, description) -> list[dict]:
+def remote_board(source: str, jobs: list, title, company, where, url, posted, description,
+                 blank_is_worldwide: bool = False) -> list[dict]:
     """A remote job board's feed as rows: one of your roles, from a place in scope (anywhere,
     Europe, the Gulf ... once marked remote), posted in the last 7 days - these boards publish a day
-    or more late (week()). The field names are the board's."""
+    or more late (week()). The field names are the board's. blank_is_worldwide: a board that shows a job with no
+    location (or just "Remote") as open to anyone (Remote OK) - the row says "Worldwide"; for any other board a blank
+    location says nothing, and the job stays out."""
     if not jobs:
         changed(source, "its feed returned no jobs")
     rows = []
     for j in jobs:
-        location = f"{j.get(where) or ''} (remote)"
+        named = j.get(where) or ""
+        if blank_is_worldwide and re.fullmatch(r"\s*(remote)?\s*", named, re.I):
+            named = "Worldwide"
+        location = f"{named} (remote)"
         day = str(datetime.fromtimestamp(int(j[posted]), timezone.utc).date()) if str(j.get(posted, "")).isdigit() \
             else str(j.get(posted) or "")[:10]
         if day >= week() and j.get(title) and j.get(url) and role_of(j[title]) and place_of(location):
@@ -85,10 +91,26 @@ def remotive() -> list[dict]:
                         "publication_date", "description")
 
 
+def unmojibake(text):
+    """Text whose UTF-8 bytes were read as Latin-1 ("\u00e2\u0080\u0093" for an en dash), as it should have been; any other text as it is."""
+    if not isinstance(text, str):
+        return text
+    try:
+        return text.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+
+
 def remoteok() -> list[dict]:
-    """Remote OK's public API (its first item is its terms, not a job)."""
-    jobs = [j for j in get("https://remoteok.com/api").json() if j.get("position")]
-    return remote_board("remoteok", jobs, "position", "company", "location", "url", "epoch", "description")
+    """Remote OK's public API (its first item is its terms, not a job). Its JSON is double-encoded, so its text is
+    repaired (unmojibake); its page shows "Worldwide" for a job with a blank location or just "Remote" (checked
+    2026-11-08), which remote_board reads that way. The payload keeps the location as the board gave it, so the
+    eligibility step knows no "who can apply" was named and lets the description decide."""
+    fields = ("position", "company", "description")
+    jobs = [{**j, **{f: unmojibake(j[f]) for f in fields if f in j}, "location": unmojibake(j.get("location"))}
+            for j in get("https://remoteok.com/api").json() if j.get("position")]
+    return remote_board("remoteok", jobs, "position", "company", "location", "url", "epoch", "description",
+                        blank_is_worldwide=True)
 
 
 def jobicy() -> list[dict]:

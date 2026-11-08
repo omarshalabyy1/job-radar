@@ -2,8 +2,10 @@
 changes its layout or API fails here first. Run on the laptop: .venv\\Scripts\\python -m pytest tests
 """
 
+import html
 import importlib.util
 import json
+import re
 import time
 from datetime import date, timedelta
 from pathlib import Path
@@ -158,6 +160,43 @@ def test_builtin_and_ycombinator_read_ages_not_dates(monkeypatch):
     monkeypatch.setattr(startups, "get", lambda url, **params: Saved("ycombinator.html"))
     rows = startups.ycombinator()  # "about 3 hours" is in the window, "8 months" is not
     assert titles(rows) == ["Data Engineer"] and rows[0]["payload"]["is_remote"]
+
+
+def test_remoteok_reads_a_blank_or_bare_remote_location_as_worldwide_and_repairs_its_double_encoded_text(monkeypatch):
+    """RemoteOK's own page shows "Worldwide" for a job whose location is blank or just "Remote" (checked 2026-11-08: 56 of
+    99 jobs); a place it names ("Kuala Lumpur ...") stays that place. Its JSON is double-encoded: an en dash arrives as three
+    Latin-1 letters. Its first item is its terms, not a job."""
+    monkeypatch.setattr(remote, "get", lambda url, **params: Saved("remoteok.json"))
+    rows = {r["title"]: r for r in remote.remoteok()}
+    assert sorted(rows) == ["AI Developer", "External Data Specialist", "ML Inference Engineer \u2013 Terminal-Bench Task"]
+    assert rows["AI Developer"]["location"] == "Worldwide (remote)"  # blank
+    assert rows["External Data Specialist"]["location"] == "Worldwide (remote)"  # bare "Remote"
+    assert rows["ML Inference Engineer \u2013 Terminal-Bench Task"]["location"] == "Anywhere in the World (remote)"
+    assert rows["ML Inference Engineer \u2013 Terminal-Bench Task"]["description"] == "Design expert-level tasks \u2013 remote."
+    assert rows["AI Developer"]["payload"]["location"] == ""  # the board's own field is kept as it was (eligibility reads it)
+
+
+def test_other_remote_boards_keep_a_blank_location_out(monkeypatch):
+    """Only RemoteOK's blank location is known to mean worldwide: a feed with none says nothing, so it is not read as open."""
+    jobs = [{"title": "Data Engineer", "company_name": "Acme", "candidate_required_location": "", "url": "https://x.example/1",
+             "publication_date": "2026-11-07T00:00:00", "description": "d"}]
+    assert remote.remote_board("remotive", jobs, "title", "company_name", "candidate_required_location", "url",
+                               "publication_date", "description") == []
+
+
+def test_ycombinator_asks_only_role_pages_it_has_and_reads_a_week(monkeypatch):
+    """YC's board has no data-science role: that slug (and any unknown one) serves the Software Engineer page again, so
+    asking it only repeats those jobs. Its pages are not newest first and hold 36 jobs, so a job under a week old counts."""
+    asked = []
+    monkeypatch.setattr(startups, "week", lambda: str(date.today() - timedelta(days=7)))
+    monkeypatch.setattr(startups, "get", lambda url, **params: asked.append(url) or Saved("ycombinator_live.html"))
+    rows = startups.ycombinator()
+    page = re.search(r'data-page="([^"]+)"', (FIXTURES / "ycombinator_live.html").read_text(encoding="utf-8")).group(1)
+    roles = {r["slug"] for r in json.loads(html.unescape(page))["props"]["jobRoles"]}
+    assert len(asked) == len(set(asked))  # no page twice
+    assert {url.split("/jobs/role/")[1].split("/")[0] for url in asked} <= roles  # each is a role YC lists
+    assert [r["title"] for r in rows] == ["Data Engineer"]  # in the week once, though both pages list it; "12 days", "over 1 year" not
+    assert all(r["date_posted"] == str(date.today() - timedelta(days=6)) for r in rows)
 
 
 def test_companies_doc_matches_settings():

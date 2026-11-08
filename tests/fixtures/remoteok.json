@@ -1,0 +1,78 @@
+[
+ {
+  "last_updated": 1794009602,
+  "legal": "https://remoteok.com/legal"
+ },
+ {
+  "slug": "remote-ai-developer-salvo-software-1137701",
+  "id": "1137701",
+  "epoch": 1794009602,
+  "date": "2026-11-07T00:00:02+00:00",
+  "company": "Salvo Software",
+  "position": "AI Developer",
+  "tags": [
+   "dev",
+   "python"
+  ],
+  "description": "Build AI features with Python.",
+  "location": "",
+  "apply_url": "https://remoteOK.com/remote-jobs/remote-ai-developer-salvo-software-1137701",
+  "url": "https://remoteOK.com/remote-jobs/remote-ai-developer-salvo-software-1137701"
+ },
+ {
+  "slug": "remote-ml-inference-engineer-x-1137600",
+  "id": "1137600",
+  "epoch": 1793990000,
+  "date": "2026-11-06T18:00:00+00:00",
+  "company": "Mercor",
+  "position": "ML Inference Engineer \u00e2\u0080\u0093 Terminal-Bench Task",
+  "tags": [
+   "ml"
+  ],
+  "description": "Design expert-level tasks \u00e2\u0080\u0093 remote.",
+  "location": "Anywhere in the World",
+  "url": "https://remoteOK.com/remote-jobs/remote-ml-inference-engineer-x-1137600"
+ },
+ {
+  "slug": "remote-external-data-specialist-y-1137500",
+  "id": "1137500",
+  "epoch": 1793980000,
+  "date": "2026-11-06T15:00:00+00:00",
+  "company": "Acme",
+  "position": "External Data Specialist",
+  "tags": [
+   "data"
+  ],
+  "description": "Gather data.",
+  "location": "Remote",
+  "url": "https://remoteOK.com/remote-jobs/remote-external-data-specialist-y-1137500"
+ },
+ {
+  "slug": "remote-data-analyst-z-1137400",
+  "id": "1137400",
+  "epoch": 1793970000,
+  "date": "2026-11-06T12:00:00+00:00",
+  "company": "Beta",
+  "position": "Data Analyst",
+  "tags": [
+   "data"
+  ],
+  "description": "Analyse data.",
+  "location": "Kuala Lumpur, Kuala Lumpur, Wilayah Persekutuan Kuala Lumpur, Malaysia",
+  "url": "https://remoteOK.com/remote-jobs/remote-data-analyst-z-1137400"
+ },
+ {
+  "slug": "remote-registered-nurse-1137300",
+  "id": "1137300",
+  "epoch": 1793960000,
+  "date": "2026-11-06T10:00:00+00:00",
+  "company": "Caringhand",
+  "position": "Registered Nurse",
+  "tags": [
+   "health"
+  ],
+  "description": "Care.",
+  "location": "",
+  "url": "https://remoteOK.com/remote-jobs/remote-registered-nurse-1137300"
+ }
+]

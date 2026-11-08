@@ -31,7 +31,8 @@ SECONDS = 180  # the DAG gives the task 240 s; the jobs left are judged next run
 MAX_TOKENS = 1024  # the answer is a word and a phrase; the rest is room for its thinking at low effort
 # The boards whose location is their own "who can apply" field (sources/remote.py writes it there): Himalayas'
 # locationRestrictions, Remotive's candidate_required_location, Jobicy's jobGeo, Remote.co's countries, We Work
-# Remotely's region, the country pill of Daily Remote and Relomote, Working Nomads' and Remote OK's location.
+# Remotely's region, the country pill of Daily Remote and Relomote, Working Nomads' and Remote OK's location (not when Remote
+# OK's is blank or just "Remote": its page shows Worldwide then, but no one chose it, so the description decides).
 # Welcome to the Jungle names its offices and Arbeitnow a city: where the company is, not who can apply.
 BOARDS = {"himalayas", "remotive", "jobicy", "remoteco", "weworkremotely", "dailyremote", "relomote", "workingnomads",
           "remoteok"}
@@ -68,6 +69,8 @@ def who_can_apply(source: str, location: str, payload: dict) -> str | None:
         if not text and payload.get("source") == "himalayas":
             return "Himalayas gives no region"  # a Himalayas job with no region is not one its own API lists as open to Egypt
         return text or None
+    if source == "remoteok" and re.fullmatch(r"\s*(remote)?\s*", payload.get("location") or "", re.I):
+        return None  # its page says "Worldwide" for a blank location, but nobody chose that: the description decides
     return location if source in BOARDS and location else None
 
 

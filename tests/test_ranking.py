@@ -40,6 +40,20 @@ def test_only_a_boards_own_who_can_apply_field_is_read(source, location, payload
     assert eligibility.who_can_apply(source, location, payload) == expected
 
 
+@pytest.mark.parametrize("location, payload, expected", [
+    ("Worldwide (remote)", {"location": ""}, None),  # RemoteOK shows Worldwide for a blank location: that says nothing of the text
+    ("Worldwide (remote)", {"location": "Remote"}, None),
+    ("Anywhere in the World (remote)", {"location": "Anywhere in the World"}, "Anywhere in the World (remote)"),  # it said so
+    ("Boston (remote)", {"location": "Boston"}, "Boston (remote)")])
+def test_remote_oks_blank_location_is_no_who_can_apply_field_so_the_description_decides(location, payload, expected):
+    assert eligibility.who_can_apply("remoteok", location, payload) == expected
+    assert eligibility.who_can_apply("remotive", "Worldwide (remote)", {"location": ""}) == "Worldwide (remote)"  # other boards unchanged
+
+
+def test_a_blank_remote_ok_job_is_not_barred_by_its_place_alone():
+    assert eligibility.not_for_egypt("remoteok", "Worldwide (remote)", "Unknown location", {"location": ""}) is None
+
+
 def job(n, score, reason="A deciding match"):
     return {"job_id": n, "title": f"Data Engineer {n}", "company": f"Acme {n}", "location": "Cairo, Egypt", "place": "Egypt",
             "source": "indeed", "job_url": f"https://example.com/{n}", "role_rank": 1, "target_company": False,

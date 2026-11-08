@@ -11,14 +11,17 @@ from datetime import date, datetime, timedelta, timezone
 from bs4 import BeautifulSoup
 
 from ..config import EXTRACT_SECONDS, KEYWORDS, kept
-from .base import Held, changed, fetch, get, held, row, since, time_left
+from .base import Held, changed, fetch, get, held, row, since, time_left, week
 
 WELLFOUND_ROLES = ["data-engineer", "data-analyst", "data-scientist", "machine-learning-engineer",
                    "artificial-intelligence-engineer", "business-intelligence-analyst"]
 WELLFOUND_PAGES = 3  # its pages are sorted by relevance; the jobs of the last day sit in the first few
 STARTUP_JOBS_ROLES = ["data-engineer", "analytics-engineer", "data-analyst", "data-scientist",
                       "machine-learning-engineer", "ai-engineer"]
-YC_PAGES = ["data-science", "data-science/remote", "software-engineer", "software-engineer/remote"]
+# YC's board has no data role: its role pages are software-engineer, designer, product-manager, science (biotech) ...;
+# any other slug ("data-science" until 2026-11-08, "data-scientist", "machine-learning") serves the Software Engineer page
+# again, so only the pages it has are asked (checked live 2026-11-08). Data jobs sit in software-engineer.
+YC_PAGES = ["software-engineer", "software-engineer/remote"]
 # Welcome to the Jungle searches with Algolia; its public search key is in the page's /api/env
 WTTJ_ALGOLIA = {"X-Algolia-Application-Id": "CSEKHVMS53", "X-Algolia-API-Key": "4bd8f6215d0cc52b26430765769e65a0",
                 "Referer": "https://www.welcometothejungle.com/", "Content-Type": "application/json"}
@@ -177,8 +180,10 @@ def builtin() -> list[dict]:
 
 def ycombinator() -> list[dict]:
     """Y Combinator's job board (Work at a Startup): each page's jobs are in its Inertia data-page JSON,
-    with their age ('6 days') rather than a date."""
-    rows, read = [], 0
+    with their age ('6 days') rather than a date. A page holds 36 jobs, not newest first (its ages run from 'about 3 hours'
+    to 'over 5 years'), so a day's window finds almost nothing: the last week is read (week()), and a job stored
+    before is not stored twice."""
+    rows, read, seen = [], 0, set()  # the remote page repeats jobs of the first
     for name in YC_PAGES:
         try:
             page = get(f"https://www.ycombinator.com/jobs/role/{name}").text
@@ -190,7 +195,8 @@ def ycombinator() -> list[dict]:
         read += len(jobs)
         for j in jobs:
             age = card_age(j.get("createdAt") or "")
-            if age and str(age) >= since() and kept(j["title"]):
+            if age and str(age) >= week() and kept(j["title"]) and j["url"] not in seen:
+                seen.add(j["url"])
                 rows.append(row("ycombinator", None, j["title"], j["companyName"], j.get("location"),
                                 "https://www.ycombinator.com" + j["url"], str(age), None,
                                 {**j, "is_remote": "remote" in (j.get("location") or "").lower()}))
