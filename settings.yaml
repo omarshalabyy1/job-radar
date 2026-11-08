@@ -294,6 +294,24 @@ apply:
   company_days: 14          # one submit per company in this many days
   boards: [greenhouse, lever]            # the allow-list: a new board is a new explicit entry
 
+# The outreach sender (job_radar/outreach_send.py): sends the cold emails outreach_drafts writes, from the Gmail accounts of MAILBOXES in
+# .env, under the guardrails of docs/superpowers/plans/2026-11-08-auto-apply.md ("Outreach sender"). Nothing leaves the laptop unless
+# enabled is true AND mode is live; dry_run writes each email it would send to output/outreach/outbox/ and sends nothing. A file
+# output/outreach.stop also stops it. Omar's go: flip mode to live and enabled to true himself.
+outreach:
+  enabled: false            # the kill switch: false = nothing is written or sent
+  mode: dry_run             # dry_run: write .eml files; live: send through Gmail (needs enabled: true as well)
+  daily_total: 20           # emails a day (Cairo day), all mailboxes; a paused mailbox's share of this is removed, not moved
+  per_mailbox: 10           # emails a day from one mailbox
+  hourly: 5                 # emails in any hour, all mailboxes
+  gap_minutes: [2, 10]      # a random wait between two emails, in this range
+  work_hours: [9, 17]       # only inside these hours, in the recipient's time zone (Mon-Fri; Sun-Thu in Egypt and Saudi Arabia)
+  followup_days: [7, 14]    # the follow-ups: day 7 and day 14 after the first email, then never again
+  followup_grace_days: 3    # a follow-up later than this after its day is skipped for good (day 7 is not day 20)
+  bounce_limit: 0.03        # bounced recipients over recipients mailed: more pauses that mailbox
+  bounce_window_days: 30    # the bounce rate looks back this far (and no further back than the end of the mailbox's last pause)
+  pause_days: 7             # a paused mailbox rests this long; a spam complaint also pauses it
+
 # Deep research on Claude Managed Agents, by hand: python -m job_radar.research <job> [key=value ...] (job_radar/research.py).
 # Always Haiku. A job's prompt takes {keys} from the command line, else its defaults; a list under `each` runs the job once
 # per item when its key is not given. job_id=N adds that job's company, title, location, description and your newest CV.

@@ -1091,3 +1091,42 @@ CREATE TABLE IF NOT EXISTS core.apply_question (
     answered_at timestamptz,
     UNIQUE (job_id, question)
 );
+
+-- The outreach sender (job_radar/outreach_send.py, docs/superpowers/plans/2026-11-08-auto-apply.md "Outreach sender").
+-- core.suppression: an address that is never mailed again, whatever its reason: a reply, 'no', 'unsubscribe', a bounce, a spam complaint
+-- or an out-of-office that names a new contact. Kept forever; never deleted by the sender.
+CREATE TABLE IF NOT EXISTS core.suppression (
+    address  text        PRIMARY KEY,   -- lower case
+    reason   text        NOT NULL,
+    added_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Every email the sender wrote: the audit (which mailbox, to whom, which message and thread, when). mode 'dry_run' rows are what a dry
+-- run would have sent (the .eml is in output/outreach/outbox/); 'live' rows were handed to Gmail. followup_no 0 is the first email, 1 and 2 the
+-- follow-ups (never a third). One row per person, follow-up and mode: a person is never mailed the same email twice, whichever mailbox.
+-- job_id has no foreign key: the job is deleted after KEEP_DAYS, the follow-ups on day 7 and 14 go on.
+CREATE TABLE IF NOT EXISTS core.outreach_send (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    mailbox     text        NOT NULL,
+    recipient   text        NOT NULL,   -- lower case
+    job_id      bigint,
+    thread_id   text        NOT NULL,   -- the Message-ID of the first email to this person: every follow-up stays in it
+    message_id  text        NOT NULL UNIQUE,
+    sent_at     timestamptz NOT NULL DEFAULT now(),
+    mode        text        NOT NULL CHECK (mode IN ('dry_run', 'live')),
+    followup_no integer     NOT NULL DEFAULT 0 CHECK (followup_no BETWEEN 0 AND 2),
+    subject     text,                   -- a follow-up is "Re: " and this
+    UNIQUE (mode, recipient, followup_no)
+);
+CREATE INDEX IF NOT EXISTS outreach_send_sent ON core.outreach_send (sent_at);
+
+-- A mailbox that is paused (a bounce rate over outreach.bounce_limit, or a spam complaint) sends nothing until until_at, and its share of the
+-- day's volume is not given to the other mailboxes.
+CREATE TABLE IF NOT EXISTS core.outreach_pause (
+    id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    mailbox   text        NOT NULL,
+    reason    text        NOT NULL,
+    paused_at timestamptz NOT NULL,
+    until_at  timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS outreach_pause_mailbox ON core.outreach_pause (mailbox, until_at);

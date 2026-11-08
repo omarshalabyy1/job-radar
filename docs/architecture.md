@@ -174,6 +174,32 @@ flowchart LR
     classDef ai fill:#ddd6fe,stroke:#6d28d9,color:#374151
 ```
 
+## Outreach sender (not scheduled yet; dry run only)
+
+`job_radar/outreach_send.py` sends the cold emails `outreach_drafts` writes, from the Gmail accounts of `MAILBOXES`, under the
+"Outreach sender" guardrails of `docs/superpowers/plans/2026-11-08-auto-apply.md`. No DAG runs it yet. It ships off
+(`outreach.enabled: false`) and in `dry_run`: nothing leaves the laptop unless `outreach.mode` is `live` AND `outreach.enabled` is
+`true`, and the file `output/outreach.stop` stops it either way. A tick (`run`) handles at most one email, so call it about every five
+minutes: the gaps between emails (random, 2 to 10 minutes) are only real if ticks are shorter than that.
+
+- `eligible(conn, now, cfg)` is read-only. It lists what the rules allow from `now`: a first email per verified contact, then the
+  follow-ups due on day 7 and day 14 (a late one is skipped for good, never a third). A recipient needs a `data/contacts.csv` row whose
+  source (its `source` column, else the URL ending `why`) is the company's own site or the press, never LinkedIn, an email finder or a
+  guessed address; their place must map to a time zone, and mail goes only 9 to 17 there (Sunday to Thursday in Egypt and Saudi Arabia).
+  A draft that names a gap, fails the humanizer check, mentions an attachment, links anywhere or poses as a reply is dropped.
+- Caps: 10 a day per mailbox, 20 a day in total (Cairo day), 5 an hour. One person is mailed once, always from the mailbox that wrote
+  first, in the same thread. A paused mailbox sends nothing, its follow-ups wait, and its share of the day's total (total / mailboxes) is
+  removed, not given to the others.
+- `run(conn, now, cfg)` in dry run writes `output/outreach/outbox/<recipient>-<n>.eml` (n = 1 first email, 2 and 3 the follow-ups) and one
+  `core.outreach_send` row with mode `dry_run`; live, it commits the row first, then sends over `smtp.gmail.com:465`, so a crash can lose
+  an email but never send one twice. Dry-run rows never count against live caps or history.
+- `suppress_from_replies(conn, rows)` takes mail rows (the dicts `applications.read_mailbox` returns, or `core.application_email` rows,
+  with `text` when there is one) and writes `core.suppression` for a reply, "no", "unsubscribe", a bounce (the failed address is read
+  from the bounce's text), a spam complaint, or an out-of-office that names a new contact. A complaint, or a bounce rate over
+  `outreach.bounce_limit`, writes `core.outreach_pause` (7 days) and sends an ntfy push.
+- Not built yet: the reader that feeds `suppress_from_replies`. `track_applications` searches subjects for application words and stores
+  no body, so a reply to a cold email, or a bounce, is not read by it today.
+
 ## What each step writes
 
 | Step | Reads | Writes |
@@ -189,6 +215,7 @@ flowchart LR
 | `tailor` | `core.claude_grade` scoring 8+ | `output/applications/<day>/` (md, html, PDFs), `core.application` as saved |
 | `check_extracts` | the tasks' states | nothing: it fails the run when `schema` or an extract did not succeed |
 | `track_applications` | Gmail, read-only | `core.application_email`, `core.application`, `output/followups/`, `output/interviews/` |
+| `outreach_send.run` (no DAG yet) | `output/outreach/*.md` drafts, `data/contacts.csv`, `core.suppression` | dry run: `output/outreach/outbox/*.eml`, `core.outreach_send` (mode `dry_run`); live: the same row, then Gmail |
 | `job_radar_backup` (its own DAG) | `core`, `raw` | `output/backups/nightly-<day>.dump`, the newest 14 |
 | every step | | one row in `core.step_run`: status, summary, Claude tokens and exact dollars |
 
