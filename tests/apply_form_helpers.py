@@ -97,23 +97,19 @@ LEVER_SHIM = """
 """
 
 
-_started: dict = {}
-
-
-@pytest.fixture(scope="session")
-def browser(request):
-    """One Chromium for every apply-adapter test module. Playwright's sync API cannot be started twice at once, so each module that imports
-    this fixture gets the same browser (other adapters' tests: import `browser` and `page` from here rather than starting their own)."""
-    if "browser" not in _started:
-        from playwright.sync_api import Error, sync_playwright
-        pw = sync_playwright().start()
+@pytest.fixture(scope="module")
+def browser():
+    """Chromium for one apply-adapter test module, closed before the next module runs. It must not outlive its module: Playwright's sync API
+    keeps an event loop running in the thread while it is started, and any other test that starts its own (test_tailor's PDF check) would fail
+    with "use the Async API instead". Import `browser` and `page` from here in other adapters' tests."""
+    from playwright.sync_api import Error, sync_playwright
+    with sync_playwright() as p:
         try:
-            _started["browser"] = pw.chromium.launch()
+            b = p.chromium.launch()
         except Error as e:
-            pw.stop()
             pytest.skip(f"no Chromium (python -m playwright install chromium): {e!r}"[:160])
-        request.addfinalizer(lambda: (_started.pop("browser").close(), pw.stop()))
-    return _started["browser"]
+        yield b
+        b.close()
 
 
 @pytest.fixture
