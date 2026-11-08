@@ -113,7 +113,10 @@ SILENT_DAYS = 7  # days in a row with no posting at all, since its last, before 
 # role of yours: Omar chose not to watch them (2026-11-08). Their "0 postings today, N in the last 7 days" warning stays.
 # So do Arbeitnow (Europe: 15 remote jobs of its 300, none yours) and We Work Remotely (1 posting of its feed in scope),
 # also Omar's choice (2026-11-08).
-EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely"}
+# Relomote and startup.jobs answered 403 (held 6 hours, sources/base.py) when checked 2026-11-08: Omar chose not to watch them
+# either. Each refusal still prints its own "WARNING <host> answered 403: held" line every run, so a block is not silent.
+EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely",
+                   "relomote", "startup_jobs"}
 
 
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
