@@ -115,8 +115,12 @@ SILENT_DAYS = 7  # days in a row with no posting at all, since its last, before 
 # also Omar's choice (2026-11-08).
 # Relomote and startup.jobs answered 403 (held 6 hours, sources/base.py) when checked 2026-11-08: Omar chose not to watch them
 # either. Each refusal still prints its own "WARNING <host> answered 403: held" line every run, so a block is not silent.
+# Y Combinator (its pages hold 36 jobs, mostly old, 1 posting in scope on 2026-11-08) and Jobicy (its role matches are
+# tied to the USA or Europe, checked 2026-11-08) are Omar's choice too (2026-11-08), and so is Wuzzuf, Egypt's own board:
+# a dead Wuzzuf stays visible only through its "0 postings today, N in the last 7 days" warning and its own error lines.
+# Tanqeeb, Egypt's job aggregator, likewise (Omar, 2026-11-08).
 EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely",
-                   "relomote", "startup_jobs"}
+                   "relomote", "startup_jobs", "ycombinator", "jobicy", "wuzzuf", "tanqeeb"}
 
 
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
