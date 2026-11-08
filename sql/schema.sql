@@ -1062,3 +1062,20 @@ CREATE TABLE IF NOT EXISTS core.step_run (
     cost_usd           numeric,  -- exact dollars at runlog.PRICES
     PRIMARY KEY (step, started_at)
 );
+
+-- Every attempt of the apply runner (job_radar/apply/queue.py, docs/superpowers/plans/2026-11-08-auto-apply.md): the proof of what was
+-- sent. 'submitted' and 'unconfirmed' count against the daily caps and the one-per-company-per-14-days rule; any attempt takes the job out
+-- of the queue ('parked' waits for Omar's answer, 'dry_run' filled the form but did not click submit).
+CREATE TABLE IF NOT EXISTS core.apply_attempt (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    job_id       bigint      NOT NULL REFERENCES core.job ON DELETE CASCADE,
+    board        text        NOT NULL,
+    started_at   timestamptz NOT NULL DEFAULT now(),
+    finished_at  timestamptz,
+    outcome      text        NOT NULL CHECK (outcome IN ('submitted', 'unconfirmed', 'parked', 'skipped', 'failed', 'dry_run')),
+    answers      jsonb,       -- the exact answers sent
+    screenshot   text,        -- path of the proof screenshot
+    confirmation text         -- the page's receipt text
+);
+CREATE INDEX IF NOT EXISTS apply_attempt_job ON core.apply_attempt (job_id);
+CREATE INDEX IF NOT EXISTS apply_attempt_started ON core.apply_attempt (started_at);
