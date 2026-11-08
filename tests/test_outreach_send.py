@@ -3,6 +3,7 @@ One test per guard of that table. Nothing here reaches a mail server: smtplib.SM
 few tests that need the live path give it a fake. No test prints or asserts on a real address or password."""
 
 import csv
+import re
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email import message_from_bytes, policy
@@ -761,5 +762,209 @@ def test_nothing_printed_names_an_address_or_a_password(conn, tmp_path, capsys):
     mailed(conn)
     outreach_send.run(conn, NOW, CFG)
     outreach_send.suppress_from_replies(conn, [reply("maya@co1.example", text="No.")], now=NOW, cfg=CFG)
+    out = capsys.readouterr().out
+    assert out and "@" not in out and not any(p in out for p in PASSWORDS.values())
+
+
+# ------------------------------------------------------------------------------------------------------------ the reply reader
+
+class FakeIMAP:
+    """Gmail over IMAP, as much as the reader uses: one list of raw messages per account, every command recorded."""
+    mail: dict[str, list[bytes]] = {}
+    broken: set[str] = set()
+    log: list[tuple] = []
+
+    def __init__(self, host, *a, **k):
+        self.host, self.user = host, None
+        FakeIMAP.log.append(("connect", host))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def login(self, user, password):
+        FakeIMAP.log.append(("login", user, password))
+        if user in FakeIMAP.broken:
+            raise OSError("down")
+        self.user = user
+        return "OK", [b"ok"]
+
+    def select(self, name, readonly=False):
+        FakeIMAP.log.append(("select", name, readonly))
+        return "OK", [b"1"]
+
+    def uid(self, cmd, *args):
+        FakeIMAP.log.append((cmd, *args))
+        box = FakeIMAP.mail.get(self.user, [])
+        if cmd == "search":      # every query finds every message: the reader must not read one twice
+            return "OK", [b" ".join(str(i + 1).encode() for i in range(len(box)))]
+        raw, spec = box[int(args[0]) - 1], args[1]
+        if "RFC822.SIZE" in spec:
+            head = raw.split(b"\r\n\r\n", 1)[0] + b"\r\n\r\n"
+            return "OK", [(f"{args[0]} (RFC822.SIZE {len(raw) if b'HUGE' not in raw else 9_000_000} BODY[HEADER.FIELDS]".encode(), head), b")"]
+        return "OK", [(f"{args[0]} (BODY[] {len(raw)}".encode(), raw), b")"]
+
+
+@pytest.fixture
+def imap(monkeypatch):
+    FakeIMAP.mail, FakeIMAP.broken, FakeIMAP.log = {}, set(), []
+    monkeypatch.setattr(outreach_send.imaplib, "IMAP4_SSL", FakeIMAP)
+    return FakeIMAP
+
+
+def raw_mail(sender, subject, text, to=MAILBOXES[0], message_id="<m1@x>", date="Wed, 11 Nov 2026 09:30:00 +0000", html=None):
+    parts = [f"From: {sender}", f"To: {to}", f"Subject: {subject}", f"Message-ID: {message_id}", f"Date: {date}", "MIME-Version: 1.0"]
+    if html:
+        body = f"Content-Type: text/html; charset=utf-8\r\n\r\n{html}"
+    else:
+        body = f"Content-Type: text/plain; charset=utf-8\r\n\r\n{text}"
+    return ("\r\n".join(parts) + "\r\n" + body).encode()
+
+
+def commands(imap):
+    return [entry[0] for entry in imap.log]
+
+
+def test_the_reader_opens_all_mail_read_only_and_only_peeks(conn, imap):
+    mailed(conn)
+    imap.mail[MAILBOXES[0]] = [raw_mail("Maya <maya@co1.example>", "Re: Late stock data", "No thanks.")]
+    outreach_send.read_replies(conn, NOW, CFG)
+    assert ("connect", "imap.gmail.com") in imap.log and ("login", MAILBOXES[0], PASSWORDS[MAILBOXES[0]]) in imap.log
+    assert ('select', '"[Gmail]/All Mail"', True) in imap.log
+    assert set(commands(imap)) <= {"connect", "login", "select", "search", "fetch"}      # never store, copy, expunge or append
+    for entry in imap.log:
+        if entry[0] == "fetch":
+            assert "PEEK" in entry[2]                                                    # nothing is marked read
+
+
+def test_the_reader_searches_for_mail_from_the_people_we_mailed_and_for_bounces(conn, imap):
+    for i in range(45):
+        mailed(conn, f"p{i}@co{i}.example", when=NOW - timedelta(days=2, minutes=i))
+    imap.mail[MAILBOXES[0]] = []
+    outreach_send.read_replies(conn, NOW, CFG)
+    queries = sorted({e[3] for e in imap.log if e[0] == "search"})   # the same searches in each of the three mailboxes
+    from_queries = [q for q in queries if "mailer-daemon" not in q]
+    assert len(from_queries) == 3 and all(q.count("@") <= 20 for q in from_queries)    # 45 addresses, 20 to a query
+    assert {f"p{i}@co{i}.example" for i in range(45)} == {a for q in from_queries for a in re.findall(r"p\d+@co\d+\.example", q)}
+    assert any("mailer-daemon" in q and "postmaster" in q for q in queries)
+    assert all("newer_than:" in q for q in queries)
+
+
+def test_the_reader_looks_back_to_the_first_email_sent_and_no_further_than_60_days(conn, imap):
+    mailed(conn, when=NOW - timedelta(days=10))
+    outreach_send.read_replies(conn, NOW, CFG)
+    assert any("newer_than:12d" in e[3] for e in imap.log if e[0] == "search")
+    imap.log.clear()
+    mailed(conn, "old@co9.example", when=NOW - timedelta(days=400))
+    outreach_send.read_replies(conn, NOW, CFG)
+    assert any("newer_than:60d" in e[3] for e in imap.log if e[0] == "search")
+
+
+def test_with_nobody_mailed_the_reader_does_not_connect(conn, imap):
+    assert outreach_send.read_replies(conn, NOW, CFG) == [] and imap.log == []
+
+
+def test_a_row_has_the_shape_suppress_from_replies_reads(conn, imap):
+    mailed(conn)
+    imap.mail[MAILBOXES[0]] = [raw_mail("Maya Founder <maya@co1.example>", "Re: Late stock data",
+                                        "No thanks.\n\nOn Wed, 11 Nov 2026, Omar wrote:\n> reply \"no\" and I will not write again.")]
+    [row] = outreach_send.read_replies(conn, NOW, CFG)
+    assert row["sender"] == "Maya Founder <maya@co1.example>" and row["subject"] == "Re: Late stock data"
+    assert row["message_id"] == "<m1@x>" and row["mailbox"] == MAILBOXES[0] and row["kind"] == "other"
+    assert row["received_at"] == datetime(2026, 11, 11, 9, 30, tzinfo=timezone.utc)
+    assert row["text"].startswith("No thanks.") and "\n> reply" in row["text"]            # the lines stay lines: quotes can be told apart
+
+
+def test_an_html_only_reply_is_read_as_text(conn, imap):
+    mailed(conn)
+    imap.mail[MAILBOXES[0]] = [raw_mail("maya@co1.example", "Re: x", "", html="<html><head><style>p{}</style></head><body><p>Please unsubscribe me.</p></body></html>")]
+    [row] = outreach_send.read_replies(conn, NOW, CFG)
+    assert "Please unsubscribe me." in row["text"] and "<p>" not in row["text"] and "p{}" not in row["text"]
+
+
+def test_a_bounce_report_names_the_failed_address_from_its_delivery_status_part(conn, imap):
+    mailed(conn)
+    dsn = ("From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>\r\nTo: " + MAILBOXES[0] + "\r\n"
+           "Subject: Delivery Status Notification (Failure)\r\nMessage-ID: <b1@x>\r\nDate: Wed, 11 Nov 2026 09:31:00 +0000\r\n"
+           "MIME-Version: 1.0\r\nContent-Type: multipart/report; report-type=delivery-status; boundary=B\r\n\r\n"
+           "--B\r\nContent-Type: text/plain\r\n\r\nYour message could not be delivered.\r\n"
+           "--B\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; googlemail.com\r\n\r\n"
+           "Final-Recipient: rfc822; maya@co1.example\r\nAction: failed\r\nStatus: 5.1.1\r\n--B--\r\n").encode()
+    imap.mail[MAILBOXES[0]] = [dsn]
+    [row] = outreach_send.read_replies(conn, NOW, CFG)
+    assert "maya@co1.example" in row["text"]
+    out = outreach_send.suppress_from_replies(conn, [row], now=NOW, cfg=CFG)
+    assert out["bounces"] == 1
+
+
+def test_a_message_found_by_several_queries_or_in_two_mailboxes_is_one_row(conn, imap):
+    mailed(conn)
+    same = raw_mail("maya@co1.example", "Re: x", "Hello")
+    imap.mail[MAILBOXES[0]] = [same, same]
+    imap.mail[MAILBOXES[1]] = [same]
+    assert len(outreach_send.read_replies(conn, NOW, CFG)) == 1
+
+
+def test_mail_from_our_own_mailboxes_and_our_own_messages_is_left_out(conn, imap):
+    mailed(conn)
+    own_id = "<own1@mail.example>"
+    conn.execute("UPDATE core.outreach_send SET message_id = %s", (own_id,))
+    imap.mail[MAILBOXES[0]] = [raw_mail(f"Omar <{MAILBOXES[1]}>", "Re: x", "note to self", message_id="<self@x>"),
+                                           raw_mail("maya@co1.example", "x", "copy", message_id=own_id)]
+    assert outreach_send.read_replies(conn, NOW, CFG) == []
+
+
+def test_a_message_over_the_size_limit_is_not_downloaded(conn, imap):
+    mailed(conn)
+    imap.mail[MAILBOXES[0]] = [raw_mail("maya@co1.example", "Re: x", "HUGE attachment inside")]
+    assert outreach_send.read_replies(conn, NOW, CFG) == []
+    assert not any(e[0] == "fetch" and "BODY.PEEK[]" in e[2] for e in imap.log)
+
+
+def test_a_mailbox_that_cannot_be_read_does_not_stop_the_others_and_names_no_address(conn, imap, capsys):
+    mailed(conn)
+    imap.broken.add(MAILBOXES[0])
+    imap.mail[MAILBOXES[1]] = [raw_mail("maya@co1.example", "Re: x", "Hello", to=MAILBOXES[1])]
+    rows = outreach_send.read_replies(conn, NOW, CFG)
+    assert [r["mailbox"] for r in rows] == [MAILBOXES[1]]
+    out = capsys.readouterr().out
+    assert "OSError" in out and "@" not in out and not any(p in out for p in PASSWORDS.values())
+
+
+def test_collecting_replies_feeds_suppression_and_the_mailbox_pause(conn, imap, pushes):
+    live_history(conn, MAILBOXES[0], 20)
+    mailed(conn)
+    imap.mail[MAILBOXES[0]] = [
+        raw_mail("Maya <maya@co1.example>", "Re: Late stock data", "No thanks, not interested.", message_id="<r1@x>"),
+        raw_mail("Mail Delivery Subsystem <mailer-daemon@googlemail.com>", "Delivery Status Notification (Failure)",
+                 f"Your message wasn't delivered to {addr(MAILBOXES[0], 0)} because the address couldn't be found.", message_id="<r2@x>")]
+    out = outreach_send.collect_replies(conn, NOW, CFG)
+    assert out["read"] == 2 and out["suppressed"] == 2 and out["bounces"] == 1
+    assert dict(conn.execute("SELECT address, reason FROM core.suppression").fetchall()) == {"maya@co1.example": "no", addr(MAILBOXES[0], 0): "bounce"}
+    assert out["paused"] == [MAILBOXES[0]] and len(pushes) == 1                       # 1 bounce of 21 recipients = 4.8% > 3%
+    again = outreach_send.collect_replies(conn, NOW + timedelta(minutes=5), CFG)       # the next tick reads them again: nothing changes
+    assert again["suppressed"] == 0 and conn.execute("SELECT count(*) FROM core.outreach_pause").fetchone() == (1,) and len(pushes) == 1
+
+
+def test_collecting_replies_touches_no_mailbox_when_outreach_is_off(conn, imap):
+    mailed(conn)
+    assert outreach_send.collect_replies(conn, NOW, {**CFG, "enabled": False})["read"] == 0
+    assert imap.log == []
+
+
+def test_collecting_replies_still_reads_when_the_stop_file_is_there(conn, imap):
+    """The stop file stops sending; a reply or an unsubscribe that arrives meanwhile must still be honoured."""
+    mailed(conn)
+    outreach_send.STOP_FILE.write_text("stop")
+    imap.mail[MAILBOXES[0]] = [raw_mail("maya@co1.example", "Re: x", "Please unsubscribe me.")]
+    assert outreach_send.collect_replies(conn, NOW, CFG)["suppressed"] == 1
+
+
+def test_collecting_prints_counts_only(conn, imap, capsys):
+    mailed(conn)
+    imap.mail[MAILBOXES[0]] = [raw_mail("maya@co1.example", "Re: x", "No.")]
+    outreach_send.collect_replies(conn, NOW, CFG)
     out = capsys.readouterr().out
     assert out and "@" not in out and not any(p in out for p in PASSWORDS.values())

@@ -26,7 +26,10 @@ Nothing here prints an address or a password: the log has counts only."""
 from __future__ import annotations
 
 import csv
+import email
+import email.policy
 import hashlib
+import imaplib
 import random
 import re
 import smtplib
@@ -34,13 +37,16 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from email.utils import format_datetime, formataddr, make_msgid, parseaddr
+from email.utils import format_datetime, formataddr, make_msgid, parsedate_to_datetime, parseaddr
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from bs4 import BeautifulSoup
+
 from . import outreach as drafts
-from .applications import CAIRO, accounts
+from .applications import CAIRO, accounts, clean
 from .config import OUTPUT, SETTINGS
+from .sources.inbox import MAIL_BYTES
 from .tailor import GAP_WORDS, slug
 
 DRAFTS = OUTPUT / "outreach"
@@ -49,6 +55,10 @@ SENDER_NAME = "Omar Shalaby"
 OPT_OUT = 'If this is not for you, reply "no" and I will not write again.'
 HORIZON = timedelta(hours=1)  # eligible plans this far ahead (the hourly cap makes a longer plan pointless)
 SMTP_HOST, SMTP_PORT = "smtp.gmail.com", 465
+IMAP_HOST = "imap.gmail.com"
+READ_DAYS = (3, 60)  # the reader looks back at least and at most this many days
+QUERY_ADDRESSES = 20  # recipients in one Gmail search
+REPLY_CHARS = 4000  # of a reply kept
 
 # ----------------------------------------------------------------------------------------------------------- settings and gates
 
@@ -656,3 +666,97 @@ def history_all(conn) -> list[tuple]:
     """Every email we wrote, either mode: a reply to a dry run's email cannot exist, but a recipient who answered once is never mailed cold."""
     return conn.execute("SELECT id, mailbox, lower(recipient), job_id, thread_id, message_id, sent_at, followup_no, subject"
                         " FROM core.outreach_send ORDER BY sent_at, id").fetchall()
+
+
+# -------------------------------------------------------------------------------------------------------------- the reply reader
+
+
+def reply_queries(recipients: list[str], days: int) -> list[str]:
+    """Gmail searches (X-GM-RAW): mail from the people we mailed (QUERY_ADDRESSES to a search), and bounce and abuse notices."""
+    window = f"newer_than:{days}d"
+    queries = [f"from:({' OR '.join(recipients[i:i + QUERY_ADDRESSES])}) {window}" for i in range(0, len(recipients), QUERY_ADDRESSES)]
+    return queries + [f"(from:(mailer-daemon OR postmaster) OR subject:(abuse OR complaint)) {window}"]
+
+
+def reply_text(msg) -> str:
+    """The words of a reply with its lines kept (suppress_from_replies tells our quoted email from their answer by line), and, for a
+    bounce report, its delivery-status part, which is where the failed address is named for certain."""
+    part = msg.get_body(preferencelist=("plain", "html"))
+    text = ""
+    if part is not None:
+        text = part.get_content()
+        if part.get_content_type() == "text/html":
+            soup = BeautifulSoup(text, "html.parser")
+            for tag in soup(["style", "script", "head"]):
+                tag.decompose()
+            text = soup.get_text("\n")
+    for sub in msg.walk():
+        if sub.get_content_type() == "message/delivery-status":
+            text += "\n" + "\n".join(str(block) for block in sub.get_payload() if not isinstance(block, str))
+    return "\n".join(line.rstrip() for line in text.splitlines() if line.strip())[:REPLY_CHARS]
+
+
+def read_one_mailbox(mailbox: str, password: str, queries: list[str], skip: set[str], seen: set[str]) -> list[dict]:
+    """The mail the queries find in one Gmail account's All Mail, read-only (the mailbox is opened read-only and only BODY.PEEK is
+    fetched: nothing is marked read, moved or deleted). A message already in `seen`, in `skip`, bigger than MAIL_BYTES or sent from one
+    of our own mailboxes is left out; `seen` gains each Message-ID read."""
+    rows: list[dict] = []
+    with imaplib.IMAP4_SSL(IMAP_HOST) as imap:
+        imap.login(mailbox, password)
+        if imap.select('"[Gmail]/All Mail"', readonly=True)[0] != "OK":
+            raise RuntimeError("All Mail could not be opened")
+        uids = list(dict.fromkeys(uid for query in queries
+                                  for uid in imap.uid("search", None, "X-GM-RAW", f'"{query}"')[1][0].split()))
+        own = set(accounts())
+        for uid in uids:
+            info, head = imap.uid("fetch", uid, "(RFC822.SIZE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT MESSAGE-ID DATE)])")[1][0]
+            h = email.message_from_bytes(head, policy=email.policy.default)
+            message_id = str(h["Message-ID"] or f"{mailbox}/All Mail/{uid.decode()}").strip()
+            size = int(re.search(rb"RFC822\.SIZE (\d+)", info).group(1))
+            sender = clean(str(h["From"] or ""))
+            if (message_id in seen or message_id in skip or size > MAIL_BYTES or parseaddr(sender)[1].lower() in own):
+                continue
+            try:
+                received = parsedate_to_datetime(str(h["Date"]))
+            except (TypeError, ValueError):
+                continue
+            seen.add(message_id)
+            msg = email.message_from_bytes(imap.uid("fetch", uid, "(BODY.PEEK[])")[1][0][1], policy=email.policy.default)
+            rows.append({"message_id": message_id, "received_at": received.astimezone(timezone.utc) if received.tzinfo
+                         else received.replace(tzinfo=timezone.utc), "sender": sender, "subject": clean(str(h["Subject"] or "")),
+                         "to": clean(str(h["To"] or "")), "text": reply_text(msg), "mailbox": mailbox, "kind": "other",
+                         "company": None, "title": None})
+    return rows
+
+
+def read_replies(conn, now: datetime, cfg: dict | None = None) -> list[dict]:
+    """The mail that can answer our emails, read from each Gmail account of MAILBOXES: everything from the people we mailed (either
+    mode) and the bounce and abuse notices, from the day of the first email back (3 to 60 days). Rows in the shape of
+    applications.read_mailbox, plus `text`, ready for suppress_from_replies. A mailbox that cannot be read is skipped, named by letter."""
+    sent = history_all(conn)
+    if not sent:
+        return []
+    low, high = READ_DAYS
+    days = min(high, max(low, (now - min(r[6] for r in sent)).days + 2))
+    queries = reply_queries(sorted({r[2] for r in sent}), days)
+    skip = {r[5] for r in sent}
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for mailbox, password in sorted(accounts().items()):
+        try:
+            rows += read_one_mailbox(mailbox, password, queries, skip, seen)
+        except (imaplib.IMAP4.error, OSError, RuntimeError) as e:  # the message of a login error can name the account: only its type
+            print(f"outreach_send: could not read mailbox {mailbox_label(mailbox)} ({type(e).__name__})")
+    return rows
+
+
+def collect_replies(conn, now: datetime, cfg: dict | None = None) -> dict:
+    """Read the replies and feed suppress_from_replies: the step that keeps core.suppression and the mailbox pauses current. Off with
+    outreach.enabled (no mailbox is touched); the stop file does not stop it, because an unsubscribe that arrives while sending is
+    stopped must still be honoured. Run it about every hour (a reply is only as late as the next read). Returns the counts."""
+    cfg = settings(cfg)
+    if cfg.get("enabled") is not True:
+        print("outreach_send: replies not read, off in settings.yaml (outreach.enabled)")
+        return {"read": 0, "suppressed": 0, "bounces": 0, "complaints": 0, "paused": []}
+    rows = read_replies(conn, now, cfg)
+    return {"read": len(rows), **suppress_from_replies(conn, rows, now, cfg)}

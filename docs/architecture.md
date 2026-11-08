@@ -197,8 +197,13 @@ minutes: the gaps between emails (random, 2 to 10 minutes) are only real if tick
   with `text` when there is one) and writes `core.suppression` for a reply, "no", "unsubscribe", a bounce (the failed address is read
   from the bounce's text), a spam complaint, or an out-of-office that names a new contact. A complaint, or a bounce rate over
   `outreach.bounce_limit`, writes `core.outreach_pause` (7 days) and sends an ntfy push.
-- Not built yet: the reader that feeds `suppress_from_replies`. `track_applications` searches subjects for application words and stores
-  no body, so a reply to a cold email, or a bounce, is not read by it today.
+- `collect_replies(conn, now, cfg)` is the reader that feeds it. For each Gmail account of `MAILBOXES` it opens All Mail read-only
+  (only `BODY.PEEK`, so nothing is marked read, moved or deleted) and searches for mail from the people we mailed (20 addresses to a
+  search) and for bounce and abuse notices, from the first email's day back (3 to 60 days). It keeps a reply's lines (so our quoted
+  email is told from their answer) and a bounce's delivery-status part (where the failed address is named), then calls
+  `suppress_from_replies`. A mailbox it cannot read is skipped and named by letter. It needs `outreach.enabled` but not a clear stop
+  file: an unsubscribe that arrives while sending is stopped is still honoured. Run it about hourly; re-reading is harmless.
+- Not built yet: the DAG or step that calls `run` (every ~5 minutes) and `collect_replies` (hourly).
 
 ## What each step writes
 
@@ -215,7 +220,7 @@ minutes: the gaps between emails (random, 2 to 10 minutes) are only real if tick
 | `tailor` | `core.claude_grade` scoring 8+ | `output/applications/<day>/` (md, html, PDFs), `core.application` as saved |
 | `check_extracts` | the tasks' states | nothing: it fails the run when `schema` or an extract did not succeed |
 | `track_applications` | Gmail, read-only | `core.application_email`, `core.application`, `output/followups/`, `output/interviews/` |
-| `outreach_send.run` (no DAG yet) | `output/outreach/*.md` drafts, `data/contacts.csv`, `core.suppression` | dry run: `output/outreach/outbox/*.eml`, `core.outreach_send` (mode `dry_run`); live: the same row, then Gmail |
+| `outreach_send.run` and `collect_replies` (no DAG yet) | `output/outreach/*.md` drafts, `data/contacts.csv`, `core.suppression`; Gmail All Mail, read-only | dry run: `output/outreach/outbox/*.eml`, `core.outreach_send` (mode `dry_run`); live: the same row, then Gmail; replies: `core.suppression`, `core.outreach_pause` |
 | `job_radar_backup` (its own DAG) | `core`, `raw` | `output/backups/nightly-<day>.dump`, the newest 14 |
 | `job_radar.review weekly` (by hand, read-only) | `core.step_run`, `core.application`, `core.claude_grade`, `core.application_email` | `output/reviews/weekly-<day>.md` |
 | every step | | one row in `core.step_run`: status, summary, Claude tokens and exact dollars |
