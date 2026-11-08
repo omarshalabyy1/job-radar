@@ -1,6 +1,6 @@
-"""Shared helpers for the form-adapter tests (tests/test_apply_adapter_<board>.py): one Chromium per test file, a page with every
-network request aborted (a test never touches a board), the saved forms in tests/fixtures/apply/, a stand-in for answers.resolve and a
-tailored job with real PDF files. The pages are saved DOM without scripts, so a test that needs the board's own JavaScript (a success
+"""Helpers for the Ashby, Recruitee, SmartRecruiters and Workable adapter tests (tests/test_apply_adapter_<board>.py). The `browser` and
+`page` fixtures (no network) are apply_form_helpers'; this adds the saved forms in tests/fixtures/apply/, a stand-in for answers.resolve, a
+tailored job with real PDF files and click counters. The pages are saved DOM without scripts, so a test that needs the board's own JavaScript (a success
 message after a click) adds a few lines of it itself."""
 
 from __future__ import annotations
@@ -15,25 +15,6 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "apply"
 
 def fixture_html(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
-
-
-@pytest.fixture(scope="module")  # one per test file: Playwright cannot start twice at once
-def browser():
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        b = p.chromium.launch()
-        yield b
-        b.close()
-
-
-@pytest.fixture
-def page(browser):
-    ctx = browser.new_context()
-    ctx.route("**/*", lambda route: route.abort())  # no network: a saved form is all a test may load
-    p = ctx.new_page()
-    yield p
-    ctx.close()
 
 
 @pytest.fixture

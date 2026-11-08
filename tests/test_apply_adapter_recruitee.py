@@ -7,8 +7,8 @@ whose label is the whole legal sentence; the phone box comes prefilled with a di
 from dataclasses import replace
 
 import pytest
-from apply_page import (browser, clicks, count_clicks_on, fast_waits, fixture_html, job, labels, page, resolver,  # noqa: F401
-                        uploaded, value_of)
+from apply_form_helpers import browser, page  # noqa: F401  (fixtures)
+from apply_page import clicks, count_clicks_on, fast_waits, fixture_html, job, labels, resolver, uploaded, value_of  # noqa: F401
 
 from job_radar.apply import queue
 from job_radar.apply.adapters import recruitee
@@ -70,10 +70,10 @@ def test_a_login_wall_or_a_verify_human_page_needs_a_human(adapter, page):
     assert adapter.needs_human(page)
 
 
-def test_a_page_with_no_form_is_not_ready_to_submit(adapter, page, job):
+def test_a_page_with_no_form_is_an_error_not_ready_to_submit(adapter, page, job):
     page.set_content("<h1>This job is closed</h1>")
-    missing = adapter.fill(page, job, resolver(APPROVED))
-    assert missing and missing[0].required
+    with pytest.raises(RuntimeError, match="no application form"):
+        adapter.fill(page, job, resolver(APPROVED))
 
 
 def test_fill_answers_come_only_from_resolve(adapter, page, job):
@@ -167,10 +167,11 @@ def test_fill_never_clicks_send(adapter, page, job):
     assert clicks(page) == 0
 
 
-def test_fill_does_not_run_on_a_page_that_needs_a_human(adapter, page, job):
+def test_fill_refuses_a_page_that_needs_a_human(adapter, page, job):
     page.set_content(fixture_html(FORWARD))  # hCaptcha still there
-    missing = adapter.fill(page, job, resolver(APPROVED))
-    assert missing and missing[0].label.startswith("needs a human") and value_of(page, NAME) == ""
+    with pytest.raises(RuntimeError, match="needs a human"):
+        adapter.fill(page, job, resolver(APPROVED))
+    assert value_of(page, NAME) == ""
 
 
 def test_submit_clicks_once_and_confirms_only_on_the_active_success_panel(adapter, page, monkeypatch):
@@ -204,7 +205,7 @@ def test_submit_never_clicks_on_a_page_that_needs_a_human(adapter, page):
     page.set_content(fixture_html(FORWARD))
     count_clicks_on(page, SUBMIT)
     receipt = adapter.submit(page)
-    assert clicks(page) == 0 and receipt == Receipt(False, receipt.text) and "human" in receipt.text.lower()
+    assert clicks(page) == 0 and receipt == Receipt(False, receipt.text) and receipt.text.startswith("NOT CONFIRMED") and "human" in receipt.text
 
 
 def test_submit_with_no_button_is_not_confirmed(adapter, page):

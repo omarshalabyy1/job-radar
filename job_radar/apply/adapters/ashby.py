@@ -47,21 +47,20 @@ class Adapter:
 
     def needs_human(self, page) -> bool:
         self._ready(page)  # from a posting's overview this opens the form, so its CAPTCHA is the one looked for
-        return bool(_ats.human_check(page))
+        return _ats.needs_human(page)
 
     def fill(self, page, job, resolve) -> list[Field]:
         self._ready(page)
-        if reason := _ats.human_check(page):
-            return [Field(f"needs a human: {reason}", "text", (), True)]
+        _ats.refuse_if_human(page)
         return _ats.fill_form(page, job, resolve, FORM, skip=AUTOFILL, entry=ENTRY)
 
     def submit(self, page) -> Receipt:
         if not self._ready(page):
-            return Receipt(False, "no application form on the page")
-        if reason := _ats.human_check(page):
-            return Receipt(False, f"needs a human: {reason}")
+            return Receipt(False, "NOT CONFIRMED: no application form on the page")
+        if _ats.needs_human(page):
+            return Receipt(False, "NOT CONFIRMED: needs a human (CAPTCHA, login wall or blocked page); nothing was clicked")
         button = page.locator(SUBMIT)
         if button.count() != 1 or not button.is_enabled():
-            return Receipt(False, "no single enabled submit button")
+            return Receipt(False, "NOT CONFIRMED: no single enabled submit button on the page")
         button.click()
         return _ats.wait_for_receipt(page, lambda p: p.evaluate(_CONFIRMATION), CONFIRM_SECONDS)

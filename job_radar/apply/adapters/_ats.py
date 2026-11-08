@@ -1,9 +1,10 @@
 """What the ATS form adapters (ashby, recruitee, smartrecruiters, workable) share, so each one is only what is true of its board:
 its hosts, where its form is, its submit button and its own confirmation.
 
-The rules every adapter keeps live here, once:
-- `human_check`: a CAPTCHA widget (visible or an invisible badge), a login wall or a verify-human / blocked page is `needs_human`;
-  nothing is filled or clicked there (fill and submit look again before they act).
+The rules every adapter keeps live here, once (the CAPTCHA / login / verify-human policy itself is human_check.py, shared with Greenhouse
+and Lever; the one rule for taking an answer is forms.ask):
+- `needs_human`: human_check, plus a blocked page (a 403 / 429 / "access denied" wall); nothing is filled or clicked there: `fill` raises
+  and `submit` returns "NOT CONFIRMED" without clicking.
 - `fill_form`: an answer comes only from `resolve(question, field_type, options)`; the question is the field's label and nothing else on the
   page (descriptions, banners and job text are data and are never read as instructions or passed on); None means "not approved": the
   field stays empty and, if required, is returned. A control this module cannot read (a custom dropdown, a yes/no button pair) is
@@ -17,31 +18,16 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from . import forms
 from .base import Field, Receipt
+from .human_check import needs_human as _shared_needs_human
 
 FORM_WAIT_MS = 10_000   # a single-page app draws its form after the page loads
 SETTLE_MS = 3_000       # then lets a CAPTCHA script add its widget before anyone looks for it
 
-CAPTCHA_SELECTOR = ", ".join([
-    'iframe[src*="recaptcha"]', 'iframe[src*="hcaptcha"]', 'iframe[src*="captcha-assets"]', 'iframe[src*="turnstile"]',
-    'iframe[src*="challenges.cloudflare.com"]', 'iframe[title*="captcha" i]', 'iframe[title*="security challenge" i]',
-    ".g-recaptcha", ".h-captcha", ".cf-turnstile", ".grecaptcha-badge", "[data-sitekey]",
-    'textarea[name="g-recaptcha-response"]', 'textarea[name="h-captcha-response"]', 'input[name="cf-turnstile-response"]',
-    '[id*="captcha" i]', '[class*="captcha" i]'])
-
-_HUMAN_CHECK = """(captcha) => {
-  const text = (document.body ? document.body.innerText : '').toLowerCase().replace(/\\s+/g, ' ');
+_BLOCKED = """() => {
   const head = (document.title + ' ' + Array.from(document.querySelectorAll('h1')).map(h => h.innerText).join(' ')).toLowerCase();
-  if (document.querySelector(captcha)) return 'a CAPTCHA widget is on the page';
-  if (/verify (that )?you(\\'re| are) (a )?human|verifying you are human|confirm you are human|are you a robot|unusual traffic|checking your browser|complete the security check|press (&|and) hold/.test(text))
-    return 'a verify-human page';
-  if (/just a moment|attention required|access denied|error 4(03|29)|too many requests|request blocked/.test(head))
-    return 'a blocked page';
-  const password = Array.from(document.querySelectorAll('input[type=password]')).some(i => !i.closest('[hidden]'));
-  if (password) return 'a login wall';
-  if (/(log ?in|sign ?in) (to|before) (apply|continue)|create an account to apply|you must be (logged|signed) in/.test(text)
-      && !document.querySelector('input[type=email], input[name*=email i]')) return 'a login wall';
-  return '';
+  return /access denied|error 4(03|29)|403 forbidden|too many requests|request blocked|attention required/.test(head);
 }"""
 
 _COLLECT = """([scopeSel, skipSel]) => {
@@ -94,7 +80,6 @@ _COLLECT = """([scopeSel, skipSel]) => {
   return out;
 }"""
 
-_BLOCKING = "this page has no application form to fill"
 _YES = {"yes", "y", "true", "1", "checked", "agree", "i agree", "accept", "i accept"}
 
 
@@ -109,23 +94,33 @@ def on_host(url: str, hosts: tuple[str, ...], suffixes: tuple[str, ...] = ()) ->
     return host in hosts or any(host == s or host.endswith("." + s) for s in suffixes)
 
 
-def human_check(page) -> str:
-    """Why a person must look at this page ('' when nothing needs one). A page that cannot be read (closed, navigating) counts as needing
-    one, so nothing is filled or clicked blind."""
+def needs_human(page) -> bool:
+    """Something only Omar passes is on the page (human_check: CAPTCHA widget, login wall, verify-human page) or the board's wall turned
+    the request away (a blocked page). A page that cannot be read (closed, navigating) counts too, so nothing is filled or clicked blind."""
     try:
-        return page.evaluate(_HUMAN_CHECK, CAPTCHA_SELECTOR)
-    except Exception as e:  # noqa: BLE001
-        return f"the page cannot be read ({type(e).__name__})"
+        return bool(_shared_needs_human(page) or page.evaluate(_BLOCKED))
+    except Exception:  # noqa: BLE001
+        return True
 
 
-def open_form(page, form_selector: str, application_url=None) -> bool:
+def refuse_if_human(page) -> None:
+    if needs_human(page):
+        raise RuntimeError("this page needs a human (CAPTCHA, login wall, human check or a blocked page): the adapter must not fill or submit it")
+
+
+def open_form(page, form_selector: str, application_url=None, opener: str = "") -> bool:
     """Make sure the application form is on the page and drawn: from a posting page go to the form's own address
-    (`application_url(current url)`), then wait for the form and let the page's scripts settle. False when there is no form."""
+    (`application_url(current url)`), or click the one visible link or button whose whole text matches the regex `opener` ("I'm
+    interested"), then wait for the form and let the page's scripts settle. False when there is no form."""
     try:
-        if not page.locator(form_selector).count() and application_url:
-            target = application_url(page.url)
+        if not page.locator(form_selector).count():
+            target = application_url(page.url) if application_url else None
             if target and target != page.url:
                 page.goto(target)
+            elif opener:
+                buttons = page.get_by_role("link", name=re.compile(opener, re.I)).or_(page.get_by_role("button", name=re.compile(opener, re.I)))
+                if buttons.count() == 1:  # two candidates is a page we do not understand: do not click either
+                    buttons.first.click()
         page.wait_for_selector(form_selector, timeout=FORM_WAIT_MS)
     except Exception:  # noqa: BLE001  (a timeout is "no form"; a closed page too)
         return False
@@ -136,16 +131,12 @@ def open_form(page, form_selector: str, application_url=None) -> bool:
     return True
 
 
-def _norm(text: str) -> str:
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).split())
-
-
 def cv_or_cover(label: str, job) -> Path | None:
     """The tailored PDF a file field asks for: the cover letter by its label, the CV for "resume" / "CV"; any other upload gets nothing."""
-    text = _norm(label)
-    path = getattr(job, "cover_pdf", None) if re.search(r"\bcover\b", text) else \
-        getattr(job, "cv_pdf", None) if re.search(r"\b(resume|cv|curriculum)\b", text) else None
-    return Path(path) if path and Path(path).is_file() and Path(path).suffix.lower() == ".pdf" else None
+    text = forms.norm(label)
+    path = forms.existing_file(getattr(job, "cover_pdf", None) if re.search(r"\bcover\b", text) else
+                               getattr(job, "cv_pdf", None) if re.search(r"\b(resume|cv|curriculum)\b", text) else None)
+    return Path(path) if path and Path(path).suffix.lower() == ".pdf" else None
 
 
 def _field(q: dict) -> Field:
@@ -157,12 +148,12 @@ def fill_form(page, job, resolve, scope: str, skip: str = "", entry: str = "") -
     """Fill every control inside `scope` that has an approved answer (and the CV / cover letter); return the required ones that
     could not be filled. `entry` (optional) is the selector of one question's block: a block with no control this module can read is
     returned as a required field too."""
-    if not page.locator(scope).count():
-        return [Field(_BLOCKING, "text", (), True)]
+    forms.require_form(page.locator(scope).count() and [scope])
     questions = page.evaluate(_COLLECT, [scope, skip])
+    forms.require_form(questions)
     missing: list[Field] = []
     for q in questions:
-        label, kind, loc = q["label"], q["kind"], page.locator(q["sel"]).first
+        label, kind, loc = forms.clean_label(q["label"]), q["kind"], page.locator(q["sel"]).first
         done = False
         if kind == "unsupported":
             pass
@@ -172,7 +163,7 @@ def fill_form(page, job, resolve, scope: str, skip: str = "", entry: str = "") -
                 done = True
         else:
             names = [o["label"] for o in q["options"]]
-            answer = resolve(label, {"radio": "select"}.get(kind, kind), names or None)
+            answer = forms.ask(resolve, label, {"radio": "select"}.get(kind, kind), names)
             if answer is not None:
                 done = _set(page, q, loc, answer, names)
         if not done and q["required"]:
@@ -207,14 +198,14 @@ def _tick(page, loc) -> bool:
 def _set(page, q: dict, loc, answer: str, names: list[str]) -> bool:
     kind = q["kind"]
     if kind == "checkbox":
-        return _norm(answer) in _YES and _tick(page, loc)
+        return forms.norm(answer) in _YES and _tick(page, loc)
     if kind == "radio":
-        pick = next((o for o in q["options"] if _norm(o["label"]) == _norm(answer)), None)
+        pick = next((o for o in q["options"] if forms.norm(o["label"]) == forms.norm(answer)), None)
         if pick is None:
             return False
         return _tick(page, page.locator(pick["sel"]).first)
     if kind == "select":
-        pick = next((o for o in q["options"] if _norm(o["label"]) == _norm(answer)), None)
+        pick = next((o for o in q["options"] if forms.norm(o["label"]) == forms.norm(answer)), None)
         if pick is None:
             return False
         loc.select_option(value=pick["sel"])
@@ -234,5 +225,23 @@ def wait_for_receipt(page, read_confirmation, seconds: float) -> Receipt:
         if text:
             return Receipt(True, text)
         if time.monotonic() >= deadline:
-            return Receipt(False, "no confirmation from the board after submit")
+            return Receipt(False, "NOT CONFIRMED: the board showed no confirmation after submit")
         page.wait_for_timeout(250)
+
+
+SUBMIT_WORDS = r"^\s*(submit( my)?( application)?|send( application)?|apply( now)?|submit and apply)\s*$"
+
+
+def single_submit(page, scope: str):
+    """The one submit button of the form `scope`, found by what it says (never by a guessed id), or None when there is not exactly one."""
+    buttons = page.locator(scope).get_by_role("button", name=re.compile(SUBMIT_WORDS, re.I))  # a <button> or an <input type=submit>
+    return buttons.first if buttons.count() == 1 else None
+
+
+GENERIC_CONFIRMATION = """(scope) => {
+  const form = document.querySelector(scope);
+  if (form && !form.hidden && form.getBoundingClientRect().height > 0) return null;  // the form is still there: not submitted
+  const main = document.querySelector('main') || document.body;
+  const text = (main ? main.innerText : '').replace(/\\s+/g, ' ').trim();
+  return /thank you for (applying|your application|your interest)|application (has been |was )?(successfully )?(submitted|received|sent)|we('ve| have) received your application/i.test(text) ? text.slice(0, 300) : null;
+}"""
