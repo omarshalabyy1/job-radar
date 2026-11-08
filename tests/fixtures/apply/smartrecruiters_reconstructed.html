@@ -1,0 +1,29 @@
+<!-- RECONSTRUCTED BY HAND on 2026-11-08, NOT a saved page: SmartRecruiters refused every automated request for its real application form (HTTP 403 on /oneclick-ui/company/<Company>/publication/<uuid> for a real posting), so this is a plain labelled form of the kind such boards show, to test the adapter's rules (human checks, answers only from resolve, uploads, one click, its own confirmation). It says nothing about the board's real markup. Replace it with a saved real form (see the adapter's docstring). -->
+<!doctype html><html><head><title>Senior Data Engineer - Acme</title></head><body>
+<header><a href="/">Acme careers</a></header>
+<main>
+<h1>Senior Data Engineer</h1>
+<p class="posting-note">We are a growing team looking for someone who loves data.</p>
+<form id="application" action="/apply" method="post">
+  <section><h2>Personal information</h2>
+    <label for="firstName">First name *</label><input id="firstName" name="firstName" required>
+    <label for="lastName">Last name *</label><input id="lastName" name="lastName" required>
+    <label for="email">Email *</label><input id="email" name="email" type="email" required>
+    <label for="phone">Phone number</label><input id="phone" name="phone" type="tel">
+    <label for="resume">Resume *</label><input id="resume" name="resume" type="file" required>
+    <label for="cover">Cover letter</label><input id="cover" name="cover" type="file">
+  </section>
+  <section><h2>Questions</h2>
+    <fieldset><legend>Are you legally authorised to work in Egypt? *</legend>
+      <label><input type="radio" name="auth" value="yes" required> Yes</label>
+      <label><input type="radio" name="auth" value="no"> No</label></fieldset>
+    <label for="notice">What is your notice period? *</label>
+    <select id="notice" name="notice" required><option value="">Select...</option><option>Immediately</option><option>1 month</option><option>2 months</option></select>
+    <label for="why">Why do you want to work here?</label><textarea id="why" name="why"></textarea>
+    <label><input type="checkbox" id="consent" name="consent" required> I agree to the privacy policy</label>
+  </section>
+  <button type="submit">Submit</button>
+</form>
+</main>
+<footer>Powered by SmartRecruiters</footer>
+</body></html>

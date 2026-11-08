@@ -65,7 +65,7 @@ _COLLECT = """([scopeSel, skipSel]) => {
       const g = groups[key] || (groups[key] = {kind: 'radio', label: groupLabel(el) || labelOf(el), required: false, options: [], sel: ''});
       if (!g.options.length) out.push(g);
       g.required = g.required || el.required || el.getAttribute('aria-required') === 'true';
-      const l = el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+      const l = (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')) || el.closest('label');
       g.options.push({label: l ? textOf(l) : el.value, sel});
       continue;
     }
@@ -144,11 +144,15 @@ def _field(q: dict) -> Field:
     return Field(q["label"] or "(unlabelled field)", kind, tuple(o["label"] for o in q["options"]), q["required"])
 
 
+def require_form_on_page(page, scope: str) -> None:
+    forms.require_form(page.locator(scope).count() and [scope])  # raises "no application form on this page"
+
+
 def fill_form(page, job, resolve, scope: str, skip: str = "", entry: str = "") -> list[Field]:
     """Fill every control inside `scope` that has an approved answer (and the CV / cover letter); return the required ones that
     could not be filled. `entry` (optional) is the selector of one question's block: a block with no control this module can read is
     returned as a required field too."""
-    forms.require_form(page.locator(scope).count() and [scope])
+    require_form_on_page(page, scope)
     questions = page.evaluate(_COLLECT, [scope, skip])
     forms.require_form(questions)
     missing: list[Field] = []
