@@ -489,6 +489,10 @@ def test_a_board_that_drops_all_or_suddenly_none_is_a_warning(conn):
         conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %s, 'zz_us_only', 13, 13)",
                      (days_ago,))
     assert steps.drop_warning(rolled, "zz_us_only", 13, 13) is None
+    for days_ago in range(1, 4):  # a global board that keeps about 2% (freehire 2026-11-08: 182 of 182 dropped after 223 of 227)
+        conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %s, 'zz_global', 200, 196)",
+                     (days_ago,))
+    assert steps.drop_warning(rolled, "zz_global", 200, 200) is None
     assert steps.drop_warning(rolled, board, 3, 3) is None             # too few to judge
     # nothing at all from a board that gave postings in the last 7 days: a warning, judged for Egypt or not
     assert "0 postings today, 60 in the last 7 days" in steps.drop_warning(rolled, board, 0, 0, judged=False)

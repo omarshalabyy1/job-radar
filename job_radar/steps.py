@@ -111,8 +111,8 @@ DROP_MIN = 10  # postings a day before a board's drop rate is judged
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
     """Record today's postings and drops of a board (core.extract_count) and say when they look like a silent failure:
     no posting at all from a board whose last 7 days gave some (the board changed, or blocks us); and, for a board whose
-    postings are judged for Egypt (`judged`), every posting dropped from a board whose last 7 days kept some (the board
-    changed its "who can apply" field or its locations), or none dropped from a board whose last 7 days dropped half or
+    postings are judged for Egypt (`judged`), every posting dropped from a board whose last 7 days kept at least a tenth (the
+    board changed its "who can apply" field or its locations; a global board like Freehire keeps about 2%, so 100% is normal), or none dropped from a board whose last 7 days dropped half or
     more (the rule broke). A board that always drops everything (Remote.co: its data jobs are US and Canada only) is not a
     change. None when they look normal."""
     conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date, %s, %s, %s)"
@@ -126,7 +126,7 @@ def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = T
         return f"{board}: 0 postings today, {before} in the last 7 days - has the board changed, or does it block us?"
     if not judged:
         return None
-    if postings >= DROP_MIN and dropped == postings and before >= DROP_MIN and before_dropped < before:
+    if postings >= DROP_MIN and dropped == postings and before >= DROP_MIN and (before - before_dropped) * 10 >= before:
         return f"{board}: all {postings} postings dropped as not for Egypt - has the board changed its locations?"
     if postings >= DROP_MIN and dropped == 0 and before >= DROP_MIN and before_dropped * 2 >= before:
         return (f"{board}: none of {postings} postings dropped as not for Egypt, where the last 7 days dropped "
