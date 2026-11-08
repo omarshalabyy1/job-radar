@@ -46,7 +46,7 @@ jobs:
           cache-dependency-path: requirements.txt
       - name: Install
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements.txt pytest  # pytest is not in requirements.txt: the app does not run it
           python -m playwright install --with-deps chromium
       - name: Tests
         run: python -m pytest tests -q
