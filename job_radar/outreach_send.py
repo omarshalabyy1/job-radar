@@ -756,7 +756,7 @@ def collect_replies(conn, now: datetime, cfg: dict | None = None) -> dict:
     stopped must still be honoured. Run it about every hour (a reply is only as late as the next read). Returns the counts."""
     cfg = settings(cfg)
     if cfg.get("enabled") is not True:
-        print("outreach_send: replies not read, off in settings.yaml (outreach.enabled)")
+        print("outreach_replies: off in settings.yaml (outreach.enabled), no mailbox read")
         return {"read": 0, "suppressed": 0, "bounces": 0, "complaints": 0, "paused": []}
     rows = read_replies(conn, now, cfg)
     return {"read": len(rows), **suppress_from_replies(conn, rows, now, cfg)}

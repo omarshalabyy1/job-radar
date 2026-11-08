@@ -9,6 +9,8 @@ The collect's time is in settings.yaml (schedule), Cairo time; as shipped:
     job_radar_email_abroad  after ranked: the jobs everywhere else (remote only) not emailed yet
     job_radar_applications  every hour: track_applications reads your mailbox (read-only) for your applications
                             -> publish_applications copies them to Neon (the website's Applications page)
+    job_radar_outreach      every 5 minutes: one cold email in dry run, or nothing while outreach is off (dags/job_radar_outreach.py)
+    job_radar_outreach_replies  hourly: replies and bounces to those emails -> core.suppression (same file)
     job_radar_backup        3am: pg_dump of the core and raw schemas to output/backups, the last 14 kept
 
 The smart steps have a switch each in settings.yaml (features) and print that they are off when it is false.

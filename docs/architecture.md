@@ -174,10 +174,11 @@ flowchart LR
     classDef ai fill:#ddd6fe,stroke:#6d28d9,color:#374151
 ```
 
-## Outreach sender (not scheduled yet; dry run only)
+## Outreach sender (scheduled, but idle until settings.yaml switches it on; dry run only)
 
 `job_radar/outreach_send.py` sends the cold emails `outreach_drafts` writes, from the Gmail accounts of `MAILBOXES`, under the
-"Outreach sender" guardrails of `docs/superpowers/plans/2026-11-08-auto-apply.md`. No DAG runs it yet. It ships off
+"Outreach sender" guardrails of `docs/superpowers/plans/2026-11-08-auto-apply.md`. Two DAGs in `dags/job_radar_outreach.py` run it
+(below). It ships off
 (`outreach.enabled: false`) and in `dry_run`: nothing leaves the laptop unless `outreach.mode` is `live` AND `outreach.enabled` is
 `true`, and the file `output/outreach.stop` stops it either way. A tick (`run`) handles at most one email, so call it about every five
 minutes: the gaps between emails (random, 2 to 10 minutes) are only real if ticks are shorter than that.
@@ -203,7 +204,12 @@ minutes: the gaps between emails (random, 2 to 10 minutes) are only real if tick
   email is told from their answer) and a bounce's delivery-status part (where the failed address is named), then calls
   `suppress_from_replies`. A mailbox it cannot read is skipped and named by letter. It needs `outreach.enabled` but not a clear stop
   file: an unsubscribe that arrives while sending is stopped is still honoured. Run it about hourly; re-reading is harmless.
-- Not built yet: the DAG or step that calls `run` (every ~5 minutes) and `collect_replies` (hourly).
+- The DAGs (`dags/job_radar_outreach.py`, steps `outreach_send` and `outreach_replies` of `python -m job_radar`): `job_radar_outreach`
+  every 5 minutes runs one `run` tick; `job_radar_outreach_replies` at :20 every hour runs `collect_replies`. Neither retries, overlaps
+  or catches up (a missed tick is not a burst of emails). With `outreach.enabled` false each task is an instant skip (exit 99) that
+  never starts Python, so the DAGs cost nothing until Omar switches dry run on. The file `output/outreach.stop` skips the sender's tick
+  (the reply reader ignores it). The DAG never picks the mode: settings.yaml's `outreach.mode` and `enabled` do, and the sender checks
+  them again.
 
 ## What each step writes
 
@@ -220,7 +226,7 @@ minutes: the gaps between emails (random, 2 to 10 minutes) are only real if tick
 | `tailor` | `core.claude_grade` scoring 8+ | `output/applications/<day>/` (md, html, PDFs), `core.application` as saved |
 | `check_extracts` | the tasks' states | nothing: it fails the run when `schema` or an extract did not succeed |
 | `track_applications` | Gmail, read-only | `core.application_email`, `core.application`, `output/followups/`, `output/interviews/` |
-| `outreach_send.run` and `collect_replies` (no DAG yet) | `output/outreach/*.md` drafts, `data/contacts.csv`, `core.suppression`; Gmail All Mail, read-only | dry run: `output/outreach/outbox/*.eml`, `core.outreach_send` (mode `dry_run`); live: the same row, then Gmail; replies: `core.suppression`, `core.outreach_pause` |
+| `outreach_send` (every 5 min) and `outreach_replies` (hourly), DAGs `job_radar_outreach` and `job_radar_outreach_replies` | `output/outreach/*.md` drafts, `data/contacts.csv`, `core.suppression`; Gmail All Mail, read-only | dry run: `output/outreach/outbox/*.eml`, `core.outreach_send` (mode `dry_run`); live: the same row, then Gmail; replies: `core.suppression`, `core.outreach_pause` |
 | `job_radar_backup` (its own DAG) | `core`, `raw` | `output/backups/nightly-<day>.dump`, the newest 14 |
 | `job_radar.review weekly` (by hand, read-only) | `core.step_run`, `core.application`, `core.claude_grade`, `core.application_email` | `output/reviews/weekly-<day>.md` |
 | every step | | one row in `core.step_run`: status, summary, Claude tokens and exact dollars |

@@ -38,6 +38,7 @@ from .digest import digest, send, subject
 from .eligibility import eligibility, not_for_egypt  # noqa: F401  (python -m job_radar eligibility)
 from .embed import embed  # noqa: F401  (python -m job_radar embed)
 from .grade import grade_claude  # noqa: F401  (python -m job_radar grade_claude)
+from . import outreach_send as outreach_sender
 from .outreach import outreach_drafts  # noqa: F401  (python -m job_radar outreach_drafts)
 from .publish import publish  # noqa: F401  (python -m job_radar publish)
 from .publish_applications import publish_applications  # noqa: F401  (python -m job_radar publish_applications)
@@ -1003,3 +1004,15 @@ def email(conn, home: bool) -> None:
         if follow_ups:
             sent_marker.parent.mkdir(parents=True, exist_ok=True)
             sent_marker.touch()
+
+
+def outreach_send(conn) -> None:
+    """One tick of the outreach sender (outreach_send.run): at most one email, written to output/outreach/outbox/ in dry run, sent only
+    with outreach.mode live AND outreach.enabled true in settings.yaml. Its own DAG, every 5 minutes: job_radar_outreach."""
+    outreach_sender.run(conn, datetime.now(timezone.utc))
+
+
+def outreach_replies(conn) -> None:
+    """Read the mailboxes (read-only) for replies and bounces to the outreach emails and suppress those addresses
+    (outreach_send.collect_replies). Its own DAG, hourly: job_radar_outreach_replies."""
+    outreach_sender.collect_replies(conn, datetime.now(timezone.utc))

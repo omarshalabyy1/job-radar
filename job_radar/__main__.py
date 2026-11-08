@@ -5,6 +5,7 @@ extract_workable extract_freehire extract_linkedin extract_companies extract_por
 match_skills eligibility embed grade_claude tailor outreach_drafts export_career_ops
 email_egypt email_abroad publish run_report
 track_applications (its own hourly DAG: your mailbox, read-only)
+outreach_send (its own DAG, every 5 minutes: one cold email in dry run unless settings.yaml says live), outreach_replies (hourly: replies and bounces, read-only)
 eligibility, embed, grade_claude, tailor, outreach_drafts and track_applications each have a switch in settings.yaml (features).
 Each step is recorded in core.step_run (runlog.py): running when it starts, then ok, warn, failed or off.
 Settings come from the environment, or from .env in the repo root (see .env.example).
@@ -28,7 +29,7 @@ STEPS = ["schema", "extract_boards", "extract_bayt", "extract_remote", "extract_
          "extract_gulf", "extract_workable", "extract_freehire", "extract_linkedin", "extract_companies", "extract_portals", "extract_market", "extract_apify",
          "extract_email",
          "transform", "describe", "match_skills", "eligibility", "embed", "grade_claude", "tailor", "outreach_drafts", "export_career_ops", "email_egypt",
-         "email_abroad", "track_applications", "publish", "publish_applications", "run_report"]
+         "email_abroad", "track_applications", "outreach_send", "outreach_replies", "publish", "publish_applications", "run_report"]
 
 WATCHDOG_SECONDS = 210  # under the 240 s execution_timeout of the extract tasks in dags/job_radar.py
 
