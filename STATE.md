@@ -20,6 +20,7 @@ Read first, update last. One fact per line, dated. Newest first in the Log.
 
 ## Log
 
+- 2026-11-08 (EMPTY_BY_DESIGN, Omar): gulftalent joins it (a Gulf board like dubizzle and naukrigulf): no 7-day-of-zero warning; its "0 postings today, N in the last 7 days" warning stays.
 - 2026-11-08 (EMPTY_BY_DESIGN, Omar): ycombinator, jobicy, wuzzuf and tanqeeb (Egypt's own boards) join it (EgyTalent was asked for too: the repo has no reader for it, so nothing to add): no 7-day-of-zero warning for them; their "0 postings today, N in the last 7 days" warning stays. Still watched for 7 days of zero: welcometothejungle, jooble, himalayas, dailyremote, wellfound, freehire, remoteok and the rest.
 - 2026-11-08 (EMPTY_BY_DESIGN, Omar): relomote and startup_jobs join it (both 403-held when checked): no 7-day-of-zero warning for them; the 403 hold's own WARNING line and the "0 postings today, N in the last 7 days" warning stay. A permanent block on either is now visible only through those.
 - 2026-11-08 (EMPTY_BY_DESIGN grows again, Omar): arbeitnow and weworkremotely join it too (no 7-day-of-zero warning; their "0 postings today, N in the last 7 days" warning stays). Still watched: relomote (403 hold) and every other board.

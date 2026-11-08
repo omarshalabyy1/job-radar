@@ -118,9 +118,9 @@ SILENT_DAYS = 7  # days in a row with no posting at all, since its last, before 
 # Y Combinator (its pages hold 36 jobs, mostly old, 1 posting in scope on 2026-11-08) and Jobicy (its role matches are
 # tied to the USA or Europe, checked 2026-11-08) are Omar's choice too (2026-11-08), and so is Wuzzuf, Egypt's own board:
 # a dead Wuzzuf stays visible only through its "0 postings today, N in the last 7 days" warning and its own error lines.
-# Tanqeeb, Egypt's job aggregator, likewise (Omar, 2026-11-08).
+# Tanqeeb, Egypt's job aggregator, likewise (Omar, 2026-11-08), and GulfTalent, a Gulf board like the other two.
 EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely",
-                   "relomote", "startup_jobs", "ycombinator", "jobicy", "wuzzuf", "tanqeeb"}
+                   "relomote", "startup_jobs", "ycombinator", "jobicy", "wuzzuf", "tanqeeb", "gulftalent"}
 
 
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
