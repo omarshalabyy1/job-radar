@@ -499,6 +499,45 @@ def test_a_board_that_drops_all_or_suddenly_none_is_a_warning(conn):
     assert steps.drop_warning(rolled, "zz_never_any", 0, 0) is None    # no postings before either
 
 
+def test_a_board_with_no_posting_for_7_days_is_a_warning_unless_it_is_empty_by_design(conn):
+    """drop_warning (rolled back): a board whose every day since its last posting gave none, 7 days or more, is dead, not quiet.
+    Boards known to give none by design, and a company's own board (ats:token), say nothing."""
+    rolled = RolledBack(conn)
+
+    def quiet(board, days):
+        for days_ago in range(1, days + 1):
+            conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %s, %s, 0, 0)",
+                         (days_ago, board))
+
+    quiet("zz_dead", 5)
+    assert steps.drop_warning(rolled, "zz_dead", 0, 0) is None  # today is the 6th day of none
+    quiet("zz_dead2", 6)
+    warning = steps.drop_warning(rolled, "zz_dead2", 0, 0)  # today is the 7th
+    assert warning and warning.startswith("zz_dead2: 0 postings every day for 7 days")
+    assert not steps.SILENT.search(warning)  # a board dead for good must not count toward run_report's "sources silent" email
+    quiet("zz_dead3", 9)
+    assert "every day for 10 days" in steps.drop_warning(rolled, "zz_dead3", 0, 0)
+    # a day with postings starts the count again, however long ago the quiet days before it were
+    conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - 8, 'zz_back', 4, 4)")
+    for days_ago in (1, 2, 3, 4, 5, 9, 10, 11, 12):
+        conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - %s, 'zz_back', 0, 0)",
+                     (days_ago,))
+    assert steps.drop_warning(rolled, "zz_back", 0, 0) is None  # 6 days of none since its last postings (the 9-12 days before them do not count)
+    conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - 6, 'zz_back', 0, 0)")
+    assert "every day for 7 days" in steps.drop_warning(rolled, "zz_back", 0, 0)  # a 7th recorded day of none
+    # a board that gave postings today, even all dropped, is not silent
+    quiet("zz_gave", 9)
+    assert steps.drop_warning(rolled, "zz_gave", 3, 3) is None
+    # the boards that always give none, and a company board, are named and left out
+    assert {"remoteco", "dubizzle", "naukrigulf"} <= steps.EMPTY_BY_DESIGN
+    for board in ("remoteco", "dubizzle", "naukrigulf", "greenhouse:acme"):
+        quiet(board, 9)
+        assert steps.drop_warning(rolled, board, 0, 0) is None
+    # a board that gave postings in the last 7 days keeps its own, older warning
+    conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date - 2, 'zz_was', 8, 0)")
+    assert "0 postings today, 8 in the last 7 days" in steps.drop_warning(rolled, "zz_was", 0, 0)
+
+
 def test_salary_reads_each_boards_own_fields_and_skips_no_amount_or_no_currency():
     assert steps.salary({"min_amount": "2000.0", "max_amount": 2500, "currency": "AED", "interval": "monthly"}) == {
         "salary_min": 2000.0, "salary_max": 2500.0, "salary_currency": "AED", "salary_period": "monthly"}

@@ -100,7 +100,8 @@ lower hides it with `features.auto_hide`, and a status of yours shows it again. 
 same job from another posting seen in the last 5 days. A job first seen over 30 days ago, or a company board's job its board
 stopped listing 2 days ago (once the board was read again), is archived whole in `core.job_archive` (with Claude's score and why), then deleted with its raw postings, unless you noted or applied to it (`core.job_seen` keeps its key; `core.job_history`
 keeps a slim line for the Market page's trends). A job's key ignores the company's spacing, case, "and" and legal suffix.
-A board that suddenly drops all its postings as not for Egypt, or none where it used to drop half, is a WARNING (`core.extract_count`).
+A board that suddenly drops all its postings as not for Egypt, or none where it used to drop half, is a WARNING (`core.extract_count`);
+so is a board that has given no posting at all every recorded day since its last, 7 days or more (a board that is dead, held or blocked; `steps.EMPTY_BY_DESIGN` names the three that give none by design, and a company's own `ats:token` board is not counted; `dead_boards` lists the 30-day ones once a month).
 With the warehouse unreachable each step exits 99 and Airflow marks it skipped. `job_radar_backup` dumps `core` and
 `raw` every night at 3am to `output/backups/` and keeps the newest 14.
 Every posting is stored once (its source and link), every job once (`core.job`), every email

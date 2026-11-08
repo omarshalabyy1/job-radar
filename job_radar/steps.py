@@ -106,6 +106,10 @@ def load(conn, name: str, rows: list[dict], wide: bool = False, record: bool = T
 
 
 DROP_MIN = 10  # postings a day before a board's drop rate is judged
+SILENT_DAYS = 7  # days in a row with no posting at all, since its last, before a board is called dead
+# Boards that give no posting by design, so their zero is not a dead board: Remote.co's data jobs are US and Canada only
+# (it drops everything it reads), and Dubizzle and NaukriGulf are Gulf boards, whose jobs are onsite or for a Gulf resident.
+EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf"}
 
 
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
@@ -114,7 +118,10 @@ def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = T
     postings are judged for Egypt (`judged`), every posting dropped from a board whose last 7 days kept at least a tenth (the
     board changed its "who can apply" field or its locations; a global board like Freehire keeps about 2%, so 100% is
     normal), or none dropped from a board whose last 7 days dropped half or more (the rule broke). A board that always drops everything (Remote.co: its data jobs are US and Canada only) is not a
-    change. None when they look normal."""
+    change. A board that has also given none for SILENT_DAYS days in a row (0 today and every recorded day since its last posting,
+    7 or more) is a warning every day until it gives one: dead - changed, blocked, held or without its key - not a quiet week.
+    Not for EMPTY_BY_DESIGN, nor for a company's own board (`ats:token`: most have no job in scope on most days). None when
+    they look normal."""
     conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date, %s, %s, %s)"
                  " ON CONFLICT (day, board) DO UPDATE SET postings = EXCLUDED.postings, dropped = EXCLUDED.dropped",
                  (board, postings, dropped))
@@ -124,6 +131,14 @@ def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = T
     conn.commit()
     if postings == 0 and before > 0:
         return f"{board}: 0 postings today, {before} in the last 7 days - has the board changed, or does it block us?"
+    if postings == 0 and board not in EMPTY_BY_DESIGN and ":" not in board:
+        quiet = conn.execute(
+            "SELECT count(*) FROM core.extract_count WHERE board = %s AND day > coalesce("
+            "(SELECT max(day) FROM core.extract_count WHERE board = %s AND postings > 0), date '1900-01-01')",
+            (board, board)).fetchone()[0]
+        if quiet >= SILENT_DAYS:
+            return (f"{board}: 0 postings every day for {quiet} days - is the board dead (changed, blocked or held, "
+                    f"or its key gone)?")
     if not judged:
         return None
     if postings >= DROP_MIN and dropped == postings and before >= DROP_MIN and (before - before_dropped) * 10 >= before:
