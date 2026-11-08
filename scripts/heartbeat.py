@@ -16,14 +16,16 @@ def stale(last: datetime | None, now: datetime, hours: int = 26) -> bool:
     return last is None or now - last > timedelta(hours=hours)
 
 
-def last_success() -> datetime | None:
-    with db.connect() as conn:
-        return conn.execute("SELECT max(started_at) FROM core.step_run WHERE status = 'ok'").fetchone()[0]
+def last_success(conn) -> datetime | None:
+    """The newest ok 'transform': a step only the daily DAG runs (the hourly applications DAG writes ok rows too)."""
+    return conn.execute("SELECT max(started_at) FROM core.step_run WHERE step = 'transform' AND status = 'ok'").fetchone()[0]
 
 
 def main() -> int:
     try:
-        reason = "no successful step in 26 hours" if stale(last_success(), datetime.now(timezone.utc)) else None
+        with db.connect() as conn:
+            last = last_success(conn)
+        reason = "no successful daily run in 26 hours" if stale(last, datetime.now(timezone.utc)) else None
     except Exception as e:  # Docker down, wrong password, anything: the radar is not running
         reason = f"warehouse unreachable: {e}"
     if reason is None:

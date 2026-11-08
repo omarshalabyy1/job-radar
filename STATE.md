@@ -20,4 +20,4 @@ Read first, update last. One fact per line, dated. Newest first in the Log.
 
 ## Log
 
-- 2026-11-08: fixed Freehire false alarm (drop_warning needs 10% kept before it warns); removed the publish Neon-count warning; removed Sylndr (Lever 404); `describe` and `tailor` summaries now say why they did less; added `scripts/heartbeat.py`, `AGENTS.md`, `STATE.md`. Searched notes, memory and past chats for "harness": only incidental uses, no X article saved; applied the harness-engineering skill (surfaces, durable state, approval boundaries) in `AGENTS.md`.
+- 2026-11-08 (review fixes: heartbeat now watches the daily `transform` step, not the hourly applications steps): fixed Freehire false alarm (drop_warning needs 10% kept before it warns); removed the publish Neon-count warning; removed Sylndr (Lever 404); `describe` and `tailor` summaries now say why they did less; added `scripts/heartbeat.py`, `AGENTS.md`, `STATE.md`. Searched notes, memory and past chats for "harness": only incidental uses, no X article saved; applied the harness-engineering skill (surfaces, durable state, approval boundaries) in `AGENTS.md`.
