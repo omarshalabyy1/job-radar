@@ -1,0 +1,52 @@
+# The tests, on every pull request and every push to main: the same `python -m pytest tests -q` as check.sh's first step.
+# check.sh stays the local gate: its second step, scripts/idempotency_check.py, reads real board rows, so it is not run here.
+# The database tests need a Postgres: a throwaway one that ends with the run (tests/conftest.py makes its own database in
+# it from sql/schema.sql). Its password is not a secret. Two tests in tests/test_tailor.py render PDFs in Chromium.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      warehouse:
+        image: postgres:17
+        env:
+          POSTGRES_USER: jobradar
+          POSTGRES_PASSWORD: jobradar  # a throwaway database that ends with the run: not a secret
+          POSTGRES_DB: jobradar
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U jobradar -d jobradar" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      WAREHOUSE_HOST: 127.0.0.1
+      WAREHOUSE_PORT: "5433"
+      WAREHOUSE_PASSWORD: jobradar
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"  # the Dockerfile's
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Tests
+        run: python -m pytest tests -q
