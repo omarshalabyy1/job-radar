@@ -19,7 +19,11 @@ class Saved:
     """A saved response, with the parts of one the readers use."""
     def __init__(self, name_or_text: str):
         path = FIXTURES / name_or_text
-        self.text = path.read_text(encoding="utf-8") if path.exists() else name_or_text
+        try:
+            is_file = path.exists()
+        except OSError:  # inline text too long for a file name: Linux raises, Windows says False
+            is_file = False
+        self.text = path.read_text(encoding="utf-8") if is_file else name_or_text
         self.content = self.text.encode()
 
     def json(self):
