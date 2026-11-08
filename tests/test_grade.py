@@ -269,7 +269,7 @@ class Post:
         self.answers, self.asked = answers, []
 
     def __call__(self, url, **kw):
-        name = next(n for n in ("groq", "googleapis", "openrouter") if n in url)
+        name = next(n for n in ("groq", "googleapis", "openrouter", "x.ai") if n in url)
         self.asked.append(name)
         status, content = self.answers[name]
         r = requests.Response()
@@ -294,6 +294,16 @@ def test_the_free_models_are_asked_in_order_and_a_429_or_bad_json_moves_on(monke
     assert set(llm.FAILED) == {"gemini HTTP 429", "openrouter ValidationError"}
     post = free_models(monkeypatch, {"groq": (200, '{"score": 5}'), "googleapis": (500, ""), "openrouter": (200, "{}")})
     assert llm.ask_json("system", "job", grade.Grade, Counter()) is None  # every one failed: the caller asks Claude
+
+
+def test_xai_grok_is_asked_last_and_only_when_the_free_models_all_failed(monkeypatch):
+    post = free_models(monkeypatch, {"googleapis": (429, ""), "openrouter": (500, ""), "groq": (413, ""), "x.ai": (200, GOOD)},
+                       keys=KEYS + ("XAI_API_KEY",))
+    model, g = llm.ask_json("system", "job", grade.Grade, Counter())
+    assert post.asked == ["googleapis", "openrouter", "groq", "x.ai"] and model == "grok-4" and g.score == 7
+    post = free_models(monkeypatch, {"googleapis": (200, GOOD), "x.ai": (200, GOOD)}, keys=("GOOGLE_GENERATIVE_AI_API_KEY", "XAI_API_KEY"))
+    llm.ask_json("system", "job", grade.Grade, Counter())
+    assert post.asked == ["googleapis"]  # a free answer means Grok is never called
 
 
 def test_a_provider_without_a_key_or_at_its_daily_cap_is_skipped(monkeypatch):

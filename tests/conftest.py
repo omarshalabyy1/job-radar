@@ -48,5 +48,5 @@ def fresh_time_budget(monkeypatch):
 @pytest.fixture(autouse=True)
 def no_free_model_keys(monkeypatch):
     """.env holds the free models' keys: no test calls them unless it sets a key itself."""
-    for key in ("GROQ_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "OPENROUTER_API_KEY"):
+    for key in ("GROQ_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "OPENROUTER_API_KEY", "XAI_API_KEY"):
         monkeypatch.delenv(key, raising=False)

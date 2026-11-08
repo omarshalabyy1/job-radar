@@ -1,4 +1,4 @@
-"""The free models first (Omar, 2026-10-17): Groq, then Gemini, then a free OpenRouter model, each through its
+"""The free models first (Omar, 2026-10-17): Gemini, then a free OpenRouter model, then Groq, then (paid, 2026-11-08) xAI Grok, each through its
 OpenAI-compatible chat API and each under a daily cap below its free limit. A provider whose key is not in .env is
 skipped. An answer that is not the JSON asked for, a 429 or any other error counts as a failure and the next
 provider is asked. When none answers, the caller asks Claude (grade.py). Tailoring stays on Claude."""
@@ -22,6 +22,8 @@ PROVIDERS = [
     ("openrouter", "OPENROUTER_API_KEY", "https://openrouter.ai/api/v1/chat/completions",
      "nvidia/nemotron-3-ultra-550b-a55b:free", 45),
     ("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b", 900),
+    # xAI Grok is paid, so it is last: asked only when every free model failed, and before Claude. Check the model id in xAI's console.
+    ("xai", "XAI_API_KEY", "https://api.x.ai/v1/chat/completions", "grok-4", 100),
 ]
 LOCK = threading.Lock()
 FAILED: Counter = Counter()  # failures per provider this run, for the step's summary line
