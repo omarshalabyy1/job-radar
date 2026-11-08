@@ -529,8 +529,8 @@ def test_a_board_with_no_posting_for_7_days_is_a_warning_unless_it_is_empty_by_d
     quiet("zz_gave", 9)
     assert steps.drop_warning(rolled, "zz_gave", 3, 3) is None
     # the boards that always give none, and a company board, are named and left out
-    assert {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads"} <= steps.EMPTY_BY_DESIGN
-    for board in ("remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "greenhouse:acme"):
+    assert {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely"} <= steps.EMPTY_BY_DESIGN
+    for board in ("remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely", "greenhouse:acme"):
         quiet(board, 9)
         assert steps.drop_warning(rolled, board, 0, 0) is None
     # a board that gave postings in the last 7 days keeps its own, older warning

@@ -111,7 +111,9 @@ SILENT_DAYS = 7  # days in a row with no posting at all, since its last, before 
 # (it drops everything it reads), and Dubizzle and NaukriGulf are Gulf boards, whose jobs are onsite or for a Gulf resident.
 # Remotive and Working Nomads work, but their public feeds are tiny (13 and 17 jobs, checked 2026-11-08) and rarely hold a
 # role of yours: Omar chose not to watch them (2026-11-08). Their "0 postings today, N in the last 7 days" warning stays.
-EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads"}
+# So do Arbeitnow (Europe: 15 remote jobs of its 300, none yours) and We Work Remotely (1 posting of its feed in scope),
+# also Omar's choice (2026-11-08).
+EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely"}
 
 
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
