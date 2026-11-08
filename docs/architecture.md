@@ -217,6 +217,7 @@ minutes: the gaps between emails (random, 2 to 10 minutes) are only real if tick
 | `track_applications` | Gmail, read-only | `core.application_email`, `core.application`, `output/followups/`, `output/interviews/` |
 | `outreach_send.run` (no DAG yet) | `output/outreach/*.md` drafts, `data/contacts.csv`, `core.suppression` | dry run: `output/outreach/outbox/*.eml`, `core.outreach_send` (mode `dry_run`); live: the same row, then Gmail |
 | `job_radar_backup` (its own DAG) | `core`, `raw` | `output/backups/nightly-<day>.dump`, the newest 14 |
+| `job_radar.review weekly` (by hand, read-only) | `core.step_run`, `core.application`, `core.claude_grade`, `core.application_email` | `output/reviews/weekly-<day>.md` |
 | every step | | one row in `core.step_run`: status, summary, Claude tokens and exact dollars |
 
 ## Every request

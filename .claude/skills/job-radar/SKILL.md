@@ -122,6 +122,7 @@ that prints job titles (many are Arabic).
 | `/job-radar review` | steps 1, 3, 4: no collect, review what is there |
 | `/job-radar apply <job_id or link>` | steps 4-5 for that one job |
 | `/job-radar emails` | send both emails now (see the end) |
+| `/job-radar weekly` | run `python -m job_radar.review weekly`, read the file it prints (`output/reviews/weekly-<day>.md`), propose at most one rule change; Omar approves before `CLAUDE.md` or `AGENTS.md` changes |
 
 ## 1. Make sure it runs
 
