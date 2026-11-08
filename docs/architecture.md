@@ -90,7 +90,7 @@ Twelve extract tasks run one by one, each within 150 seconds (LinkedIn's Apify r
 busy laptop is not swamped; a task may wait up to an hour for its turn (`task_queued_timeout` 3600 in
 `docker-compose.yml`), so the last extracts are never failed unrun. A whole collect takes about 15
 minutes, and both emails go right after `ranked`, which runs when grade_claude has ended, red or green. embed gives each job with a description a
-local vector (CV match: closeness to your CV, $0 on the CPU), grade_claude has Claude score the closest ones (at most
+local vector (CV match: closeness to your CV, $0 on the CPU), grade_claude has the free models (Groq, Gemini, OpenRouter) score the closest ones, Claude only when none answers (
 no daily cap, any place) 0-10 against your CV, naming a years-of-experience mismatch, and pushes an
 8+ job in its first 12 hours to your phone (ntfy.sh); tailor drafts the 8+ ones in Egypt (`ai_places`) as markdown, html and
 one-page PDFs, checked in code (no gap named, one page, every link kept). With `features.eligibility` on, a job someone living in Cairo cannot legally take is never stored (every extract drops it before it reaches raw.job_posting) when its board's own "who can apply" field bars Egypt or its location ties it to the USA, Canada or Europe, else hidden, not deleted:
@@ -141,7 +141,7 @@ flowchart LR
     match --> export["export_career_ops"]
     match --> eligible["eligibility<br>board field, else Haiku"]:::ai
     eligible --> embed["embed<br>local vectors"]:::ai
-    embed --> grade["grade_claude<br>Claude scores the 20 closest a day"]:::ai
+    embed --> grade["grade_claude<br>free models score the closest, Claude last; no daily cap"]:::ai
     grade --> ranked["ranked<br>releases the emails,<br>even if grading failed"]
     ranked --> tailor["tailor<br>drafts and PDFs for 8+"]:::ai
     core -.-> mart[("mart.job_status")]
