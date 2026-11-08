@@ -2,21 +2,34 @@
 
 Read first, update last. One fact per line, dated. Newest first in the Log.
 
-## Now (2026-11-08)
+## Now (2026-11-09)
 
-- Stack: warehouse, airflow-db, airflow, tracker all up (compose has `restart: unless-stopped`; it was Docker Desktop that was not running, 2026-11-02 to 11-08).
-- Last DAG run: `scheduled__2026-11-08T10:00:00+00:00`, success. Egypt email 37 new jobs, abroad 8.
-- Gate: `bash check.sh` prints `GATE: PASS` (tests + idempotency).
-- Grading: free models first (Groq, Gemini, OpenRouter), Claude only when none answers (`grade.py`, `llm.py`).
-- Embedding: needs Ollama on the laptop at `host.docker.internal:11434` (`nomic-embed-text`). Not started by Windows yet.
+- Stack: warehouse, airflow-db, airflow, tracker up. Gate: `bash check.sh` prints `GATE: PASS` on `main` (97f9054; one run hit a transient lost connection when other sessions shared the warehouse, the rerun passed).
+- Built and on `main`: apply queue + guardrails (`apply/queue.py`), approved answers (`apply/answers.py`), runner (`apply/runner.py`), adapter contract (`apply/adapters/base.py`), outreach sender in dry run (`outreach_send.py`), weekly review (`review.py`), source-health fixes and the zero-board warning, `docs/bots/` (eight bot specs), embed fails red, xAI Grok in `llm.py`, heartbeat script, CI on pull requests.
+- Not built yet: the form adapters (Greenhouse, Lever, Workable, Ashby, SmartRecruiters, Recruitee; two cloud sessions were started, nothing pushed yet), Task 6 (hourly apply DAG, persist the breaker, ntfy), Task 7 (tracker page), Task 8 (triage report), LinkedIn and Indeed adapters.
+- Switches: `apply.enabled: false` and `mode: dry_run`; `outreach.enabled: false` and `mode: dry_run`. Nothing applies or sends.
+- Inboxes: 2313 noise messages archived with the Gmail label `radar-noise` (undo: search that label, Move to inbox).
+
+## Needs Omar
+
+1. Add `XAI_API_KEY` to `.env` (Grok fallback) and check the model id `grok-4` in xAI's console.
+2. Copy `apply-answers.example.yaml` to `output/applications/apply-answers.yaml` and fill in only answers you approve (salary, authorization, links).
+3. Run the Grok feasibility spike (bot-team plan Task 1) on a dedicated Grok account, and decide where the bots run (Grok computer or the laptop) and where the apply queue lives (warehouse or Neon).
+4. Add the repo secret `NEON_OWNER_URL` to fennec (its schema workflow fails without it).
+5. Start with Windows: Docker Desktop and Ollama (`ollama serve`); schedule `python scripts/heartbeat.py` daily in Task Scheduler.
+6. Re-authenticate Vercel and reconnect Playwright with `/mcp`; sign in to X in the browser pane if you want the saved articles read.
+7. For LinkedIn and Indeed: log in and pass any CAPTCHA once with `scripts/open_blocked.py` (sessions saved, gitignored). Decide whether they stay in scope given the ban risk.
+8. Start client-radar's containers (stopped since mid-October) if you still want it running.
+9. Go-live is yours: read a week of dry-run screenshots, then say go before `apply.mode: live` or `outreach.mode: live`.
+10. Delete the old branches on GitHub (`ci/pr-tests`, `radar-fixes-2026-11-08`, `embed-fails-red`, `fix/db-down-smoke`) if you want them gone.
 
 ## Open
 
-- Merged to `main` 2026-11-08 (PR #2). fennec PR #2 and client-radar `main` also pushed. fennec CI `check` (db-down smoke tests expect 500, get 404) was already failing before the merge; its `Apply schema to Neon` workflow fails until the repo secret `NEON_OWNER_URL` is added (Omar's to add).
-- Not scheduled yet (Omar's OS settings): Docker Desktop autostart, Ollama autostart, Task Scheduler running `python scripts/heartbeat.py` daily.
-- client-radar containers stopped since mid-October; the heartbeat only covers job-radar.
-- Neon (read-only, 2026-11-08): `jobs.job` 2303 rows, 2286 in the last 5 days, against 428 in the warehouse. The gap is rows other publishers added (the publish docs say GitHub runs do this); not verified which publisher.
-- Vercel connector needs `/mcp` re-authentication; the Neon connector lists no projects, so Neon was read through the repo's own connection.
+- Task 6 must persist the circuit breaker; LinkedIn and Indeed adapters need their own closed-page check; a cover letter is optional in the runner.
+- The reader that feeds `suppress_from_replies` is not built: replies and bounces to cold emails never reach `core.suppression`.
+- `extract_count` keeps the day's last count, so a second same-day collect emptied by a hold overwrites the real count with 0.
+- Neon (read-only, 2026-11-08): `jobs.job` 2303 rows, 2286 in the last 5 days, against 428 in the warehouse; the gap is rows other publishers add, not verified which.
+- fennec: `fix/db-down-smoke` is merged; its `Apply schema to Neon` workflow still fails without the secret above.
 
 ## Log
 
