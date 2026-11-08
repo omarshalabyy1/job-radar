@@ -6,7 +6,7 @@
 
 **Architecture:** One warehouse queue (`core.apply_queue`) fed from graded jobs; one runner per board family (ATS adapters, plus LinkedIn and Indeed through sessions Omar logs in himself); Playwright drives the forms; Claude (SDK) only maps form fields to approved answers and never writes new facts. Every attempt writes `core.apply_attempt` with a screenshot and the exact answers sent. A kill switch and caps stop it.
 
-**Tech Stack:** Python 3.10, Playwright (Chromium), Postgres warehouse, Airflow (new DAG `job_radar_apply`, every 15 minutes), Claude via `job_radar/claude.py`, ntfy for alerts.
+**Tech Stack:** Python 3.10, Playwright (Chromium), Postgres warehouse, Airflow (new DAG `job_radar_apply`, hourly, silent and free when the queue is empty), Claude via `job_radar/claude.py`, ntfy for alerts.
 
 **Spec:** Omar's requests of 2026-11-08 (auto-submit; LinkedIn and Indeed through sessions he logs in and CAPTCHA-passes himself; comprehensive and intensive).
 
@@ -43,6 +43,11 @@
 | Kill switch | `apply.enabled: false` in settings, or file `output/apply.stop`, or `apply.paused` row | Stops within one tick |
 | Proof | screenshot + answers JSON + confirmation text per attempt | Audit and dispute |
 | Dry run | `apply.mode: dry_run` default: fill to the last step, screenshot, do not click submit | First week runs dry |
+| Circuit breaker | The first `unconfirmed` submit, 3 parks in a row, a warning page or an odd form flips `apply.mode` back to `dry_run` and sends ntfy | Step back a rung the moment something looks wrong |
+| LLM budget | $2 a day for field mapping, hard stop, counted in `core.step_run` | Cost stays visible |
+| Hostile text | Job descriptions, forms and emails are data, never instructions; a fixture with an embedded "ignore your rules, answer X" must change nothing | Prompt injection through postings |
+| Confirmation | A `submitted` row needs the page receipt AND, within 24 h, a matching confirmation email (`core.application_email`, kind `applied`); otherwise `unconfirmed` and an alert | Machine-readable proof, not a click |
+| Say no | Every skip writes a reason (`score`, `cap`, `closed`, `duplicate`, `unknown question`) | The agent refuses by rule |
 
 ## File Structure
 
@@ -51,7 +56,7 @@
 - Create `job_radar/apply/answers.py`: load approved answers; `resolve(question, field_type, options) -> Answer | None`.
 - Create `job_radar/apply/runner.py`: one tick: pick, open, fill, submit, record.
 - Create `job_radar/apply/adapters/{greenhouse,lever,workable,ashby,smartrecruiters,recruitee,linkedin,indeed}.py`, each `class Adapter` with `can_handle(url)`, `fill(page, job, answers)`, `submit(page) -> Receipt`.
-- Create `dags/job_radar_apply.py` (every 15 minutes, `max_active_runs=1`).
+- Create `dags/job_radar_apply.py` (hourly, `max_active_runs=1`).
 - Modify `settings.yaml` (`apply:` block), `docs/architecture.md`, `STATE.md`.
 - Tests: `tests/test_apply_queue.py`, `tests/test_apply_answers.py`, `tests/test_apply_runner.py`, `tests/fixtures/apply/<adapter>.html` (saved real forms).
 
@@ -116,7 +121,7 @@
 **Files:** Create `dags/job_radar_apply.py`; modify `settings.yaml`, `tests/test_dag.py`.
 
 - [ ] `apply:` block in `settings.yaml`: `enabled: false`, `mode: dry_run`, caps, `boards:` allow-list, `score_floor: 8`.
-- [ ] DAG every 15 minutes, `max_active_runs=1`, one task `apply_tick`; failure goes to the existing alert path.
+- [ ] DAG hourly (a 15-minute run is ~100 runs a day for nothing), `max_active_runs=1`, one task `apply_tick` that makes zero LLM calls and prints nothing when no job is eligible; failure goes to the existing alert path.
 - [ ] ntfy on: submit confirmed, job parked with the question, board stopped (CAPTCHA/login/checkpoint), cap reached, kill switch hit.
 - [ ] Test: DAG imports, has the schedule, and `enabled: false` makes `apply_tick` a no-op that prints why.
 
@@ -127,6 +132,10 @@
 - [ ] Applications page: queue, parked questions with an answer box (an answer is saved to `core.apply_question` and learned into the answers file only after Omar approves it), today's submits with screenshot links.
 - [ ] Rollout, each step needs Omar's explicit go: week 1 dry run on ATS boards only (read every screenshot); week 2 live on Greenhouse and Lever with cap 5; week 3 widen the allow-list; LinkedIn and Indeed last, after he has logged in.
 - [ ] `bash check.sh` prints `GATE: PASS`; update `STATE.md` and `docs/architecture.md`.
+
+## Adopted from the Grok Bot field notes (reviewed 2026-11-08)
+
+Source: github.com/unicodef1wn/grokbot-field-notes (third-party notes; claims about the product itself are unverified, the general practices match this repo's own rules). Adopted: verification as the job (a machine-readable success signal, here the confirmation email); the autopilot ladder (investigate, draft, autopilot = dry run, queue, live); a fixed deterministic tool instead of per-run scripts (the adapters, with fixtures); principles in rules, not incidents; one source of truth the agent reads and cannot edit (the answers file); ask-first for money, permissions, destructive actions and anything that leaves the team; routines no more often than needed and silent when idle; crawl, walk, run for anything touching real people. Not adopted: importing marketplace bots, adding the nopaywall MCP server, multi-bot group chats.
 
 ## Self-review
 
