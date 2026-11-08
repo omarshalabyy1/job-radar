@@ -34,10 +34,10 @@
 
 | Guard | Value | Why |
 |---|---|---|
-| Score floor | Claude grade >= 8 (`core.claude_grade`), `restriction` empty, years mismatch not named | Only strong fits |
+| Score floor | Claude grade >= 6 (`core.claude_grade`; raised from 8 to 6 on 2026-11-08 by Omar), `restriction` empty, years mismatch not named | Only strong fits |
 | Freshness | posted < 48 h, page re-fetched open at submit time | He applies early; closed jobs never submitted |
 | Eligibility | `features.eligibility` result allows Cairo | Never apply where he cannot work |
-| Daily cap | 15 submits a day total, 8 per board family, 1 per company per 14 days | Quality and ban safety |
+| Daily cap | 40 submits a day total, 20 per board family, 15 each on LinkedIn and Indeed, 1 per company per 14 days (raised on 2026-11-08 by Omar) | Quality and ban safety |
 | Allow-list | adapters listed in `settings.yaml: apply.boards` | New board = new explicit entry |
 | Unknown question | park, ntfy, wait | No invented answers |
 | Kill switch | `apply.enabled: false` in settings, or file `output/apply.stop`, or `apply.paused` row | Stops within one tick |
@@ -114,7 +114,7 @@
 
 - [ ] Omar logs in and passes any CAPTCHA once in the visible Chromium (`scripts/open_blocked.py linkedin.com indeed.com`); the session is saved under `output/sessions/` (gitignored). The adapters only load that session.
 - [ ] Easy Apply / Indeed Apply only; any step that asks a question outside the approved answers parks; any checkpoint, CAPTCHA or "verify it's you" page stops that board for 24 hours and sends ntfy.
-- [ ] Hard limits for these two: 5 submits a day each, human-like pacing (30-90 s between actions), no parallel tabs. **Risk, accepted by Omar:** these sites ban automated applying; a flagged account can be restricted. The runner stops on the first warning page.
+- [ ] Hard limits for these two: 15 submits a day each, human-like pacing (30-90 s between actions), no parallel tabs. **Risk, accepted by Omar:** these sites ban automated applying; a flagged account can be restricted. The runner stops on the first warning page.
 - [ ] Tests: the session-expired page is detected and stops the board; the daily 5 holds; fixtures of an Easy Apply modal and an Indeed Apply form fill and park correctly.
 
 ### Task 6: DAG, settings, kill switch, alerts

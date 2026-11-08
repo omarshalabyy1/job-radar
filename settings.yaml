@@ -284,13 +284,13 @@ claude:
 apply:
   enabled: false            # the kill switch: false = nothing is picked; so is a file output/apply.stop
   mode: dry_run             # dry_run: fill the form, screenshot, never click submit; live: submit
-  score_floor: 8            # Claude's grade (core.claude_grade) at or above this
+  score_floor: 6            # Claude's grade (core.claude_grade) at or above this
   places: [Egypt, Remote]   # focus: Egypt jobs and remote jobs only (core.job.place); nothing in the Gulf, Europe or the US on site
   max_years: 3              # skip a job that asks for more years (core.job.years_required): Omar's CV shows about 2
   fresh_hours: 48           # only a posting this fresh
-  daily_total: 15           # submits a day, all boards
-  per_board: 8              # submits a day on one board
-  board_caps: {linkedin: 5, indeed: 5}   # lower caps for the two boards that ban automation
+  daily_total: 40           # submits a day, all boards
+  per_board: 20              # submits a day on one board
+  board_caps: {linkedin: 15, indeed: 15}   # lower caps for the two boards that ban automation
   company_days: 14          # one submit per company in this many days
   boards: [greenhouse, lever]            # the allow-list: a new board is a new explicit entry
 
