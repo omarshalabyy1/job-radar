@@ -1,0 +1,9 @@
+# Copy to output/applications/apply-answers.yaml (gitignored) and fill in YOUR approved answers. A question with no entry here is
+# parked for you; nothing is ever guessed. `match` phrases are matched inside the question (case and punctuation ignored).
+- match: [notice period, when can you start]
+  answer: Two weeks
+- match: [years of experience with python]
+  answer: "2"
+- match: [willing to relocate]
+  answer: "No"
+# Add salary, work authorization, visa, links and the rest yourself, only what you approve.

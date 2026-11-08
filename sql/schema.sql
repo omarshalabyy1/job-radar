@@ -1079,3 +1079,15 @@ CREATE TABLE IF NOT EXISTS core.apply_attempt (
 );
 CREATE INDEX IF NOT EXISTS apply_attempt_job ON core.apply_attempt (job_id);
 CREATE INDEX IF NOT EXISTS apply_attempt_started ON core.apply_attempt (started_at);
+
+-- A form question the apply runner had no approved answer for (job_radar/apply/answers.py): the job waits, Omar answers, and an answer
+-- becomes an entry of his approved-answers file only after he approves it. One row per job and question.
+CREATE TABLE IF NOT EXISTS core.apply_question (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    job_id      bigint      NOT NULL REFERENCES core.job ON DELETE CASCADE,
+    question    text        NOT NULL,
+    parked_at   timestamptz NOT NULL DEFAULT now(),
+    answer      text,
+    answered_at timestamptz,
+    UNIQUE (job_id, question)
+);
