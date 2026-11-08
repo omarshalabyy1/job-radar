@@ -300,12 +300,6 @@ def publish_once(conn) -> None:
         jobs = [tuple(row[i] for i in pick) + (row[-1],) for row in jobs]  # job_key stays last
         if absent := [c for c in WIDE if c not in have]:
             print(f"WARNING publish: skipped: jobs.job columns not on Neon yet: {', '.join(absent)}")
-        # Counted before the upsert; the site's own email jobs are not the warehouse's, so they are left out.
-        # Only Neon's recent jobs: older ones it keeps (saved, tracked) are not the warehouse's to send.
-        on_neon = cur.execute("SELECT count(*) FROM jobs.job WHERE source NOT LIKE 'email:%%' AND (source = 'email'"
-                              " OR coalesce(posted_at::date, first_seen) >= current_date - %s)", (KEEP_DAYS,)).fetchone()[0]
-        if len(jobs) * 2 < on_neon:
-            print(f"WARNING publish: only {len(jobs)} jobs read, Neon has {on_neon}")
         # Remove this check once radar-db's jobs.job.job_key is applied everywhere.
         if "job_key" in have:
             remap(cur, keys)

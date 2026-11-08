@@ -33,7 +33,7 @@ from . import fx, runlog, sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
 from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
                      ROLE_LABEL, ROOT, SEEN_DAYS, WORK_DAYS,
-                     NOT_REMOTE, SETTINGS, hidden_reason, in_reach, is_target, place_of, role_of, too_senior)
+                     NOT_REMOTE, SETTINGS, hidden_reason, in_reach, is_target, place_of, reasons, role_of, too_senior)
 from .digest import digest, send, subject
 from .eligibility import eligibility, not_for_egypt  # noqa: F401  (python -m job_radar eligibility)
 from .embed import embed  # noqa: F401  (python -m job_radar embed)
@@ -111,9 +111,9 @@ DROP_MIN = 10  # postings a day before a board's drop rate is judged
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
     """Record today's postings and drops of a board (core.extract_count) and say when they look like a silent failure:
     no posting at all from a board whose last 7 days gave some (the board changed, or blocks us); and, for a board whose
-    postings are judged for Egypt (`judged`), every posting dropped from a board whose last 7 days kept some (the board
-    changed its "who can apply" field or its locations), or none dropped from a board whose last 7 days dropped half or
-    more (the rule broke). A board that always drops everything (Remote.co: its data jobs are US and Canada only) is not a
+    postings are judged for Egypt (`judged`), every posting dropped from a board whose last 7 days kept at least a tenth (the
+    board changed its "who can apply" field or its locations; a global board like Freehire keeps about 2%, so 100% is
+    normal), or none dropped from a board whose last 7 days dropped half or more (the rule broke). A board that always drops everything (Remote.co: its data jobs are US and Canada only) is not a
     change. None when they look normal."""
     conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date, %s, %s, %s)"
                  " ON CONFLICT (day, board) DO UPDATE SET postings = EXCLUDED.postings, dropped = EXCLUDED.dropped",
@@ -126,7 +126,7 @@ def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = T
         return f"{board}: 0 postings today, {before} in the last 7 days - has the board changed, or does it block us?"
     if not judged:
         return None
-    if postings >= DROP_MIN and dropped == postings and before >= DROP_MIN and before_dropped < before:
+    if postings >= DROP_MIN and dropped == postings and before >= DROP_MIN and (before - before_dropped) * 10 >= before:
         return f"{board}: all {postings} postings dropped as not for Egypt - has the board changed its locations?"
     if postings >= DROP_MIN and dropped == 0 and before >= DROP_MIN and before_dropped * 2 >= before:
         return (f"{board}: none of {postings} postings dropped as not for Egypt, where the last 7 days dropped "
@@ -706,7 +706,9 @@ def describe(conn) -> None:
     found = sum(text is not None for text, _ in read)
     if len(todo) >= 10 and found * 10 < len(todo):  # a site that hides its text wastes the step every run
         print(f"WARNING describe: only {found} of {len(todo)} pages gave a description - a site may hide it (config.NO_FETCH)")
-    print(f"describe: {found} of {len(todo)} descriptions found" + (f", {len(closed)} jobs closed (hidden)" if closed else ""))
+    print(f"describe: {found} of {len(todo)} descriptions found"
+          + reasons(page_gave_no_text=len(read) - found - sum(why == "page gone" for why, _ in closed), not_reached=len(todo) - len(read))
+          + (f", {len(closed)} jobs closed (hidden)" if closed else ""))
 
 
 # "4+ years of experience", "3-5 yrs of hands-on PySpark experience", "experience: 2 years", "minimum 3 years' experience"

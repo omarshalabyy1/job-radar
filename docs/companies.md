@@ -1,6 +1,6 @@
 # Your companies
 
-The 159 companies whose own career sites job-radar reads every day: only companies that hire in
+The 158 companies whose own career sites job-radar reads every day: only companies that hire in
 Egypt, each through its jobs page filtered to Egypt where the site has a filter, and only their jobs
 in Egypt are kept. Jobs at these companies are starred in your email, from any source.
 
@@ -108,7 +108,6 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Sumerge | [apply.workable.com](https://apply.workable.com/sumerge-1/) | Workable, public API |
 | Sutherland | [www.jobs.sutherlandglobal.com](https://www.jobs.sutherlandglobal.com/job-results#/egypt) | careers page (platform found on the first read) |
 | Swvl | [apply.workable.com](https://apply.workable.com/swvl/) | Workable, public API |
-| Sylndr | [sylndr.com](https://sylndr.com/) | careers page (platform found on the first read) |
 | Sympl | [sympl.ai](https://sympl.ai/) | careers page (platform found on the first read) |
 | Synapse Analytics | [synapseanalytics.recruitee.com](https://synapseanalytics.recruitee.com/) | careers page (platform found on the first read) |
 | Tabby | [tabby.pinpointhq.com](https://tabby.pinpointhq.com/) | careers page (platform found on the first read) |

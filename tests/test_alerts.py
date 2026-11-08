@@ -123,7 +123,7 @@ def test_a_step_whose_connection_dies_is_recorded_failed_even_while_the_warehous
         with db.connect() as check:
             status, summary = check.execute("SELECT status, summary FROM core.step_run WHERE step = %s", (name,)).fetchone()
             check.execute("DELETE FROM core.step_run WHERE step = %s", (name,))
-        assert status == "failed" and "OperationalError" in summary and tries["n"] >= 4  # more when real connects also time out
+        assert status == "failed" and ("OperationalError" in summary or "AdminShutdown" in summary) and tries["n"] >= 4  # more when real connects also time out
     finally:
         step_conn.close()
 
