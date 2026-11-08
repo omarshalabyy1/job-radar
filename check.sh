@@ -2,5 +2,7 @@
 # The one "done" check for this repo. Prints GATE: PASS only if every step passes.
 set -euo pipefail
 cd "$(dirname "$0")"
-echo "== tests"; python -m pytest tests -q
+PY=python; [ -x .venv/Scripts/python ] && PY=.venv/Scripts/python
+echo "== tests"; $PY -m pytest tests -q
+echo "== idempotency"; $PY scripts/idempotency_check.py
 echo "GATE: PASS"
