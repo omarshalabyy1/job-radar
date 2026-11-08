@@ -323,14 +323,22 @@ def extract_market(conn) -> None:
 
 
 def extract_apify(conn) -> None:
-    """The website's hard boards through Apify (sources/apify.py, settings.yaml apify): every enabled board's Actor run
-    inside the month's budget, as wide postings. Off until a board is enabled."""
+    """The website's hard boards and the social hiring posts through Apify (sources/apify.py, settings.yaml apify): every
+    enabled board's Actor run inside the month's budget, as wide postings. Off until a board is enabled. A social post whose
+    text is already stored under another link is a repost and is dropped. The last line says what the runs cost, which is
+    the line the run log keeps."""
     if not FEATURES.get("market"):
         print("extract_apify: off in settings.yaml (features.market)")
         return
-    rows = sources.apify.apify_jobs()
+    seen: dict[str, set[str]] = {}
+    for digest, url in conn.execute("SELECT payload->>'text_hash', job_url FROM raw.job_posting"
+                                    " WHERE source IN ('apify:x', 'apify:reddit') AND payload ? 'text_hash'"):
+        seen.setdefault(digest, set()).add(url)
+    rows = sources.apify.apify_jobs(seen)
     for board in sorted({r["source"] for r in rows}):
         load(conn, board, [r for r in rows if r["source"] == board], wide=True)
+    if line := sources.apify.spend_line():
+        print(line)
 
 
 def extract_portals(conn) -> None:
@@ -429,9 +437,10 @@ def salary(payload: dict) -> dict | None:
 
 def apply_url(source: str, payload: dict) -> str | None:
     """The employer's or original board's own page for a job, when the source's payload gives one (Indeed's
-    job_url_direct, freehire's url when its own source is not himalayas or adzuna): else None, and the job's
-    job_url stays the link."""
-    url = payload.get("job_url_direct") if source == "indeed" else payload.get("url") if source == "freehire" else None
+    job_url_direct, freehire's url when its own source is not himalayas or adzuna, the link inside a social hiring post
+    (sources/social.py)): else None, and the job's job_url stays the link (for a post, the post itself)."""
+    url = (payload.get("job_url_direct") if source == "indeed" else payload.get("url") if source == "freehire"
+           else payload.get("apply_link") if source in ("apify:x", "apify:reddit") else None)
     return url if isinstance(url, str) and url.startswith("http") and not any(h in url for h in BOARD_HOSTS) else None
 
 

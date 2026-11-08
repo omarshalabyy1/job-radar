@@ -119,9 +119,13 @@ linkedin:
 # month); each run goes to the account with the most left after its max_charge_usd and margin_usd, read from Apify's own
 # usage and limit, so no account passes its limit. A run stops at max_items jobs and at max_charge_usd. Price: dollars per
 # 1,000 items (Apify Store, 2026-10-29). At max_items a day for 30 days the enabled boards cost about: linkedin $2.40,
-# linkedin_gulf $2.40, indeed $0.30, glassdoor $1.20, stepstone $3, xing $3, career_sites $3.90, x $0.75, reddit $3.60
-# wellfound $4.50, seek $3.75 (~$28.75, plus ~$3 for the LinkedIn leg above, inside the ~$35 the five accounts get a
-# month). X and Reddit return posts, not listings: Claude's grading hides the ones that are no job. Off: facebook (the
+# linkedin_gulf $2.40, indeed $0.30, glassdoor $1.20, stepstone $3, xing $3, career_sites $3.90, x $1.10, reddit $3.50
+# wellfound $4.50, seek $3.75 (~$29, plus ~$3 for the LinkedIn leg above, inside the ~$35 the five accounts get a
+# month). X and Reddit return posts, not listings, and are filtered before anything is stored (posts: below, sources/social.py):
+# only a post that says someone is hiring, names one of your roles (roles above) and gives a company, an apply link or a
+# contact is kept; retweets, job seekers, reposts of the same text and posts over fresh_days old are dropped, and each run
+# logs how many of each. They were off from 2026-10-29 (every post, a for-hire post too, was stored as a job) until this filter.
+# Each run prints its cost (Apify's own figure) and the collect ends with one spend line. Off: facebook (the
 # Egypt job pages found on 2026-10-29 last posted in 2021-2025; add active public groups or pages, then enable).
 apify:
   margin_usd: 0.5
@@ -244,21 +248,42 @@ apify:
       max_charge_usd: 0.15
       input: {timeRange: 24h, limit: 10, removeAgency: true, aiTaxonomiesFilter: [Data & Analytics],
               locationSearch: [Egypt, United Arab Emirates, Saudi Arabia, Qatar], aiWorkArrangementFilter: [Remote Solely]}
-    x:           # kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest: $0.25 / 1k tweets (tested 2026-10-29)
-      enabled: false
+    x:           # kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest: $0.25 / 1k tweets, no start fee (Apify Store, 2026-11-08)
+      enabled: true
       actor: kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest
-      max_items: 100
-      max_charge_usd: 0.05
-      input: {queryType: Latest, maxItems: 100, searchTerms: [
-        '("hiring" OR "we are hiring") ("data engineer" OR "analytics engineer" OR "data analyst" OR "BI developer" OR "AI engineer") -filter:retweets']}
-    reddit:      # harshmaur/reddit-scraper: $2.00 / 1k + $0.02 a run, 4.7 stars (tested 2026-10-29)
-      enabled: false
+      max_items: 150            # the run's total (6 terms x 25); the Actor's own minimum per term is 20
+      max_charge_usd: 0.05      # 150 tweets are $0.0375: the cap is never the limit
+      posts: {kind: x, fresh_days: 3}   # ' since:<date>' is added to each term at run time; sources/social.py filters what comes back
+      input:
+        queryType: Latest
+        maxItems: 25            # per search term (the Actor's meaning when searchTerms is set)
+        searchTerms:            # English and Arabic, Egypt and remote; X reads up to ~500 characters a term
+          - '(hiring OR "we''re hiring" OR "we are hiring") ("data engineer" OR "analytics engineer" OR "ETL developer") (Egypt OR Cairo OR Giza) -filter:retweets -filter:replies'
+          - '(hiring OR "we''re hiring" OR "we are hiring") ("data analyst" OR "BI developer" OR "Power BI") (Egypt OR Cairo OR Giza) -filter:retweets -filter:replies'
+          - '(hiring OR "we''re hiring" OR "we are hiring") ("AI engineer" OR "ML engineer" OR "machine learning engineer" OR "LLM engineer" OR "data scientist") (Egypt OR Cairo) -filter:retweets -filter:replies'
+          - '(hiring OR "we''re hiring" OR "we are hiring") remote ("data engineer" OR "analytics engineer" OR "data analyst" OR "AI engineer" OR "ML engineer" OR "BI developer") -filter:retweets -filter:replies'
+          - '(مطلوب OR "نبحث عن" OR "فرصة عمل" OR "وظيفة شاغرة") ("مهندس بيانات" OR "محلل بيانات" OR "عالم بيانات" OR "ذكاء اصطناعي") -filter:retweets -filter:replies'
+          - '(مطلوب OR "فرصة عمل" OR "للتقديم") ("data engineer" OR "data analyst" OR "Power BI" OR "BI developer") (مصر OR القاهرة OR الجيزة OR "عن بعد") -filter:retweets -filter:replies'
+    reddit:      # harshmaur/reddit-scraper: $2.00 / 1k posts + $0.02 a run start (Apify Store, 2026-11-08)
+      enabled: true
       actor: harshmaur/reddit-scraper
-      max_items: 50
-      max_charge_usd: 0.15
-      input: {maxPostsCount: 50, crawlCommentsPerPost: false, postedAfter: 1 day, subredditUrls: [
-        "https://www.reddit.com/r/forhire/new/", "https://www.reddit.com/r/dataengineeringjobs/new/",
-        "https://www.reddit.com/r/RemoteJobs/new/", "https://www.reddit.com/r/jobbit/new/"]}
+      max_items: 50             # 6 keywords x 8 posts = 48 posts = $0.096 + $0.02 start = $0.116
+      max_charge_usd: 0.15      # the old input (4 whole subreddits x 50 posts) wanted 200 posts = $0.40 and was cut at ~65, all from one subreddit
+      posts: {kind: reddit, fresh_days: 3}   # postedAfter '3 days', newest first, is added at run time
+      input:
+        searchPosts: true
+        searchComments: false   # a comment is a billed result too
+        searchCommunities: false
+        crawlCommentsPerPost: false
+        includeNSFW: false
+        maxPostsCount: 8        # per keyword
+        searchTerms:            # all of Reddit by keyword: r/forhire is mostly people for hire; the filter drops those that slip in
+          - hiring data engineer Egypt
+          - hiring data analyst Cairo
+          - hiring data engineer remote
+          - hiring data analyst remote
+          - hiring AI engineer remote
+          - مطلوب مهندس بيانات
     facebook:    # apify/facebook-posts-scraper: $5 / 1k posts; public pages' or groups' links in startUrls, then enable
       enabled: false
       actor: apify/facebook-posts-scraper

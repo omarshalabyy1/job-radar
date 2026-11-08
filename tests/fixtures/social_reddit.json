@@ -1,0 +1,104 @@
+{
+  "about": "Hand-written to the documented output shape of harshmaur/reddit-scraper (its README's post and comment examples, read 2026-11-08). No real run was possible when this was written (no Apify token in the sandbox), so the people, companies and links are invented; the field names are the actor's. Each item's `case` says what the filter must do with it (the code never reads `case`).",
+  "items": [
+    {
+      "case": "kept: [HIRING] remote post, company after 'at', apply link and email in the body",
+      "dataType": "post", "id": "t3_r1", "parsedId": "r1",
+      "title": "[HIRING] Remote Data Engineer at Lumen Pay (EMEA timezones)",
+      "body": "We build payments infrastructure. Stack: Python, dbt, BigQuery. 2-4 years. Apply via https://jobs.lumenpay.example/data-engineer or email talent@lumenpay.example",
+      "authorName": "lumenpay_talent", "communityName": "r/forhire", "parsedCommunityName": "forhire",
+      "flair": "Hiring", "postUrl": "https://www.reddit.com/r/forhire/comments/r1/hiring_remote_data_engineer/",
+      "url": "https://www.reddit.com/r/forhire/comments/r1/hiring_remote_data_engineer/", "contentUrl": null,
+      "createdAt": "2026-11-07T10:00:00.000Z", "removalStatus": "active", "nsfw": false, "isSelf": true
+    },
+    {
+      "case": "dropped: a job seeker ([FOR HIRE])",
+      "dataType": "post", "id": "t3_r2", "parsedId": "r2",
+      "title": "[FOR HIRE] Data analyst, Power BI and SQL, 3 yrs, remote",
+      "body": "Available now. Portfolio on request. DM me.",
+      "authorName": "nour_analyst", "communityName": "r/forhire", "parsedCommunityName": "forhire",
+      "flair": "For Hire", "postUrl": "https://www.reddit.com/r/forhire/comments/r2/for_hire_data_analyst/",
+      "url": "https://www.reddit.com/r/forhire/comments/r2/for_hire_data_analyst/", "contentUrl": null,
+      "createdAt": "2026-11-07T11:00:00.000Z", "removalStatus": "active", "nsfw": false, "isSelf": true
+    },
+    {
+      "case": "dropped: names no role of ours (community manager)",
+      "dataType": "post", "id": "t3_r3", "parsedId": "r3",
+      "title": "[HIRING] Community manager for a crypto project",
+      "body": "Part time. Apply at https://cryptoproj.example/apply",
+      "authorName": "cryptoproj", "communityName": "r/forhire", "parsedCommunityName": "forhire",
+      "flair": "Hiring", "postUrl": "https://www.reddit.com/r/forhire/comments/r3/hiring_community_manager/",
+      "url": "https://www.reddit.com/r/forhire/comments/r3/hiring_community_manager/", "contentUrl": null,
+      "createdAt": "2026-11-07T12:00:00.000Z", "removalStatus": "active", "nsfw": false, "isSelf": true
+    },
+    {
+      "case": "dropped: the same text as r1 cross-posted to another subreddit, later, by the same author",
+      "dataType": "post", "id": "t3_r4", "parsedId": "r4",
+      "title": "[HIRING] Remote Data Engineer at Lumen Pay (EMEA timezones)",
+      "body": "We build payments infrastructure. Stack: Python, dbt, BigQuery. 2-4 years. Apply via https://jobs.lumenpay.example/data-engineer or email talent@lumenpay.example",
+      "authorName": "lumenpay_talent", "communityName": "r/RemoteJobs", "parsedCommunityName": "RemoteJobs",
+      "flair": "Hiring", "postUrl": "https://www.reddit.com/r/RemoteJobs/comments/r4/hiring_remote_data_engineer/",
+      "url": "https://www.reddit.com/r/RemoteJobs/comments/r4/hiring_remote_data_engineer/", "contentUrl": null,
+      "createdAt": "2026-11-08T08:00:00.000Z", "removalStatus": "active", "nsfw": false, "isSelf": true
+    },
+    {
+      "case": "dropped: removed by a moderator",
+      "dataType": "post", "id": "t3_r5", "parsedId": "r5",
+      "title": "[HIRING] Data Engineer, fully remote",
+      "body": "[removed]",
+      "authorName": "spammer1", "communityName": "r/forhire", "parsedCommunityName": "forhire",
+      "flair": "Hiring", "postUrl": "https://www.reddit.com/r/forhire/comments/r5/hiring_data_engineer/",
+      "url": "https://www.reddit.com/r/forhire/comments/r5/hiring_data_engineer/", "contentUrl": null,
+      "createdAt": "2026-11-07T13:00:00.000Z", "removalStatus": "removed_by_moderator", "nsfw": false, "isSelf": true
+    },
+    {
+      "case": "dropped: a comment, not a post",
+      "dataType": "comment", "id": "t1_c1", "parsedId": "c1",
+      "body": "We are hiring a data engineer too, apply at https://x.example/apply",
+      "authorName": "someone", "communityName": "r/forhire", "parsedCommunityName": "forhire",
+      "url": "https://www.reddit.com/r/forhire/comments/r1/hiring_remote_data_engineer/c1/",
+      "createdAt": "2026-11-07T14:00:00.000Z"
+    },
+    {
+      "case": "dropped: a role and a hiring tag, but no company, no link and no contact",
+      "dataType": "post", "id": "t3_r7", "parsedId": "r7",
+      "title": "[HIRING] Data Analyst, Cairo",
+      "body": "Looking for a data analyst with good SQL. Sounds fun? Think about it.",
+      "authorName": "somebody_in_cairo", "communityName": "r/Egypt", "parsedCommunityName": "Egypt",
+      "flair": "Hiring", "postUrl": "https://www.reddit.com/r/Egypt/comments/r7/hiring_data_analyst_cairo/",
+      "url": "https://www.reddit.com/r/Egypt/comments/r7/hiring_data_analyst_cairo/", "contentUrl": null,
+      "createdAt": "2026-11-07T15:00:00.000Z", "removalStatus": "active", "nsfw": false, "isSelf": true
+    },
+    {
+      "case": "kept: an Arabic post in r/Egypt with a form link (the link is an external contentUrl)",
+      "dataType": "post", "id": "t3_r8", "parsedId": "r8",
+      "title": "مطلوب محلل بيانات - القاهرة",
+      "body": "شركة الأفق للتحليلات تعلن عن حاجتها لمحلل بيانات. خبرة في SQL و Power BI. للتقديم: https://forms.alofoq.example/apply",
+      "authorName": "alofoq_hr", "communityName": "r/Egypt", "parsedCommunityName": "Egypt",
+      "flair": "وظائف", "postUrl": "https://www.reddit.com/r/Egypt/comments/r8/data_analyst_cairo/",
+      "url": "https://www.reddit.com/r/Egypt/comments/r8/data_analyst_cairo/", "contentUrl": null,
+      "createdAt": "2026-11-06T09:00:00.000Z", "removalStatus": "active", "nsfw": false, "isSelf": true
+    },
+    {
+      "case": "dropped: a good hiring post, but 5 days old (the window is 3 days)",
+      "dataType": "post", "id": "t3_r9", "parsedId": "r9",
+      "title": "[HIRING] AI Engineer at Cobalt Labs, remote",
+      "body": "LLM agents and RAG. Apply at https://cobalt.example/jobs/ai",
+      "authorName": "cobalt_labs", "communityName": "r/RemoteJobs", "parsedCommunityName": "RemoteJobs",
+      "flair": "Hiring", "postUrl": "https://www.reddit.com/r/RemoteJobs/comments/r9/hiring_ai_engineer/",
+      "url": "https://www.reddit.com/r/RemoteJobs/comments/r9/hiring_ai_engineer/", "contentUrl": null,
+      "createdAt": "2026-11-03T09:00:00.000Z", "removalStatus": "active", "nsfw": false, "isSelf": true
+    },
+    {
+      "case": "kept: an external-link post whose contentUrl is the apply page, no company in the text",
+      "dataType": "post", "id": "t3_r10", "parsedId": "r10",
+      "title": "[Hiring] Machine Learning Engineer, remote, worldwide",
+      "body": "",
+      "authorName": "ml_recruiter", "communityName": "r/RemoteJobs", "parsedCommunityName": "RemoteJobs",
+      "flair": "Hiring", "postUrl": "https://www.reddit.com/r/RemoteJobs/comments/r10/hiring_ml_engineer/",
+      "url": "https://www.reddit.com/r/RemoteJobs/comments/r10/hiring_ml_engineer/",
+      "contentUrl": "https://apply.mlco.example/ml-engineer",
+      "createdAt": "2026-11-08T06:00:00.000Z", "removalStatus": "active", "nsfw": false, "isSelf": false
+    }
+  ]
+}

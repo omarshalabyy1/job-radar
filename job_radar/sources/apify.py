@@ -11,7 +11,14 @@ next month. The tokens come from .env and are never printed. Fallbacks with the 
 firecrawl on a board would name them).
 
 A row's source is 'apify:<board>', its natural key the job's own URL (raw.job_posting's (source, job_url)), so a run
-read twice stores each job once. The Actors name their fields differently: the first field present wins (FIELDS)."""
+read twice stores each job once. The Actors name their fields differently: the first field present wins (FIELDS).
+
+A board with a `posts:` block (x, reddit) returns posts, not listings: sources/social.py asks the Actor for the last
+posts.fresh_days days, keeps only the posts that are hiring posts for one of your roles, and says how many it dropped and why.
+
+Spend is in the run log: each run prints its cost (Apify's own usageTotalUsd for the run) next to its cap and the account's
+month so far, a cost over the cap is a WARNING, and extract_apify ends with spend_line(), so the step's last line, which the
+run log keeps, is what the collect cost."""
 
 from __future__ import annotations
 
@@ -22,6 +29,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 import requests
 
 from ..config import SETTINGS
+from . import social
 from .base import duration, hold, row, waiting
 from .market import text
 
@@ -38,6 +46,13 @@ FIELDS = {"title": ("title", "jobTitle", "job_title", "positionName", "position"
           "description": ("descriptionText", "description", "description.text", "jobDescription", "job_description",
                           "descriptionHtml", "description_text", "body", "textSnippet", "text")}
 WAIT_SECONDS = 240  # a run still going after this is left to finish on Apify; its jobs are read by the next run
+SPEND: dict[str, float | None] = {}  # board -> what its run cost this collect (None: Apify gave no figure); see spend_line()
+
+
+class Items(list):
+    """A run's dataset items, with what the run cost: Apify's usageTotalUsd (the total the account pays, platform use and
+    pay-per-event charges), None when it gave none."""
+    cost: float | None = None
 
 
 def field(item: dict, name: str):
@@ -92,8 +107,8 @@ def tokens() -> list[str]:
     return [t.strip() for t in (os.environ.get("APIFY_TOKENS") or os.environ.get("APIFY_TOKEN") or "").split(",") if t.strip()]
 
 
-def run(token: str, actor: str, payload: dict, max_items: int, max_charge: float) -> list[dict]:
-    """One Actor run, waited for, and its dataset's items."""
+def run(token: str, actor: str, payload: dict, max_items: int, max_charge: float) -> Items:
+    """One Actor run, waited for, and its dataset's items (with the run's cost)."""
     auth = {"Authorization": f"Bearer {token}"}
     started = requests.post(f"{API}/acts/{actor.replace('/', '~')}/runs", headers=auth, json=payload, timeout=90,
                             params={"maxItems": max_items, "maxTotalChargeUsd": max_charge, "waitForFinish": 60})
@@ -104,11 +119,26 @@ def run(token: str, actor: str, payload: dict, max_items: int, max_charge: float
     items = requests.get(f"{API}/datasets/{info['defaultDatasetId']}/items", headers=auth, params={"clean": "true"}, timeout=120)
     items.raise_for_status()
     print(f"apify {actor}: run {info['status'].lower()}, {len(items.json())} items")
-    return items.json()
+    out = Items(items.json())
+    cost = info.get("usageTotalUsd")
+    out.cost = float(cost) if isinstance(cost, (int, float)) else None
+    return out
 
 
-def apify_jobs() -> list[dict]:
-    """Every enabled board's run, inside the month's budget; none enabled (the default) reads nothing."""
+def spend_line() -> str | None:
+    """What this collect's runs cost, in one line ('apify: spent $0.0579 on 2 runs (x $0.0123, reddit $0.0456)'); None when
+    no run started."""
+    if not SPEND:
+        return None
+    total, n = sum(c for c in SPEND.values() if c is not None), len(SPEND)
+    parts = ", ".join(f"{name} ${c:.4f}" if c is not None else f"{name} unknown" for name, c in SPEND.items())
+    return f"apify: spent ${total:.4f} on {n} run{'s' if n != 1 else ''} ({parts})"
+
+
+def apify_jobs(seen: dict[str, set[str]] | None = None) -> list[dict]:
+    """Every enabled board's run, inside the month's budget; none enabled (the default) reads nothing. `seen` is the text
+    hash -> links of the social posts already stored (steps.extract_apify reads it), so a repost is dropped."""
+    SPEND.clear()
     cfg = SETTINGS.get("apify") or {}
     boards = {name: b for name, b in (cfg.get("boards") or {}).items() if b.get("enabled")}
     if not boards:
@@ -123,14 +153,14 @@ def apify_jobs() -> list[dict]:
         if wait := waiting(f"apify-{name}"):  # one run a day, however many collects (GitHub's two, Airflow's)
             print(f"apify {name}: next run in {duration(wait)} (apify.every_hours)")
             continue
-        cap, left = float(b["max_charge_usd"]), {}
+        cap, left, month = float(b["max_charge_usd"]), {}, {}
         for n, token in enumerate(accounts, 1):
             try:
                 used, limit = spent(token)
             except requests.RequestException as e:
                 print(f"WARNING apify: account {n}'s usage could not be read ({type(e).__name__}), skipped")
                 continue
-            left[n] = limit - used - margin - cap
+            left[n], month[n] = limit - used - margin - cap, (used, limit)
         best = max(left, key=left.get, default=None)
         if best is None:
             print(f"WARNING apify {name}: no account's usage could be read: not run")
@@ -138,13 +168,27 @@ def apify_jobs() -> list[dict]:
         if left[best] < 0:
             print(f"apify {name}: no account has ${cap:.2f} left this month: next month")
             continue
+        posts = b.get("posts")  # a social board: posts, not listings
         try:
-            items = run(accounts[best - 1], b["actor"], b["input"], int(b["max_items"]), cap)
-            found = normalize(name, items, b.get("link_base", ""))
+            sent = social.prepare_input(posts["kind"], b["input"], int(posts["fresh_days"]), social.utcnow().date()) if posts else b["input"]
+            items = run(accounts[best - 1], b["actor"], sent, int(b["max_items"]), cap)
+            cost = getattr(items, "cost", None)
+            SPEND[name] = cost
+            if posts:
+                found, dropped = social.posts(posts["kind"], items, fresh_days=int(posts["fresh_days"]), now=social.utcnow(), seen=seen)
+                why = ", ".join(f"{reason} {count}" for reason, count in dropped.most_common())
+                print(f"apify {name}: {len(items)} items, {len(found)} posts kept" + (f" (dropped: {why})" if why else ""))
+            else:
+                found = normalize(name, items, b.get("link_base", ""))
             hold(f"apify-{name}", every)
         except requests.RequestException as e:  # one board's failure leaves the others to run
             print(f"WARNING apify {name}: run failed ({type(e).__name__}), next run tries again")
             continue
+        used, limit = month[best]
+        print(f"apify {name}: cost " + (f"${cost:.4f}" if cost is not None else "unknown") + f" (cap ${cap:.2f}), account {best} had"
+              f" ${used:.2f} of ${limit:.2f} used this month before it")
+        if cost is not None and cost > cap * 1.05:
+            print(f"WARNING apify {name}: cost ${cost:.4f} is over its cap ${cap:.2f}")
         # a run that gives nothing, or items none of which has a title and a link, is a board that stopped working
         # (LinkedIn Egypt's search gave 0 items, Seek's 50 items gave 0 postings on 2026-10-29)
         if not found:

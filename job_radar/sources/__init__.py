@@ -20,12 +20,12 @@ from .remote import (arbeitnow, dailyremote, himalayas, jobicy, relomote, remote
                      weworkremotely, workingnomads)
 from .startups import builtin, startup_jobs, welcometothejungle, wellfound, ycombinator
 from .companies import company_portals, company_sites
-from . import apify, market
+from . import apify, market, social
 from .inbox import LINKEDIN_ALERTS, mailboxes
 
 __all__ = ["ERRORS", "Challenge", "Held", "fetch", "time_left", "bayt", "freehire", "indeed", "jooble", "linkedin",
            "workable_jobs", "tanqeeb", "wuzzuf", "dubizzle", "gulftalent", "naukrigulf", "arbeitnow",
            "dailyremote", "himalayas", "jobicy", "relomote", "remoteco", "remoteok", "remotive",
            "weworkremotely", "workingnomads", "builtin", "startup_jobs", "welcometothejungle", "wellfound",
-           "ycombinator", "company_portals", "company_sites", "apify", "market", "LINKEDIN_ALERTS",
+           "ycombinator", "company_portals", "company_sites", "apify", "market", "social", "LINKEDIN_ALERTS",
            "mailboxes"]
