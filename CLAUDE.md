@@ -26,3 +26,6 @@ A change to loading or publishing also passes `python scripts/idempotency_check.
 - Scraping a source: `scraping-orchestrator`.
 - Claude calls, caching, model ids: `claude-api`.
 - Before saying done: `superpowers:verification-before-completion`. Before merge: `/code-review`.
+
+## Agents
+- Read `STATE.md` first and update it before you stop. `AGENTS.md` says which files are locked, editable, append-only or Omar's to approve.
