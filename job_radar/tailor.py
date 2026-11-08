@@ -319,13 +319,16 @@ def write_draft(folder: Path, d: Draft, company: str) -> list[str]:
 def jobs_to_tailor(conn) -> list[tuple]:
     """The jobs to draft, best score first: graded MIN_SCORE or more, in ai_places, with no application row yet and (with
     features.eligibility) no restriction of the eligibility step's or of Claude's."""
+    apply = SETTINGS.get("apply") or {}
+    # With the apply runner on, draft what it may apply to: its places (Egypt and remote) at its score floor.
+    floor, places = (apply["score_floor"], apply["places"]) if apply.get("enabled") else (MIN_SCORE, SETTINGS.get("ai_places") or [])
     return conn.execute(
         "SELECT j.job_id, j.title, j.company, j.location, j.description, g.score, g.cv, g.reason"
         " FROM core.claude_grade g JOIN core.job j USING (job_id)"
         " WHERE g.score >= %s AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)"
         " AND j.place = ANY(%s) AND (coalesce(j.restriction, '') = '' AND coalesce(g.restriction, '') = '' OR NOT %s)"
         " ORDER BY g.score DESC, j.role_rank, j.job_id",
-        (MIN_SCORE, SETTINGS.get("ai_places") or [], FEATURES["eligibility"])).fetchall()
+        (floor, places, FEATURES["eligibility"])).fetchall()
 
 
 def form_facts() -> str:

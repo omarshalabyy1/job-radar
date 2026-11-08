@@ -251,7 +251,7 @@ def test_a_job_with_no_draft_is_skipped(conn, pages):
     adapter = FakeAdapter()
     result = tick(conn, adapter, pages, LIVE)
     assert result.skipped == 1 and adapter.calls == [] and pages.made == []
-    assert "no draft" in attempts(conn, job_id)[0][4]
+    assert attempts(conn, job_id) == []  # not recorded: tailor may draft it later, so the next tick tries it again
 
 
 def test_a_draft_whose_pdf_has_problems_is_skipped(conn, pages, monkeypatch):

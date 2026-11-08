@@ -188,7 +188,8 @@ def tick(conn, adapters, now: datetime, cfg: dict | None = None, page_factory=No
             if prepared is not None and (closed := closed_now(job.url)):
                 prepared, why = None, f"closed: {closed}"
             if prepared is None:
-                _record(conn, job, "skipped", now, confirmation=why)
+                if why != "no draft":  # no draft yet is not final: tailor may draft it, so it is not recorded and the next tick retries
+                    _record(conn, job, "skipped", now, confirmation=why)
                 result.skipped += 1
                 continue
             outcome, stop_board = _apply_to(conn, adapter, prepared, now, live, page_factory)

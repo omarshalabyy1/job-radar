@@ -277,3 +277,14 @@ def test_the_ready_page_lists_apply_today_first_then_the_rest_by_score(conn):
     names = {job_id: name for name, job_id in mine.items()}
     rows = [(names[r[0]], r[-1]) for r in conn.execute(DRAFTS).fetchall() if r[0] in names]
     assert rows == [("fresh_nine", True), ("fresh_eight", True), ("old_ten", False), ("old_nine", False), ("fresh_seven", False)]
+
+
+def test_with_the_apply_runner_on_remote_jobs_at_the_apply_floor_are_drafted_too(conn, monkeypatch):
+    egypt = add_graded_job(conn, "ap-egypt", 6, place="Egypt")
+    remote = add_graded_job(conn, "ap-remote", 6, place="Remote")
+    gulf = add_graded_job(conn, "ap-gulf", 9, place="UAE")
+    mine = {"egypt6": egypt, "remote6": remote, "gulf9": gulf}
+    assert picked(conn, mine) == ["gulf9"] or "remote6" not in picked(conn, mine)  # apply off: the old rule (score 8+, ai_places)
+    monkeypatch.setitem(tailor.SETTINGS, "apply", {"enabled": True, "score_floor": 6, "places": ["Egypt", "Remote"]})
+    got = picked(conn, mine)
+    assert "remote6" in got and "egypt6" in got and "gulf9" not in got
