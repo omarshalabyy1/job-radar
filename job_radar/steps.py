@@ -31,7 +31,7 @@ from psycopg.types.json import Jsonb
 
 from . import fx, runlog, sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
-from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
+from .config import (reasons, BOARD_HOSTS, CLOSED_AFTER_DAYS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
                      ROLE_LABEL, ROOT, SEEN_DAYS, WORK_DAYS,
                      NOT_REMOTE, SETTINGS, hidden_reason, in_reach, is_target, place_of, role_of, too_senior)
 from .digest import digest, send, subject
@@ -706,7 +706,9 @@ def describe(conn) -> None:
     found = sum(text is not None for text, _ in read)
     if len(todo) >= 10 and found * 10 < len(todo):  # a site that hides its text wastes the step every run
         print(f"WARNING describe: only {found} of {len(todo)} pages gave a description - a site may hide it (config.NO_FETCH)")
-    print(f"describe: {found} of {len(todo)} descriptions found" + (f", {len(closed)} jobs closed (hidden)" if closed else ""))
+    print(f"describe: {found} of {len(todo)} descriptions found"
+          + reasons(page_gave_no_text=len(read) - found, not_reached=len(todo) - len(read))
+          + (f", {len(closed)} jobs closed (hidden)" if closed else ""))
 
 
 # "4+ years of experience", "3-5 yrs of hands-on PySpark experience", "experience: 2 years", "minimum 3 years' experience"

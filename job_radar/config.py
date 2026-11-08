@@ -183,3 +183,9 @@ def hidden_reason(status: str, restriction: str | None, score, features: dict = 
     if features["auto_hide"] and features["grade"] and score is not None and score == score and score <= 3:  # score == score: not NaN
         return f"score {int(score)}"
     return None
+
+
+def reasons(**counts: int) -> str:
+    """' (closed 2, time ran out 3)' for the nonzero counts, '' when all are zero: why a step did less than it was given."""
+    shown = ", ".join(f"{name.replace('_', ' ')} {n}" for name, n in counts.items() if n)
+    return f" ({shown})" if shown else ""

@@ -833,3 +833,9 @@ def test_the_same_job_on_linkedin_and_indeed_is_one_job(conn):
     steps.transform(RolledBack(conn))
     assert conn.execute("SELECT count(*), min(job_key) FROM core.job WHERE company ILIKE 'zzdupco%%'").fetchone() == (
         1, steps.job_key("Data Engineer", "Zzdupco", "https://test.example/dup-linkedin"))
+
+
+def test_reasons_lists_only_the_nonzero_counts():
+    from job_radar.config import reasons
+    assert reasons(closed=2, thrown_away=0, time_ran_out=3) == " (closed 2, time ran out 3)"
+    assert reasons(closed=0) == ""

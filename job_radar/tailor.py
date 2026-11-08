@@ -26,7 +26,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from . import claude
-from .config import FEATURES, NO_FETCH, OUTPUT, SETTINGS
+from .config import FEATURES, NO_FETCH, OUTPUT, SETTINGS, reasons
 from .sources import ERRORS, Held, fetch, time_left
 
 TAILOR_SECONDS = 300  # the DAG gives the task 300 s; a new draft (two calls) starts only with 120 s left
@@ -421,7 +421,7 @@ def tailor(conn) -> None:
     import anthropic  # for its errors; the SDK loads only in a run that calls Claude
     client = claude.client()  # a stuck call gives up inside the DAG's 300 s
     today = str(date.today())
-    done, out_of_credit, failed = 0, False, []
+    done, out_of_credit, failed, closed_n, thrown_away = 0, False, [], 0, 0
     for job in jobs:
         job_id, title, company = job[:3]
         if time_left(TAILOR_SECONDS) < 120:
@@ -432,6 +432,7 @@ def tailor(conn) -> None:
                          " ON CONFLICT (job_id) DO NOTHING", (job_id, f"closed before drafting {today}"))
             conn.commit()
             print(f"tailor: job {job_id} ({company}) is closed ({why}), set to ignored, not drafted")
+            closed_n += 1
             continue
         try:
             d = ask(client, cvs, job)
@@ -442,6 +443,7 @@ def tailor(conn) -> None:
             print(f"WARNING tailor: job {job_id} ({company}): {e!r}"[:300] + ", left for the next run")
             continue
         if d is None:
+            thrown_away += 1
             continue
         folder = draft_folder(today, company, title, job_id)
         if problems := write_draft(folder, d, company):
@@ -453,6 +455,8 @@ def tailor(conn) -> None:
         conn.commit()
         done += 1
     print(f"tailor: {done} of {len(jobs)} jobs drafted with {cfg['model']}"
+          + reasons(closed=closed_n, thrown_away_for_naming_a_gap=thrown_away, failed=len(failed),
+                    left_for_next_run=len(jobs) - done - closed_n - thrown_away - len(failed))
           + (" - WARNING the API credit ran out: no more drafts until you buy more" if out_of_credit else ""))
     if failed:
         raise RuntimeError("tailor: " + "; ".join(failed))
