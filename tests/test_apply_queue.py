@@ -11,7 +11,7 @@ NOW = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
 GH, LEVER, LI = "https://boards.greenhouse.io/acme/jobs/1", "https://jobs.lever.co/acme/1", "https://www.linkedin.com/jobs/view/1"
 CFG = {"enabled": True, "score_floor": 8, "max_years": 3, "fresh_hours": 48, "daily_total": 15, "per_board": 8,
        "board_caps": {"linkedin": 5, "indeed": 5}, "company_days": 14,
-       "boards": ["greenhouse", "lever", "workable", "ashby", "linkedin", "indeed"]}
+       "boards": ["greenhouse", "lever", "workable", "ashby", "linkedin", "indeed"], "places": ["Egypt", "Remote"]}
 
 
 @pytest.fixture
@@ -25,12 +25,13 @@ def conn():
     connection.close()
 
 
-def job(conn, key, company="Acme", url=GH, score=9, restriction=None, grade_restriction=None, years=None, age_hours=1):
+def job(conn, key, company="Acme", url=GH, score=9, restriction=None, grade_restriction=None, years=None, age_hours=1, place="Egypt"):
     job_id = conn.execute(
         "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company, first_seen,"
         " posted_at, apply_url, restriction, years_required) VALUES (%s, 'Data Engineer', %s, 'Cairo', 'Egypt', 'test', %s, 1, 'Data Engineer',"
         " false, %s, %s, %s, %s, %s) RETURNING job_id",
         (key, company, url, NOW.date(), NOW - timedelta(hours=age_hours), url, restriction, years)).fetchone()[0]
+    conn.execute("UPDATE core.job SET place = %s WHERE job_id = %s", (place, job_id))
     conn.execute("INSERT INTO core.claude_grade (job_id, score, cv, reason, model, restriction) VALUES (%s, %s, 'cv', 'ok', 'm', %s)",
                  (job_id, score, grade_restriction))
     return job_id
@@ -75,6 +76,15 @@ def test_stale_applied_or_ignored_or_already_tried_jobs_are_never_picked(conn):
     tried = job(conn, "zz-tried")
     queue.record_attempt(conn, tried, "greenhouse", "parked")
     assert not {stale, applied, tried} & set(picked(conn))
+
+
+def test_only_egypt_and_remote_jobs_are_picked(conn):
+    egypt = job(conn, "zz-eg", company="EgCo", place="Egypt")
+    remote = job(conn, "zz-rem", company="RemCo", place="Remote")
+    gulf = job(conn, "zz-gulf", company="GulfCo", place="United Arab Emirates")
+    unknown = job(conn, "zz-unk", company="UnkCo", place="Unknown location")
+    got = picked(conn)
+    assert {egypt, remote} <= set(got) and not {gulf, unknown} & set(got)
 
 
 def test_a_board_that_is_not_on_the_allow_list_is_never_picked(conn):

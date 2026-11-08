@@ -1,7 +1,7 @@
 """Which graded jobs the apply runner may touch, and the record of what it did (core.apply_attempt). Every guardrail of
 docs/superpowers/plans/2026-11-08-auto-apply.md that decides *which* job lives here; the runner and the adapters come later.
 `pick` is read-only: it returns the jobs to try, best first, inside the score floor, freshness, eligibility, allow-list, daily caps,
-one-per-company and kill-switch rules. A job with any attempt row is never picked again."""
+one-per-company, place (Egypt and Remote only) and kill-switch rules. A job with any attempt row is never picked again."""
 
 from __future__ import annotations
 
@@ -41,13 +41,13 @@ def pick(conn, now: datetime, cfg: dict | None = None, stop_file: Path | None = 
         return []
     rows = conn.execute(
         "SELECT j.job_id, j.company, coalesce(j.apply_url, j.job_url), g.score FROM core.job j JOIN core.claude_grade g USING (job_id)"
-        " WHERE g.score >= %s AND coalesce(j.restriction, '') = '' AND coalesce(g.restriction, '') = ''"
+        " WHERE g.score >= %s AND j.place = ANY(%s) AND coalesce(j.restriction, '') = '' AND coalesce(g.restriction, '') = ''"
         " AND coalesce(j.years_required, 0) <= %s AND coalesce(j.posted_at, j.first_seen::timestamptz) >= %s"
         " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id"
         "                 AND a.status IN ('applied', 'interview', 'offer', 'rejected', 'ignored'))"
         " AND NOT EXISTS (SELECT 1 FROM core.apply_attempt t WHERE t.job_id = j.job_id)"
         " ORDER BY g.score DESC, coalesce(j.posted_at, j.first_seen::timestamptz) DESC, j.job_id",
-        (cfg["score_floor"], cfg["max_years"], now - timedelta(hours=cfg["fresh_hours"]))).fetchall()
+        (cfg["score_floor"], cfg["places"], cfg["max_years"], now - timedelta(hours=cfg["fresh_hours"]))).fetchall()
     done_today = dict(conn.execute(
         "SELECT board, count(*) FROM core.apply_attempt WHERE outcome = ANY(%s) AND (started_at AT TIME ZONE 'UTC')::date = %s GROUP BY board",
         (list(COUNTED), now.date())).fetchall())

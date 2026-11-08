@@ -285,6 +285,7 @@ apply:
   enabled: false            # the kill switch: false = nothing is picked; so is a file output/apply.stop
   mode: dry_run             # dry_run: fill the form, screenshot, never click submit; live: submit
   score_floor: 8            # Claude's grade (core.claude_grade) at or above this
+  places: [Egypt, Remote]   # focus: Egypt jobs and remote jobs only (core.job.place); nothing in the Gulf, Europe or the US on site
   max_years: 3              # skip a job that asks for more years (core.job.years_required): Omar's CV shows about 2
   fresh_hours: 48           # only a posting this fresh
   daily_total: 15           # submits a day, all boards
