@@ -1,0 +1,276 @@
+{
+ "data": [
+  {
+   "id": "62aeac4b-5503-47cd-92c5-e5516ede4b69",
+   "type": "job",
+   "attributes": {
+    "title": "Data Entry Clerk",
+    "postedAt": "11/09/2026 00:34:14",
+    "uri": "jobs/p/0inkmzatu3uy-data-entry-clerk-gft-technologies-dubai-united-arab-emirates",
+    "description": "<p>We are looking for motivated and detail-oriented individuals to join our team as Data Entry Clerks. This is a great opportunity for beginners, fresh graduates, students, and anyone interested in gaining experience in administrative and data entry work.</p><p>The successful candidates will help ma",
+    "requirements": "<ul><li><p></p></li></ul><p>* Basic computer and internet skills.</p><p>* Basic knowledge of Microsoft Word, Excel, or Google Sheets.</p><p>* Good typing and data entry accuracy.</p><p>* Strong attention to detail.</p><p>* Good organizational and time-management skills.</p><p>* Ability to follow ins",
+    "location": {
+     "country": {
+      "id": 196,
+      "name": "United Arab Emirates",
+      "translations": {
+       "name": {
+        "ar": "الإمارات العربية المتحدة",
+        "en": "United Arab Emirates"
+       }
+      },
+      "code": "AE",
+      "browsePage": "a/Data-Entry-Clerk-Jobs-in-United-Arab-Emirates"
+     },
+     "city": {
+      "id": 5433,
+      "name": "Dubai",
+      "translations": {
+       "name": {
+        "ar": "دبي",
+        "en": "Dubai"
+       }
+      },
+      "latitude": "25.06570000",
+      "longitude": "55.17128000",
+      "browsePage": "a/Data-Entry-Clerk-Jobs-in-Dubai"
+     },
+     "area": null
+    },
+    "workplaceArrangement": {
+     "id": 2,
+     "displayedName": "Remote",
+     "translations": {
+      "displayed_name": {
+       "ar": "عمل عن بُعد",
+       "en": "remote"
+      }
+     },
+     "browsePage": "a/Remote-Jobs-in-United-Arab-Emirates"
+    },
+    "status": "active",
+    "jobType": "job"
+   }
+  },
+  {
+   "id": "4134cd10-2efe-4e4e-91dd-119d7d8ffc5c",
+   "type": "job",
+   "attributes": {
+    "title": "AI Engineer",
+    "postedAt": "11/08/2026 23:42:00",
+    "uri": "jobs/p/n0x2wacijoq1-ai-engineer-cairo-egypt",
+    "description": "<p>We are looking for a skilled <strong>AI Engineer</strong> with a strong background in <strong>.NET backend development and AI-Native Software Architecture</strong> to design, develop, and integrate intelligent capabilities into enterprise applications.</p><p>The ideal candidate should understand ",
+    "requirements": "<p><strong>Must-Have Skills</strong></p><ul><li><p>3+ years of professional software development experience, with strong hands-on experience in C# and ASP.NET Core.</p></li><li><p>Solid understanding of Clean Architecture, layered architecture, REST APIs, dependency injection, and microservices.</p>",
+    "location": {
+     "country": {
+      "id": 56,
+      "name": "Egypt",
+      "translations": {
+       "name": {
+        "ar": "مصر",
+        "en": "Egypt"
+       }
+      },
+      "code": "EG",
+      "browsePage": "a/AI-Engineer-Jobs-in-Egypt"
+     },
+     "city": {
+      "id": 1545,
+      "name": "Cairo",
+      "translations": {
+       "name": {
+        "ar": "القاهرة",
+        "en": "Cairo"
+       }
+      },
+      "latitude": "30.05075900",
+      "longitude": "31.23383900",
+      "browsePage": "a/AI-Engineer-Jobs-in-Cairo"
+     },
+     "area": null
+    },
+    "workplaceArrangement": {
+     "id": 3,
+     "displayedName": "Hybrid",
+     "translations": {
+      "displayed_name": {
+       "ar": "عمل هجين",
+       "en": "hybrid"
+      }
+     },
+     "browsePage": "a/Hybrid-Jobs-in-Egypt"
+    },
+    "status": "active",
+    "jobType": "job"
+   }
+  },
+  {
+   "id": "9bf84908-d467-4b89-bbc1-62890477326f",
+   "type": "job",
+   "attributes": {
+    "title": "Site Manager",
+    "postedAt": "11/08/2026 23:27:21",
+    "uri": "jobs/p/iqb3zhkj7fjl-site-manager-kec-identity-for-engenering-matruh-egypt",
+    "description": "<ul><li><p><strong>Site Supervision &amp; Operations:</strong> Manage daily on-site activities, ensuring work aligns with approved architectural drawings, specifications, and fast-track schedules.</p></li><li><p><strong>Subcontractor &amp; Trade Coordination:</strong> Direct and coordinate diverse t",
+    "requirements": "<p><strong>1. Educational Qualifications</strong></p><ul><li><p><strong>Bachelor’s degree in architecture</strong>, Civil Engineering or Interior Design.</p></li></ul><p></p><p><strong>2 Professional Experience</strong></p><ul><li><p><strong>Minimum of 5 to 7+ years</strong> of total experience in c",
+    "location": {
+     "country": {
+      "id": 56,
+      "name": "Egypt",
+      "translations": {
+       "name": {
+        "ar": "مصر",
+        "en": "Egypt"
+       }
+      },
+      "code": "EG",
+      "browsePage": "a/Site-Manager-Jobs-in-Egypt"
+     },
+     "city": {
+      "id": 1554,
+      "name": "Matruh",
+      "translations": {
+       "name": {
+        "ar": "مطروح",
+        "en": "Matruh"
+       }
+      },
+      "latitude": "31.35714200",
+      "longitude": "27.23747700",
+      "browsePage": "a/Site-Manager-Jobs-in-Matruh"
+     },
+     "area": {
+      "id": 345,
+      "name": "North Coast",
+      "translations": {
+       "name": {
+        "ar": "الساحل الشمالي",
+        "en": "North Coast"
+       }
+      },
+      "latitude": "30.96838800",
+      "longitude": "28.74399800",
+      "browsePage": "a/Site-Manager-Jobs-in-North-Coast"
+     }
+    },
+    "workplaceArrangement": {
+     "id": 1,
+     "displayedName": "On-site",
+     "translations": {
+      "displayed_name": {
+       "ar": "عمل من مقر الشركة",
+       "en": "on_site"
+      }
+     },
+     "browsePage": "a/On-Site-Jobs-in-Egypt"
+    },
+    "status": "active",
+    "jobType": "job"
+   }
+  },
+  {
+   "id": "b9196e2b-0324-4370-8021-2935055e5998",
+   "type": "job",
+   "attributes": {
+    "title": "Public Finance Specialist / Senior Public Finance Specialist",
+    "postedAt": "11/08/2026 23:23:15",
+    "uri": "jobs/p/kknjrlyziinv-public-finance-specialist-senior-public-finance-specialist-energy-technology-services-cairo-egypt",
+    "description": "<p><strong><u>Job Summary</u></strong></p><p>We are seeking a detail-oriented Public Finance Specialist / Senior Public Finance Specialist with 2–6 years of relevant experience to support financial operations, reporting, taxation, and regulatory compliance.</p><p>The ideal candidate will be responsi",
+    "requirements": "<p><strong><u>Qualifications &amp; Requirements</u></strong></p><ul><li><p>Bachelor's degree in Finance, Accounting, Commerce, or a related field.</p></li><li><p>2–6 years of relevant experience in finance, accounting, or public finance operations.</p></li><li><p>Strong understanding of financial pr",
+    "location": {
+     "country": {
+      "id": 56,
+      "name": "Egypt",
+      "translations": {
+       "name": {
+        "ar": "مصر",
+        "en": "Egypt"
+       }
+      },
+      "code": "EG",
+      "browsePage": "a/Public-Finance-Specialist-Senior-Public-Finance-Specialist-Jobs-in-Egypt"
+     },
+     "city": {
+      "id": 1545,
+      "name": "Cairo",
+      "translations": {
+       "name": {
+        "ar": "القاهرة",
+        "en": "Cairo"
+       }
+      },
+      "latitude": "30.05075900",
+      "longitude": "31.23383900",
+      "browsePage": "a/Public-Finance-Specialist-Senior-Public-Finance-Specialist-Jobs-in-Cairo"
+     },
+     "area": null
+    },
+    "workplaceArrangement": {
+     "id": 1,
+     "displayedName": "On-site",
+     "translations": {
+      "displayed_name": {
+       "ar": "عمل من مقر الشركة",
+       "en": "on_site"
+      }
+     },
+     "browsePage": "a/On-Site-Jobs-in-Egypt"
+    },
+    "status": "active",
+    "jobType": "job"
+   }
+  },
+  {
+   "id": "0e20d627-571f-4e41-9e9d-878eaca9e561",
+   "type": "job",
+   "attributes": {
+    "title": "Software Development Intern – Full-Stack & AI",
+    "postedAt": "09/23/2026 13:28:06",
+    "uri": "internship/rn5qmqxnv4w5-software-development-intern-full-stack-ai-sherkety-alexandria-egypt",
+    "description": "<h2>Internship Description</h2><p>We are looking for talented and motivated <strong>Software Development Interns</strong> to join our development team and work on real-world software and AI products.</p><p>As an intern, you will contribute to the development of products involving <strong>AI agents, ",
+    "requirements": "<h2>Internship Requirements</h2><ul><li><p>Currently pursuing or recently completed a degree in <strong>Computer Science, Software Engineering, Artificial Intelligence, Computer Engineering</strong>, or a related field.</p></li><li><p>Good programming fundamentals.</p></li><li><p>Good knowledge of <",
+    "location": {
+     "country": {
+      "id": 56,
+      "name": "Egypt",
+      "translations": {
+       "name": {
+        "ar": "مصر",
+        "en": "Egypt"
+       }
+      },
+      "code": "EG",
+      "browsePage": "a/Software-Development-Intern-Full-Stack-AI-Jobs-in-Egypt"
+     },
+     "city": {
+      "id": 1540,
+      "name": "Alexandria",
+      "translations": {
+       "name": {
+        "ar": "الإسكندرية",
+        "en": "Alexandria"
+       }
+      },
+      "latitude": "31.21170300",
+      "longitude": "29.91916800",
+      "browsePage": "a/Software-Development-Intern-Full-Stack-AI-Jobs-in-Alexandria"
+     },
+     "area": null
+    },
+    "workplaceArrangement": {
+     "id": 2,
+     "displayedName": "Remote",
+     "translations": {
+      "displayed_name": {
+       "ar": "عمل عن بُعد",
+       "en": "remote"
+      }
+     },
+     "browsePage": "a/Remote-Jobs-in-Egypt"
+    },
+    "status": "active",
+    "jobType": "internship"
+   }
+  }
+ ]
+}

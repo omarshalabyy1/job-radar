@@ -201,7 +201,7 @@ How each source is read, and the reasoning behind each choice: [docs/scraping-pl
 
 | Source | How | Within its limits |
 |---|---|---|
-| Wuzzuf | the JSON API its web app calls: every job in Egypt from the last 24 hours, newest first, with its description | a few calls a run, 1 second apart |
+| Wuzzuf | the JSON API its web app calls: every job in Egypt from the last 72 hours (a missed run is caught up), newest first, with its description and remote flag; the run log says how many jobs the site lists and how many were read | about 40 calls a run, 1 second apart |
 | Indeed, Bayt | [JobSpy](https://github.com/speedyapply/JobSpy) as a guest, each in its own task; remote jobs only outside Egypt | 3 seconds between a board's searches; a 403 or 429 stops that board for 6 hours |
 | Tanqeeb (Bayt, Forasna, NaukriGulf, GulfTalent) | its Egypt, UAE, Saudi, Qatar, Kuwait, Bahrain and Oman sites' IT, data, business analyst, Python and internship pages; outside Egypt only jobs that say remote | 5 pages a site a run, 1 second apart |
 | NaukriGulf, GulfTalent | the search APIs their pages call (they answer only a real Chrome handshake): the newest jobs of each keyword from the last week; outside Egypt only remote ones are kept | 13 searches each a run, 1 second apart, in the Gulf task |

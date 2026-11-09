@@ -50,7 +50,7 @@ only remote jobs.
 mindmap
   root((job-radar<br>28 sources))
     Egypt<br>onsite in Cairo and Giza
-      Wuzzuf<br>every job, last 24 h
+      Wuzzuf<br>every job, last 72 h
       Tanqeeb Egypt
       Indeed and Bayt
       freehire.me

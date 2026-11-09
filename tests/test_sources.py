@@ -7,7 +7,7 @@ import importlib.util
 import json
 import re
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -55,6 +55,125 @@ def test_wuzzuf_reads_its_api_newest_first(monkeypatch):
     # the 1 October job is more than a day older than the newest (5 October): outside the window
     assert titles(rows) == ["Data Engineer"] and rows[0]["company"] == "Acme Egypt"
     assert rows[0]["job_url"] == "https://wuzzuf.net/jobs/p/a1" and rows[0]["location"] == "Cairo, Egypt"
+
+
+WUZZUF_TIME = "%m/%d/%Y %H:%M:%S"
+
+
+def wuzzuf_site(posted, pages=1, total=5177, hit_cap=None, hold_at=None, without_details=()):
+    """A fake Wuzzuf API from two saved real responses (tests/fixtures/wuzzuf_live_*.json: the search page with its
+    totalResultsCount, and its jobs). Every search page repeats the five saved jobs under new ids; `posted(page, i)` is the
+    postedAt time of job i on that page; `pages` search pages have jobs, then the list ends; a Held is raised at the search
+    page index `hold_at`; `without_details` are ids the details call leaves out."""
+    search, jobs = json.loads(Saved("wuzzuf_live_search.json").text), json.loads(Saved("wuzzuf_live_jobs.json").text)["data"]
+    if total is None:
+        del search["meta"]
+    made = {}
+
+    def fetch(method, url, **kw):
+        if url.endswith("/search/job"):
+            start = json.loads(kw["data"])["startIndex"]
+            if hold_at is not None and start == hold_at * 50:
+                raise egypt.Held("wuzzuf.net answered 429: held for 1.0 hours")
+            page = start // 50
+            if page >= pages:
+                return Saved(json.dumps({"data": [], "meta": {"totalResultsCount": total}}))
+            data = []
+            for i, hit in enumerate(search["data"][:hit_cap]):
+                ident = f"p{page}-{i}"
+                made[ident] = json.loads(json.dumps(jobs[i]))
+                made[ident]["id"] = ident
+                made[ident]["attributes"]["postedAt"] = posted(page, i).strftime(WUZZUF_TIME)
+                made[ident]["attributes"]["uri"] = f"jobs/p/{ident}"
+                data.append({**json.loads(json.dumps(hit)), "id": ident})
+            return Saved(json.dumps({**search, "data": data}))
+        wanted = kw["params"]["filter[other][ids]"].split(",")
+        return Saved(json.dumps({"data": [made[i] for i in wanted if i in made and i not in without_details]}))
+    return fetch
+
+
+NEWEST = datetime(2026, 11, 8, 23, 0)
+
+
+def wuzzuf_lines(capsys):
+    return [line for line in capsys.readouterr().out.splitlines() if line.startswith(("wuzzuf:", "WARNING wuzzuf:"))]
+
+
+def test_wuzzuf_says_how_many_the_site_lists_and_how_many_it_read(monkeypatch, capsys):
+    # the second page has nothing from the window: it ends the read, as it does on the real site (newest first)
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: NEWEST if page == 0 else NEWEST - timedelta(hours=100), pages=2))
+    rows = egypt.wuzzuf()
+    lines = wuzzuf_lines(capsys)
+    summary = [line for line in lines if "5177" in line]
+    # a window that ended the read is normal, however few of the site's 5177 jobs that is: no WARNING
+    assert len(summary) == 1 and "read 10 " in summary[0] and not summary[0].startswith("WARNING")
+    assert not [line for line in lines if line.startswith("WARNING")] and len(rows) == 2  # the AI Engineer and the intern
+
+
+def test_wuzzuf_keeps_the_postings_of_the_last_three_days_not_only_the_last_one(monkeypatch):
+    # a run missed yesterday: its jobs are still on the site, and the next run is the only one that can read them
+    posted = {0: NEWEST, 1: NEWEST - timedelta(hours=30), 4: NEWEST - timedelta(hours=80)}
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: posted.get(i, NEWEST - timedelta(hours=20))))
+    rows = egypt.wuzzuf()
+    assert titles(rows) == ["AI Engineer"] and rows[0]["date_posted"] == "2026-11-07"  # its own day: 30 hours before the newest
+    # the 80-hour-old intern is outside the three days
+
+
+def test_wuzzuf_passes_on_the_boards_remote_flag(monkeypatch):
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: NEWEST))
+    by_title = {r["title"]: r for r in egypt.wuzzuf()}
+    intern = by_title["Software Development Intern – Full-Stack & AI"]
+    assert intern["location"] == "Alexandria, Egypt" and intern["payload"]["is_remote"] is True
+    assert by_title["AI Engineer"]["payload"]["is_remote"] is False  # Hybrid, Cairo
+    from job_radar.config import in_reach, place_of
+    # Egypt's rule is unchanged: a remote job anywhere in Egypt, onsite and hybrid only in Cairo and Giza
+    assert in_reach(place_of(intern["location"]), intern["location"], intern["title"], intern["payload"]["is_remote"])
+    assert not in_reach(place_of(intern["location"]), intern["location"], intern["title"], False)
+    assert in_reach("Egypt", "Cairo, Egypt", "AI Engineer", by_title["AI Engineer"]["payload"]["is_remote"])
+
+
+def test_wuzzuf_warns_when_the_time_budget_cut_the_read_short(monkeypatch, capsys):
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: NEWEST, pages=3))
+    left = iter([100, 10])  # the budget is gone before the second page
+    monkeypatch.setattr(egypt, "time_left", lambda budget: next(left))
+    egypt.wuzzuf()
+    warning = [line for line in wuzzuf_lines(capsys) if line.startswith("WARNING wuzzuf: site lists")]
+    assert len(warning) == 1 and "5177" in warning[0] and "read only 5 " in warning[0] and "time budget" in warning[0]
+
+
+def test_wuzzuf_warns_when_the_page_limit_cut_the_read_short(monkeypatch, capsys):
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: NEWEST, pages=100))  # no page ever reaches the window's end
+    egypt.wuzzuf()
+    warning = [line for line in wuzzuf_lines(capsys) if line.startswith("WARNING wuzzuf: site lists")]
+    assert len(warning) == 1 and "read only 200 " in warning[0] and "page limit" in warning[0]
+
+
+def test_wuzzuf_warns_when_a_hold_stopped_the_read(monkeypatch, capsys):
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: NEWEST, pages=3, hold_at=1))
+    rows = egypt.wuzzuf()
+    lines = wuzzuf_lines(capsys)
+    assert len(rows) == 2  # what the first page found is kept
+    assert [line for line in lines if line.startswith("WARNING wuzzuf: site lists") and "held" in line and "read only 5 " in line]
+
+
+def test_wuzzuf_warns_when_the_list_ends_before_the_count_it_reported(monkeypatch, capsys):
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: NEWEST, pages=2))  # then an empty page, though 5177 are listed
+    egypt.wuzzuf()
+    assert [line for line in wuzzuf_lines(capsys) if line.startswith("WARNING wuzzuf: site lists") and "list ended" in line]
+
+
+def test_wuzzuf_warns_for_a_job_the_search_listed_and_the_details_left_out(monkeypatch, capsys):
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: NEWEST if page == 0 else NEWEST - timedelta(hours=100), pages=2,
+                                                    without_details={"p0-1"}))
+    rows = egypt.wuzzuf()
+    assert titles(rows) == ["Software Development Intern – Full-Stack & AI"]  # the AI Engineer's details were not served
+    assert "WARNING wuzzuf: 1 of the 10 jobs the search listed came back without details" in wuzzuf_lines(capsys)
+
+
+def test_wuzzuf_warns_when_the_search_gives_no_result_count(monkeypatch, capsys):
+    monkeypatch.setattr(egypt, "fetch", wuzzuf_site(lambda page, i: NEWEST, total=None))
+    egypt.wuzzuf()
+    assert [line for line in wuzzuf_lines(capsys) if line.startswith("WARNING wuzzuf: its search API gave no result count")]
 
 
 def test_tanqeeb_reads_its_cards(monkeypatch):
