@@ -262,10 +262,10 @@ holding:
   bold title, " — " company | city in grey, dates right-aligned with the length in brackets
   ("Sep 2025 – Present (1 yr)"), then 3-5 bullets that start with a verb and end with a result or
   number. Each project the same, plus an italic "Technologies:" line under its bullets.
-- `cover-letter.md` - at most one page: why this company, why him for this role (two or three
-  facts from his CV that answer the job's main needs), a short close. Plain, specific English.
-  In his voice (below), so it persuades the reader to call him. Short
-  paragraphs: two or three sentences each, about 200-250 words in all.
+- `cover-letter.md` - one page in his own cover letter voice, the `cover_letter_md` rule in
+  `job_radar/tailor.py` (it wins over the voice below for letters): "Dear <Company> Hiring Team,",
+  formal corporate English that stays diplomatic and appreciative, about 200 words in 4 short
+  paragraphs (interest and background, Bosch Car Service, the real work at Null Labs, thanks).
 - `notes.md` - the grade, the gaps and how to address them, three likely interview questions
   with answers drawn from his experience, three STAR stories (Situation, Task, Action, Result) from his CV
   for this job, and a "Review" part: what the second Claude pass changed and the job's keywords his CV cannot show.

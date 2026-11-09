@@ -47,7 +47,7 @@ Data engineering comes first, for an AI job too: the summary, the skills and eac
 warehouses and data quality, and the AI work reads as the layer built on that data. The candidate does not train models: \
 never write fine-tuning, LoRA, QLoRA, PEFT, SFT, "trained a model" or any training claim, even when the posting asks for it.
 
-Voice, in all three: plain, direct, confident and senior, never junior or job-seeking. Lead with strengths, impact and \
+Voice, in the CV, notes and form answers: plain, direct, confident and senior, never junior or job-seeking. Lead with strengths, impact and \
 achievements, with numbers only from <cv>. Short sentences. Verbs and outcomes, not adjectives. The employer is the \
 subject: "your team", "your data". Spell out an abbreviation the first time a business reader meets it. Never write \
 passionate, aspiring, excited, eager, thrilled, "grateful for the opportunity", unlock, leverage, seamless, cutting-edge, \
@@ -76,10 +76,7 @@ length in brackets. A project's org is its context; repo_url its GitHub repo whe
 one A4 page: about 520 words at most, so cut the weakest bullets and projects first. file_tag: DE, BI, DA or AI, the \
 kind of role.
 
-cover_letter_md: 200-250 words, short paragraphs of 2-3 sentences, plain text with a blank line between paragraphs. \
-Open with what the candidate can do for this employer's main need, not with who they are. Then 2-3 facts from the CV, \
-with their numbers, that prove it. End with one clear ask: a short call about the role. Sign with the candidate's name \
-only.
+cover_letter_md: 180-230 words in 4 short paragraphs, plain text with a blank line between paragraphs. Voice of the cover letter, his own: formal corporate English that stays diplomatic, warm and appreciative; concise and human, never pushy, salesy or a claim to be the best; no contractions, no emoji, no bold, no dashes joining clauses. Corporate verbs such as delivered, aligned, reconciled and collaborate. First line, exactly "Dear <Company> Hiring Team," with the company's name from <job>. Paragraph 1: he is pleased to express his interest in joining the company as part of the team the posting names, and brings experience in data engineering and business intelligence, with a focus on supply chain and operations. Paragraph 2: Bosch Car Service, where he began as an Operations Engineer monitoring inventory, purchasing and supplier performance KPIs, then as a BI Developer delivered Power BI reporting for operations, procurement and finance across 4 branches, aligned KPI definitions with stakeholders, reconciled reported figures against finance records and reduced the monthly reporting cycle from 3 days to under 2 hours with Power Query and Python. Paragraph 3: the real work at Null Labs, never a vague line: he owns a retail supplier's data platform end to end with a US-based team; he built daily Python and Apache Airflow pipelines that collect data from several sources (the retailer's API, its supplier portal and the supplier's Business Central ERP) into a PostgreSQL warehouse with bronze, silver and gold layers and a star schema for reporting; incremental loads, a full run log and a quarantine for invalid records keep the data accurate; the platform identifies retailer deductions the supplier can recover, with AI agents preparing the evidence for each dispute under human review. Lead each paragraph with what this job's duties need, never name the retailer or the supplier. Paragraph 4: "I would welcome the opportunity" to contribute to the team's work and to discuss how his experience aligns with its needs, then thanks them for their time and consideration. Then "Kind regards," on its own line and the candidate's name.
 
 notes_md: the score and why, the gaps between the job and the CV and how to address each, then three likely \
 interview questions with answers drawn only from the CV (same plain style as the letter), then "STAR stories": three \
