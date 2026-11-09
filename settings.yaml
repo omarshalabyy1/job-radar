@@ -706,7 +706,7 @@ companies:
   - {name: "Sakneen", link: "https://www.sakneen.com/company/careers/"}
   - {name: "MAKKN", link: "https://www.makkn.com/careers"}
 
-# Added 2026-11-09 (widening, 82 employers): each was found in a public source and its board or page answered live that day;
+# Added 2026-11-09 (widening, 80 employers): each was found in a public source and its board or page answered live that day;
 # `note` says where it was found and what the board showed. `remote: true` keeps the board's remote jobs open to Egypt (worldwide,
 # anywhere, EMEA, MENA) besides its Egypt jobs; the others keep only Egypt. Boards are read through each platform's public API,
 # the pages by rendering them (sources/companies.py); a board that cannot be read is one log line and a note in core.company.
@@ -770,8 +770,6 @@ companies:
   - {name: "Cequens", link: "https://apply.workable.com/cequens/", note: "Egypt employer shortlist; its own site names this Workable board (API not asked: Workable answers 429 to the sandbox)"}
   - {name: "Hugging Face", link: "https://apply.workable.com/huggingface/", remote: true, note: "remote-first shortlist; its own site names this Workable board (API not asked: Workable answers 429 to the sandbox)"}
   - {name: "ArabyAds", link: "https://arabyads.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
-  - {name: "Brightskies", link: "https://brightskies.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
-  - {name: "Cairo Capital", link: "https://cairocapital.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Credit Agricole Egypt", link: "https://ca-egypt.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Dayra", link: "https://dayra.co/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Dsquares", link: "https://dsquares.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}

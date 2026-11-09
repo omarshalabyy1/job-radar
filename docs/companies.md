@@ -1,6 +1,6 @@
 # Your companies
 
-The 240 companies whose own career sites job-radar reads: only companies that hire in
+The 238 companies whose own career sites job-radar reads: only companies that hire in
 Egypt, or remote-first ones that hire worldwide, each through its jobs page filtered to Egypt where the site has a filter.
 Only their jobs in Egypt are kept; a company marked (+ remote) also keeps its remote jobs open to someone in Egypt
 (worldwide, anywhere, EMEA, MENA). Jobs at these companies are starred in your email, from any source. A site
@@ -230,8 +230,6 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Cequens | [apply.workable.com](https://apply.workable.com/cequens/) | Workable, public API | Egypt employer shortlist; its own site names this Workable board (API not asked: Workable answers 429 to the sandbox) |
 | Hugging Face (+ remote) | [apply.workable.com](https://apply.workable.com/huggingface/) | Workable, public API | remote-first shortlist; its own site names this Workable board (API not asked: Workable answers 429 to the sandbox) |
 | ArabyAds | [arabyads.com](https://arabyads.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
-| Brightskies | [brightskies.com](https://brightskies.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
-| Cairo Capital | [cairocapital.com](https://cairocapital.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Credit Agricole Egypt | [ca-egypt.com](https://ca-egypt.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Dayra | [dayra.co](https://dayra.co/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Dsquares | [dsquares.com](https://dsquares.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
