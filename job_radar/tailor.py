@@ -97,6 +97,15 @@ already right. changes: one short line per change you made. missing_keywords: th
 CV still does not show, because <cv> does not back them. The rules the draft was written under follow; their fixed \
 facts and backed outcomes count as in <cv>, so keep them.
 
+Then correct the cover letter to his voice, the way he edits it himself. It opens with exactly "Dear <Company> \
+Hiring Team," (the company's name from <job>), is 180-230 words in 4 paragraphs and keeps the corporate, diplomatic \
+tone with no contractions. It reads as a person wrote it: every sentence adds a fact the reader did not have, sentence \
+lengths vary, and none of these AI tells is left: dashes joining clauses, "not X but Y" or "not just X", a staged \
+opener, a one-line closer that repeats the point, a list of three for rhythm, inflated words (pivotal, robust, \
+leverage, seamless, passionate, excited). The Null Labs paragraph shows the real work in the rules, never a vague \
+line. Fix wording only, never add a fact, a number or a tool, and drop any claim neither <cv> nor the rules back. Each \
+letter correction is one line in changes, starting "Letter: ".
+
 """
 
 CV_CSS = """@page { size: A4; margin: 8mm 12mm; }

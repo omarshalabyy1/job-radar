@@ -25,6 +25,7 @@ Logins, 2FA and CAPTCHAs are Omar's: stop that board and send ntfy; never type a
 | Needs Omar | Everything is a draft; sending is the Applier's job and goes through its guardrails. |
 | When it runs | As part of the daily run (`tailor` step), once. |
 | Hard limits | Facts only from the master CV: never invent an employer, date, metric or skill; drafts naming a gap are thrown away; gaps go only in `notes.md`. |
+| Voice | Cover letters in Omar's own voice (`cover_letter_md` in `job_radar/tailor.py`): "Dear <Company> Hiring Team,", formal and diplomatic, about 200 words, the real Null Labs work; the review pass corrects each letter to it and humanizes it (lines starting "Letter: " in the notes' Review). |
 
 Handoff: state lives in files and tables, the message carries only an id or a path; a note names what was verified, what was not, and what is left. One writer per surface (see `docs/superpowers/specs/2026-11-08-bot-team-design.md` on branch docs/bot-team-design).
 

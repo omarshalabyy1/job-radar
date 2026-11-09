@@ -24,6 +24,14 @@ def test_the_letter_shows_the_real_work_at_null_labs():
         assert needed in rules
 
 
+def test_the_review_pass_corrects_the_letter_to_his_voice():
+    review = tailor.REVIEW_RULES
+    for needed in ('"Dear <Company> Hiring Team,"', "reads as a person wrote it", "dashes joining clauses",
+                   '"not X but Y"', "staged opener", "one-line closer", "contractions", "wording only, never add a fact",
+                   "180-230 words", '"Letter: "'):
+        assert needed in review
+
+
 def test_the_letter_has_its_own_voice_apart_from_the_cvs():
     assert "Voice, in all three" not in tailor.RULES  # the plain, direct voice is the CV's, notes' and form answers'
     assert "Voice of the cover letter" in tailor.RULES
