@@ -168,12 +168,13 @@ def test_a_rendered_page_does_not_download_its_images_and_fonts_but_runs_its_scr
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Site)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        html = base.rendered(f"http://127.0.0.1:{server.server_port}/")
+        # in a worker thread, as the sources use it: Playwright's sync API leaves its event loop on the thread that started it,
+        # and a second sync_playwright() in the test process (the tailor tests') would then refuse to start
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(1) as pool:
+            html = pool.submit(base.rendered, f"http://127.0.0.1:{server.server_port}/").result(timeout=60)
     finally:
         server.shutdown()
-        if hasattr(base.BROWSERS, "chromium"):
-            base.BROWSERS.chromium.close()
-            del base.BROWSERS.chromium
     assert "Data Engineer" in html  # the script ran
     assert "/pic.png" not in asked  # the picture was never asked for
 
