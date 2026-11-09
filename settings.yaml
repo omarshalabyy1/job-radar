@@ -705,3 +705,90 @@ companies:
   - {name: "Tafweela", link: "https://apply.workable.com/tafweela/"}
   - {name: "Sakneen", link: "https://www.sakneen.com/company/careers/"}
   - {name: "MAKKN", link: "https://www.makkn.com/careers"}
+
+# Added 2026-11-09 (widening, 82 employers): each was found in a public source and its board or page answered live that day;
+# `note` says where it was found and what the board showed. `remote: true` keeps the board's remote jobs open to Egypt (worldwide,
+# anywhere, EMEA, MENA) besides its Egypt jobs; the others keep only Egypt. Boards are read through each platform's public API,
+# the pages by rendering them (sources/companies.py); a board that cannot be read is one log line and a note in core.company.
+  - {name: "Agoda", link: "https://boards.greenhouse.io/agoda", note: "remote-first shortlist; Greenhouse board 2026-11-09: 11 in Egypt"}
+  - {name: "Alpaca", link: "https://boards.greenhouse.io/alpaca", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 12 remote jobs open to Egypt, 8 tech, 1 on your roles"}
+  - {name: "Arize AI", link: "https://boards.greenhouse.io/arizeai", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 1 remote jobs open to Egypt, 1 tech, 1 on your roles"}
+  - {name: "Canonical", link: "https://boards.greenhouse.io/canonical", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 226 remote jobs open to Egypt, 141 tech, 9 on your roles"}
+  - {name: "Commvault", link: "https://boards.greenhouse.io/commvault", note: "job-board feed; Greenhouse board 2026-11-09: 3 in Egypt"}
+  - {name: "Consensys", link: "https://boards.greenhouse.io/consensys", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 2 remote jobs open to Egypt"}
+  - {name: "Customer.io", link: "https://boards.greenhouse.io/customerio", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 6 remote jobs open to Egypt, 2 tech, 1 on your roles"}
+  - {name: "DataKind", link: "https://boards.greenhouse.io/datakindinc", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 3 remote jobs open to Egypt, 2 tech"}
+  - {name: "dmg events", link: "https://boards.greenhouse.io/dmgevents", note: "job-board feed; Greenhouse board 2026-11-09: 1 in Egypt"}
+  - {name: "DoiT", link: "https://boards.greenhouse.io/doitintl", remote: true, note: "job-board feed; Greenhouse board 2026-11-09: 6 remote jobs open to Egypt, 4 tech"}
+  - {name: "InMobi", link: "https://boards.greenhouse.io/inmobi", note: "job-board feed; Greenhouse board 2026-11-09: 1 in Egypt"}
+  - {name: "Jumia", link: "https://boards.greenhouse.io/jumia", note: "Egypt employer shortlist; Greenhouse board 2026-11-09: 1 in Egypt"}
+  - {name: "M9 Solutions", link: "https://boards.greenhouse.io/m9solutions", note: "job-board feed; Greenhouse board 2026-11-09: 1 in Egypt"}
+  - {name: "Moniepoint", link: "https://boards.greenhouse.io/moniepoint", remote: true, note: "Egypt employer shortlist; Greenhouse board 2026-11-09: 6 remote jobs open to Egypt, 6 tech, 1 on your roles"}
+  - {name: "OKX", link: "https://boards.greenhouse.io/okx", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 12 remote jobs open to Egypt, 3 tech"}
+  - {name: "PlanetScale", link: "https://boards.greenhouse.io/planetscale", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 2 remote jobs open to Egypt, 1 tech"}
+  - {name: "Rapp", link: "https://boards.greenhouse.io/rapp", note: "job-board feed; Greenhouse board 2026-11-09: 1 in Egypt"}
+  - {name: "Testlio", link: "https://boards.greenhouse.io/testlio", remote: true, note: "job-board feed; Greenhouse board 2026-11-09: 4 remote jobs open to Egypt, 4 tech"}
+  - {name: "Truecaller", link: "https://boards.greenhouse.io/truecaller", note: "job-board feed; Greenhouse board 2026-11-09: 2 in Egypt"}
+  - {name: "Turing", link: "https://boards.greenhouse.io/turing", remote: true, note: "remote-first shortlist; Greenhouse board 2026-11-09: 2 remote jobs open to Egypt, 2 tech"}
+  - {name: "WPP Media", link: "https://boards.greenhouse.io/wppmedia", note: "job-board feed; Greenhouse board 2026-11-09: 7 in Egypt"}
+  - {name: "Ajax Systems", link: "https://jobs.lever.co/ajax", note: "job-board feed; Lever board 2026-11-09: 1 in Egypt"}
+  - {name: "Aleph", link: "https://jobs.lever.co/aleph", note: "job-board feed; Lever board 2026-11-09: 9 in Egypt, 1 tech"}
+  - {name: "Appen", link: "https://jobs.lever.co/appen", note: "Egypt employer shortlist; Lever board 2026-11-09: 1 in Egypt, 1 tech"}
+  - {name: "Contentsquare", link: "https://jobs.lever.co/contentsquare", note: "remote-first shortlist; Lever board 2026-11-09: 1 in Egypt, 1 tech"}
+  - {name: "Crest Operations", link: "https://jobs.lever.co/crestoperations", note: "job-board feed; Lever board 2026-11-09: 17 in Egypt"}
+  - {name: "Distru", link: "https://jobs.lever.co/distru", remote: true, note: "job-board feed; Lever board 2026-11-09: 2 remote jobs open to Egypt, 1 tech, 1 on your roles"}
+  - {name: "eConstruct", link: "https://jobs.lever.co/econstruct", note: "job-board feed; Lever board 2026-11-09: 9 in Egypt, 4 tech"}
+  - {name: "Firework", link: "https://jobs.lever.co/fireworkhq", note: "job-board feed; Lever board 2026-11-09: 1 in Egypt, 1 tech, 1 on your roles"}
+  - {name: "Incorta", link: "https://jobs.lever.co/incorta", note: "job-board feed; Lever board 2026-11-09: 2 in Egypt, 2 tech"}
+  - {name: "McChrystal Group", link: "https://jobs.lever.co/mcchrystalgroup", note: "job-board feed; Lever board 2026-11-09: 4 in Egypt, 1 tech, 1 on your roles"}
+  - {name: "Metabase", link: "https://jobs.lever.co/metabase", remote: true, note: "remote-first shortlist; Lever board 2026-11-09: 12 remote jobs open to Egypt, 6 tech"}
+  - {name: "SonarSource", link: "https://jobs.lever.co/sonarsource", note: "job-board feed; Lever board 2026-11-09: 2 in Egypt"}
+  - {name: "Viseven", link: "https://jobs.lever.co/viseven", note: "job-board feed; Lever board 2026-11-09: feed: 1 Egypt, 0 remote"}
+  - {name: "Alan", link: "https://jobs.ashbyhq.com/alan", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: 26 remote jobs open to Egypt, 4 tech"}
+  - {name: "Alcazar Energy", link: "https://jobs.ashbyhq.com/alcazar-energy", note: "job-board feed; Ashby board 2026-11-09: 7 in Egypt"}
+  - {name: "Andromeda", link: "https://jobs.ashbyhq.com/andromeda", remote: true, note: "job-board feed; Ashby board 2026-11-09: 5 remote jobs open to Egypt, 2 tech"}
+  - {name: "Dandy", link: "https://jobs.ashbyhq.com/dandy", note: "job-board feed; Ashby board 2026-11-09: 1 in Egypt, 1 tech"}
+  - {name: "Darkroom", link: "https://jobs.ashbyhq.com/darkroom", note: "job-board feed; Ashby board 2026-11-09: 1 in Egypt, 1 tech"}
+  - {name: "Dash0", link: "https://jobs.ashbyhq.com/dash0", remote: true, note: "job-board feed; Ashby board 2026-11-09: 11 remote jobs open to Egypt, 6 tech"}
+  - {name: "Deepgram", link: "https://jobs.ashbyhq.com/deepgram", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: 1 remote jobs open to Egypt"}
+  - {name: "easygenerator", link: "https://jobs.ashbyhq.com/easygenerator", note: "job-board feed; Ashby board 2026-11-09: 3 in Egypt, 2 tech"}
+  - {name: "FlutterFlow", link: "https://jobs.ashbyhq.com/flutterflow", remote: true, note: "YC directory (remote, hiring); Ashby board 2026-11-09: 1 remote jobs open to Egypt, 1 tech"}
+  - {name: "Goodie AI", link: "https://jobs.ashbyhq.com/goodie-ai", note: "job-board feed; Ashby board 2026-11-09: 1 in Egypt, 1 tech"}
+  - {name: "Lilt", link: "https://jobs.ashbyhq.com/lilt-production", remote: true, note: "job-board feed; Ashby board 2026-11-09: 2 remote jobs open to Egypt, 4 in Egypt, 3 tech"}
+  - {name: "Luxor", link: "https://jobs.ashbyhq.com/luxor", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: feed: 0 Egypt, 1 remote"}
+  - {name: "Moxie", link: "https://jobs.ashbyhq.com/moxie", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: 4 remote jobs open to Egypt, 4 tech, 1 on your roles"}
+  - {name: "Notabene", link: "https://jobs.ashbyhq.com/notabene", remote: true, note: "YC directory (remote, hiring); Ashby board 2026-11-09: 1 remote jobs open to Egypt, 1 tech"}
+  - {name: "Overjet", link: "https://jobs.ashbyhq.com/overjet", note: "job-board feed; Ashby board 2026-11-09: 2 in Egypt"}
+  - {name: "Oyster", link: "https://jobs.ashbyhq.com/oyster", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: 7 remote jobs open to Egypt, 3 tech, 2 on your roles"}
+  - {name: "Railway", link: "https://jobs.ashbyhq.com/railway", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: 6 remote jobs open to Egypt, 3 tech"}
+  - {name: "Rwazi", link: "https://jobs.ashbyhq.com/rwazi", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: 25 remote jobs open to Egypt, 6 tech, 2 on your roles"}
+  - {name: "Tailor", link: "https://jobs.ashbyhq.com/tailor", remote: true, note: "YC directory (remote, hiring); Ashby board 2026-11-09: 2 remote jobs open to Egypt, 1 tech"}
+  - {name: "Toogeza", link: "https://jobs.ashbyhq.com/toogeza", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: 1 remote jobs open to Egypt, 1 tech, 1 on your roles"}
+  - {name: "Trust Wallet", link: "https://jobs.ashbyhq.com/trust-wallet", remote: true, note: "remote-first shortlist; Ashby board 2026-11-09: 9 remote jobs open to Egypt, 5 tech, 2 on your roles"}
+  - {name: "Whippy", link: "https://jobs.ashbyhq.com/whippy", remote: true, note: "job-board feed; Ashby board 2026-11-09: 1 remote jobs open to Egypt, 1 tech"}
+  - {name: "Homzmart", link: "https://careers.smartrecruiters.com/Homzmart", note: "Egypt employer shortlist; SmartRecruiters 2026-11-09: 10 postings in Egypt (1 tech, 0 on your roles)"}
+  - {name: "Cequens", link: "https://apply.workable.com/cequens/", note: "Egypt employer shortlist; its own site names this Workable board (API not asked: Workable answers 429 to the sandbox)"}
+  - {name: "Hugging Face", link: "https://apply.workable.com/huggingface/", remote: true, note: "remote-first shortlist; its own site names this Workable board (API not asked: Workable answers 429 to the sandbox)"}
+  - {name: "ArabyAds", link: "https://arabyads.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Brightskies", link: "https://brightskies.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Cairo Capital", link: "https://cairocapital.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Credit Agricole Egypt", link: "https://ca-egypt.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Dayra", link: "https://dayra.co/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Dsquares", link: "https://dsquares.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Etisalat Misr", link: "https://etisalat.eg/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "HC Securities", link: "https://hc-si.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Intcore", link: "https://intcore.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Kashier", link: "https://kashier.io/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Luciq", link: "https://luciq.ai/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Lynks", link: "https://lynks.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Madinet Masr", link: "https://madinetmasr.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Mostaql", link: "https://mostaql.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Naeem Holding", link: "https://naeemholding.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Orascom Construction", link: "https://orascom.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Orascom Development", link: "https://orascomdh.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Pharco", link: "https://pharco.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "ShipBlu", link: "https://shipblu.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Sprints", link: "https://sprints.ai/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Tamweely", link: "https://tamweely.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Tatweer Misr", link: "https://tatweermisr.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "Tazkarti", link: "https://tazkarti.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}

@@ -20,7 +20,9 @@ PLATFORMS = [(r"greenhouse\.io", "Greenhouse, public API"), (r"lever\.co", "Leve
              (r"myworkdayjobs\.com", "Workday, through the 28,000-company feed"),
              (r"bamboohr\.com", "BambooHR, through the 28,000-company feed"),
              (r"successfactors|jobs\.sap\.com", "SuccessFactors search page"), (r"oraclecloud\.com", "Oracle Cloud page"),
-             (r"taleo\.net", "Taleo page"), (r"eightfold\.ai", "Eightfold page")]
+             (r"taleo\.net", "Taleo page"), (r"eightfold\.ai", "Eightfold page"),
+             (r"recruitee\.com", "Recruitee, public API"), (r"smartrecruiters\.com", "SmartRecruiters, public API"),
+             (r"teamtailor\.com", "Teamtailor, public RSS")]
 
 
 def read_as(link: str) -> str:
@@ -29,19 +31,22 @@ def read_as(link: str) -> str:
 
 def render() -> str:
     companies = yaml.safe_load((ROOT / "settings.yaml").read_text(encoding="utf-8"))["companies"]
-    rows = "\n".join(f"| {c['name']}{'' if c.get('starred', True) else ' (not starred)'} | "
-                     f"[{urlsplit(c['link']).netloc}]({c['link']}) | {read_as(c['link'])} |" for c in companies)
+    rows = "\n".join(f"| {c['name']}{'' if c.get('starred', True) else ' (not starred)'}{' (+ remote)' if c.get('remote') else ''} | "
+                     f"[{urlsplit(c['link']).netloc}]({c['link']}) | {read_as(c['link'])} | {c.get('note', '')} |" for c in companies)
     return f"""# Your companies
 
-The {len(companies)} companies whose own career sites job-radar reads every day: only companies that hire in
-Egypt, each through its jobs page filtered to Egypt where the site has a filter, and only their jobs
-in Egypt are kept. Jobs at these companies are starred in your email, from any source.
+The {len(companies)} companies whose own career sites job-radar reads: only companies that hire in
+Egypt, or remote-first ones that hire worldwide, each through its jobs page filtered to Egypt where the site has a filter.
+Only their jobs in Egypt are kept; a company marked (+ remote) also keeps its remote jobs open to someone in Egypt
+(worldwide, anywhere, EMEA, MENA). Jobs at these companies are starred in your email, from any source. A site
+is read at most once in 20 hours; when a run's time runs out the sites left are read first next run (the
+`extract_companies:` line of the log says how many were read, left for time, or unreadable).
 
 This page is written from `settings.yaml` (companies) by `scripts/companies_doc.py`; change a company
 there, then run the script. The tracker's Companies page shows how each site was last read.
 
-| Company | Egypt jobs page | Read as |
-|---|---|---|
+| Company | Jobs page | Read as | Why it is listed |
+|---|---|---|---|
 {rows}
 """
 

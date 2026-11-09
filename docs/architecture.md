@@ -75,7 +75,7 @@ mindmap
       Startup platforms
         Wellfound, Welcome to the Jungle
         startup.jobs, Built In, Y Combinator
-    Your companies<br>Egypt jobs only
+    Your companies<br>Egypt jobs, plus remote ones for remote-first companies
       Their own career sites
       28,000-company feed
     Your inboxes<br>read-only
