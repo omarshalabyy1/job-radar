@@ -138,7 +138,7 @@ def too_senior(title: str) -> bool:
 def place_of(location: str) -> str | None:
     """Your home, a Gulf country, USA, Europe, Remote (open to Egypt), or None when out of scope. A
     remote job open worldwide is Remote; one tied to a country takes that country."""
-    remote = re.search(r"remote", location, re.I)
+    remote = re.search(r"remote|home[- ]?based", location, re.I)  # Canonical: "Home based - Worldwide"
     if remote and re.search(r"worldwide|anywhere|global", location, re.I):
         return "Remote"
     for place, pattern in PLACE_PATTERNS.items():

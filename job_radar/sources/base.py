@@ -57,6 +57,9 @@ def row(source, searched_for, title, company, location, job_url, date_posted, de
 
 BROWSERS = threading.local()  # one headless Chromium per worker thread, see rendered()
 
+# what a career page's browser never needs: pictures, fonts and video (a page of links loads a quarter faster without them)
+MEDIA = re.compile(r"\.(png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|mp4|webm)(\?|$)", re.I)
+
 BROWSER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
                          "Chrome/129.0 Safari/537.36"}
 
@@ -237,6 +240,7 @@ def rendered(url: str, click: str | None = None) -> str:
         user_agent=saved["user_agent"] if saved else BROWSER["User-Agent"],
         storage_state={"cookies": saved["cookies"], "origins": []} if saved else None)
     try:
+        context.route(MEDIA, lambda route: route.abort())
         context.set_default_timeout(site_left(30) * 1000)  # every wait of this page ends within the site's time
         page = context.new_page()
         try:

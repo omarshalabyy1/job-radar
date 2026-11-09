@@ -79,22 +79,44 @@ def company_portals() -> list[dict]:
     return [r for rows in found.values() for r in rows]
 
 
-def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
-    """The career sites in core.company, side by side: (company, careers_url, platform, api) each,
-    keeping only their jobs in Egypt. A site not yet known is first detected (platform, api); the rows
-    come with each site's (platform, api, note, company), for core.company."""
+# platforms whose reader starts a browser (or whose platform is still to be found: detect() may start one): 4 at a time,
+# as each Chromium is heavy; every other reader is plain HTTP, which steps.extract_companies reads first and wider
+NEEDS_BROWSER = {None, "page", "blocked", "forbidden", "unreachable", "successfactors_classic"}
+
+
+def needs_browser(platform: str | None, url: str) -> bool:
+    """Whether reading this site may start a browser. A site not yet detected (or retried) whose address already names its
+    platform (a Greenhouse or Lever board) is detected from the address alone, so it is as cheap as one already known."""
+    if platform in (None, "blocked", "forbidden", "unreachable"):
+        platform = next((p for p, pattern in ATS_PATTERNS if re.search(pattern, url or "")), platform)
+    return platform in NEEDS_BROWSER
+
+
+FAST_THREADS = 12  # plain-HTTP readers at once (each host is still asked one request a second, sources.base.pace)
+
+
+def company_sites(sites: list[tuple], threads: int = 4) -> tuple[list[dict], list[tuple]]:
+    """The career sites in core.company, side by side: (company, careers_url, platform, api[, remote]) each,
+    keeping only their jobs in Egypt (and, for a site marked remote, the remote ones open to someone in Egypt). A site
+    not yet known is first detected (platform, api); the rows come with each site's (platform, api, note, company), for
+    core.company. A site that cannot be read is one line in the log and one note, never an error for the others."""
     def read(site: tuple) -> tuple[list[dict], tuple]:
-        company, url, platform, api = site
+        company, url, platform, api, *flags = site
+        places = {HOME, "Remote"} if flags and flags[0] else {HOME}
         SITE.until = time.monotonic() + SITE_SECONDS  # every request and page wait of this site ends by then
         note = None
         if platform in (None, "blocked", "forbidden", "unreachable"):
-            platform, api, note = detect(url)
+            try:
+                platform, api, note = detect(url)
+            except Exception as e:  # an address that cannot even be requested: this site only, tried again next run
+                print(f"WARNING {company}: detection failed: {e!r}"[:300])
+                return [], (None, api, f"detection failed: {e!r}"[:200], company)
         if platform in (None, "blocked", "forbidden", "unreachable", "covered"):
             print(f"{company}: {platform or 'not reached, tried again next run'} ({note})")
             return [], (platform, api, note, company)
         try:
-            rows = [r for r in READERS[platform](company, api) if place_of(r["location"]) == HOME]  # Egypt only
-        except Exception as e:  # one site down is a short day; a refusal is detected again next run,
+            rows = [r for r in READERS[platform](company, api) if place_of(r["location"]) in places]  # Egypt (and remote)
+        except Exception as e:  # one site down is a short day, a refusal is detected again next run,
             # so a site whose saved session expired shows as blocked, for scripts/open_blocked.py
             print(f"WARNING {company}: {e!r}"[:300])
             refused = isinstance(e, (Held, Challenge))
@@ -107,13 +129,20 @@ def company_sites(sites: list[tuple]) -> tuple[list[dict], list[tuple]]:
     # most). __main__ leaves without waiting for a site not done by then. One still loading is stamped with a note,
     # so the next run moves on to the others: unstamped, the same slow sites came first every run and the batch
     # gave up on them every time (40 sites never read, 2026-10-11). One never started is left first in line.
-    pool = ThreadPoolExecutor(4)
+    pool = ThreadPoolExecutor(threads)
     futures = {pool.submit(read, site): site for site in sites}
     done, _ = wait(futures, timeout=max(0, time_left(EXTRACT_SECONDS) - SITE_SECONDS))
     pool.shutdown(wait=False, cancel_futures=True)
-    results = [f.result() for f in done]
-    late = [(platform, api, "not read: the run's time ran out while it loaded", company)
-            for f, (company, _, platform, api) in futures.items() if not f.done()]
+    results = []
+    for f in (f for f in futures if f in done):  # the sites' order
+        if f.exception():  # read() answers for every error it can foresee; this is one it could not
+            company, _, platform, api, *_ = futures[f]
+            print(f"WARNING {company}: {f.exception()!r}"[:300])
+            results.append(([], (platform, api, f"read failed: {f.exception()!r}"[:200], company)))
+        else:
+            results.append(f.result())
+    late = [(site[2], site[3], "not read: the run's time ran out while it loaded", site[0])
+            for f, site in futures.items() if not f.done()]
     return [r for rows, _ in results for r in rows], [found for _, found in results] + late
 
 
@@ -132,6 +161,7 @@ ATS_PATTERNS = [
     ("smartrecruiters", r"(?:jobs|careers)\.smartrecruiters\.com/([\w-]+)"),
     ("recruitee", r"\b(?!www\.|app\.|api\.)([\w-]+)\.recruitee\.com"),
     ("personio", r"\b([\w-]+)\.jobs\.personio\.(?:de|com)"),
+    ("teamtailor", r"\b(?!www\.|app\.|api\.|career\.)([\w-]+)\.teamtailor\.com"),
 ]
 
 
@@ -261,6 +291,25 @@ def recruitee(company: str, slug: str) -> list[dict]:
     return rows
 
 
+def teamtailor(company: str, slug: str) -> list[dict]:
+    """Every open job of a company on Teamtailor, through its public RSS feed (jobs.rss): each job names its cities and
+    countries, and whether it is done remotely (fully) or hybrid."""
+    locations = "{https://teamtailor.com/locations}"
+    rows = []
+    for item in ET.fromstring(get(f"https://{slug}.teamtailor.com/jobs.rss").content).iter("item"):
+        title = (item.findtext("title") or "").strip()
+        places = [", ".join(filter(None, [(l.findtext(locations + "city") or "").strip(), (l.findtext(locations + "country") or "").strip()]))
+                  for l in item.iter(locations + "location")]
+        status = (item.findtext("remoteStatus") or "").lower()
+        location = "; ".join(dict.fromkeys(p for p in places if p)) + (" (remote)" if status == "fully" else " (hybrid)" if status == "hybrid" else "")
+        if role_of(title) and place_of(location):
+            posted = str(parsedate_to_datetime(item.findtext("pubDate"))).split(" ")[0] if item.findtext("pubDate") else None
+            text = BeautifulSoup(item.findtext("description") or "", "html.parser").get_text(" ", strip=True) or None
+            rows.append(row(company.lower(), None, title, company, location, item.findtext("link"), posted, text,
+                            {"title": title, "location": location, "guid": item.findtext("guid")}))
+    return rows
+
+
 def personio(company: str, slug: str) -> list[dict]:
     """Every open job of a company on Personio, through its public XML feed (its main office and the others it names)."""
     rows = []
@@ -367,5 +416,5 @@ def rss(company: str, feed: str) -> list[dict]:
 
 
 READERS = {"workable": workable, "greenhouse": greenhouse, "lever": lever, "ashby": ashby, "phenom": phenom,
-           "smartrecruiters": smartrecruiters, "recruitee": recruitee, "personio": personio,
+           "smartrecruiters": smartrecruiters, "recruitee": recruitee, "personio": personio, "teamtailor": teamtailor,
            "successfactors": successfactors, "successfactors_classic": successfactors_classic, "rss": rss, "page": career_page}

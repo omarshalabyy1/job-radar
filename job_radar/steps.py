@@ -59,14 +59,15 @@ def schema(conn) -> None:
     conn.execute("DELETE FROM core.company WHERE company <> ALL(%s)", ([c["name"] for c in companies],))
     with conn.cursor() as cur:
         cur.executemany("""
-            INSERT INTO core.company AS c (company, careers_url, starred) VALUES (%(name)s, %(link)s, %(starred)s)
+            INSERT INTO core.company AS c (company, careers_url, starred, remote) VALUES (%(name)s, %(link)s, %(starred)s, %(remote)s)
             ON CONFLICT (company) DO UPDATE SET
-                careers_url = EXCLUDED.careers_url, starred = EXCLUDED.starred,
+                careers_url = EXCLUDED.careers_url, starred = EXCLUDED.starred, remote = EXCLUDED.remote,
                 platform   = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.platform END,
                 api        = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.api END,
                 note       = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.note END,
                 checked_at = CASE WHEN c.careers_url IS DISTINCT FROM EXCLUDED.careers_url THEN NULL ELSE c.checked_at END""",
-            [{"name": c["name"], "link": c.get("link"), "starred": c.get("starred", True)} for c in companies])
+            [{"name": c["name"], "link": c.get("link"), "starred": c.get("starred", True), "remote": c.get("remote", False)}
+             for c in companies])
     conn.commit()
 
 
@@ -232,34 +233,73 @@ def extract_companies(conn) -> None:
     """The careers pages in core.company; a site not yet known is detected first, and one another
     source covers is not read. A site checked in the last 20 hours is skipped (not 24: checked_at is stamped after the step
     starts, so yesterday's read is under 24 hours old), so each run moves on to the others, never checked or oldest checked
-    first. The day's count (drop_warning) is all batches', once: a last batch with no job is not a silent board."""
+    first. The sites a plain API reads (Greenhouse, Lever, Ashby ...) go first and 12 at a time: they are cheap, so the
+    pages that need a browser (4 at a time, up to a minute each) never starve them; each kind is oldest read first, so the
+    pages share what time is left round-robin. The day's count (drop_warning) is all batches', once: a last batch with no job is
+    not a silent board. The step ends with one line: sites due, read, left for time, unreadable (and why)."""
     if not online():  # a red task Airflow retries, not a green run that found nothing
         raise RuntimeError("no network: host names do not resolve")
     sites = conn.execute(
-        "SELECT company, careers_url, platform, api FROM core.company WHERE coalesce(careers_url, '') <> ''"
+        "SELECT company, careers_url, platform, api, remote FROM core.company WHERE coalesce(careers_url, '') <> ''"
         " AND platform IS DISTINCT FROM 'covered'"
         " AND (checked_at IS NULL OR checked_at < now() - interval '20 hours')"
         " ORDER BY checked_at NULLS FIRST").fetchall()
+    slow = [s for s in sites if sources.companies.needs_browser(s[2], s[1])]
+    queue = [(s, sources.companies.FAST_THREADS) for s in sites if s not in slow] + [(s, 4) for s in slow]
     batches = postings = dropped = 0
+    outcome, left = Counter(), 0
     # 50 sites at a time, each batch saved before the next: a run stopped part way keeps what it found,
     # and no batch starts once the step's time budget is nearly spent
-    for start in range(0, len(sites), 50):
+    for start in range(0, len(queue), 50):
+        batch = queue[start:start + 50]
         if sources.time_left(EXTRACT_SECONDS) < 70:
-            print(f"extract_companies: time budget reached, {len(sites) - start} sites wait for the next run")
+            print(f"extract_companies: time budget reached, {len(queue) - start} sites wait for the next run")
+            left = len(queue) - start
             break
+        threads = batch[0][1]
         try:
-            rows, found = sources.company_sites(sites[start:start + 50])
+            rows, found = sources.company_sites([s for s, _ in batch]) if threads == 4 else \
+                sources.company_sites([s for s, _ in batch], threads=threads)
         except Exception as e:  # one batch down is a short day, not a failed run
             print(f"WARNING company_sites: {e!r}"[:300])
+            outcome["failed"] += len(batch)
             continue
-        batch = load(conn, "company_sites", rows, record=False)
-        batches, postings, dropped = batches + 1, postings + batch[0], dropped + batch[1]
+        outcome["not reached in time"] += len(batch) - len(found)  # a thread the batch's time never gave a site
+        for platform, _, note, _ in found:
+            outcome[company_outcome(platform, note)] += 1
+        batch_posted = load(conn, "company_sites", rows, record=False)
+        batches, postings, dropped = batches + 1, postings + batch_posted[0], dropped + batch_posted[1]
         with conn.cursor() as cur:
             cur.executemany("UPDATE core.company SET platform = %s, api = %s, note = %s, checked_at = now()"
                             " WHERE company = %s", found)
         conn.commit()
+    skipped = left + outcome.pop("skipped", 0) + outcome.pop("not reached in time", 0)
+    read = outcome.pop("read", 0)
+    unreadable = sum(outcome.values())
+    why = ", ".join(f"{n} {kind}" for kind, n in sorted(outcome.items()))
+    print(f"extract_companies: {len(sites)} due, {read} read, {skipped} skipped for time, {unreadable} unreadable"
+          + (f" ({why})" if why else ""))
     if batches and (warning := drop_warning(conn, "company_sites", postings, dropped, judged=FEATURES["eligibility"])):
         print(f"WARNING {warning}")
+
+
+def company_outcome(platform: str | None, note: str | None) -> str:
+    """How one site's read went, for extract_companies' one line: read, skipped (its time ran out while it loaded), or why
+    it is unreadable (blocked, unreachable, failed, held, not reached)."""
+    note = note or ""
+    if note.startswith("not read:"):
+        return "skipped"
+    if platform in ("blocked", "forbidden"):
+        return "blocked"
+    if platform == "unreachable":
+        return "unreachable"
+    if note.startswith(("read failed", "detection failed")) and "Held(" not in note:
+        return "failed"
+    if "Held(" in note or (platform is None and ("held for" in note or "asked to wait" in note)):
+        return "held"
+    if platform is None:
+        return "not reached"
+    return "read"
 
 
 MARKET_BOARDS = 40  # boards read a run, oldest read first: grown step by step (Omar, 2026-10-17: 20, then 40; watch time and RAM)

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:tt="https://teamtailor.com/locations">
+  <channel>
+    <title>Property Finder</title>
+    <description/>
+    <link>https://propertyfinder.teamtailor.com/jobs</link>
+    <item>
+      <title>Customer Success Partner</title>
+      <description>&lt;p&gt;SQL, Python and dashboards for the &lt;b&gt;team&lt;/b&gt;&lt;/p&gt;</description>
+      <pubDate>Tue, 14 Jul 2026 17:36:35 +0400</pubDate>
+      <link>https://propertyfinder.teamtailor.com/jobs/8066036-customer-success-partner</link>
+      <remoteStatus>hybrid</remoteStatus>
+      <guid>aec50f0b-8d12-4305-a771-6e8faed58815</guid>
+      <company_name>Property Finder</company_name>
+      <company_uuid>ADtyF4IQMBQ</company_uuid>
+      <tt:locations>
+        <tt:location>
+          <tt:name>Property Finder Egypt</tt:name>
+          <tt:address/>
+          <tt:zip/>
+          <tt:city>Cairo</tt:city>
+          <tt:country>Egypt</tt:country>
+        </tt:location>
+      </tt:locations>
+      <tt:department>Sales</tt:department>
+      <tt:role/>
+    </item>
+    <item>
+      <title>Commercial Strategy &amp; Operations Analyst</title>
+      <description>&lt;p&gt;SQL, Python and dashboards for the &lt;b&gt;team&lt;/b&gt;&lt;/p&gt;</description>
+      <pubDate>Tue, 27 Oct 2026 08:56:23 +0400</pubDate>
+      <link>https://propertyfinder.teamtailor.com/jobs/8620836-commercial-strategy-operations-analyst</link>
+      <remoteStatus>none</remoteStatus>
+      <guid>23d0c0c3-8997-448b-87a0-f249c9f4575b</guid>
+      <company_name>Property Finder</company_name>
+      <company_uuid>ADtyF4IQMBQ</company_uuid>
+      <tt:locations>
+        <tt:location>
+          <tt:name>Property Finder Egypt</tt:name>
+          <tt:address/>
+          <tt:zip/>
+          <tt:city>Cairo</tt:city>
+          <tt:country>Egypt</tt:country>
+        </tt:location>
+      </tt:locations>
+      <tt:department>Sales</tt:department>
+      <tt:role>Commercial Strategy</tt:role>
+    </item>
+    <item>
+      <title>AI Strategist</title>
+      <description>&lt;p&gt;SQL, Python and dashboards for the &lt;b&gt;team&lt;/b&gt;&lt;/p&gt;</description>
+      <pubDate>Tue, 20 Oct 2026 08:55:44 +0400</pubDate>
+      <link>https://propertyfinder.teamtailor.com/jobs/8572362-ai-strategist</link>
+      <remoteStatus>none</remoteStatus>
+      <guid>02f11807-6ee6-479a-bcc0-aaa3c91a5c5e</guid>
+      <company_name>Property Finder</company_name>
+      <company_uuid>ADtyF4IQMBQ</company_uuid>
+      <tt:locations>
+        <tt:location>
+          <tt:name>Property Finder UAE</tt:name>
+          <tt:address/>
+          <tt:zip/>
+          <tt:city>Dubai</tt:city>
+          <tt:country>United Arab Emirates</tt:country>
+        </tt:location>
+      </tt:locations>
+      <tt:department>Strategy &amp; Analytics</tt:department>
+      <tt:role/>
+    </item>
+    <item>
+      <title>Credit &amp; Collection Specialist</title>
+      <description>&lt;p&gt;SQL, Python and dashboards for the &lt;b&gt;team&lt;/b&gt;&lt;/p&gt;</description>
+      <pubDate>Mon, 05 Oct 2026 09:51:51 +0400</pubDate>
+      <link>https://propertyfinder.teamtailor.com/jobs/8496156-credit-collection-specialist</link>
+      <remoteStatus>none</remoteStatus>
+      <guid>a5613efd-dd62-4b4b-9a3c-5c0dd03a8af0</guid>
+      <company_name>Property Finder</company_name>
+      <company_uuid>ADtyF4IQMBQ</company_uuid>
+      <tt:locations>
+        <tt:location>
+          <tt:name>Property Finder Bahrain</tt:name>
+          <tt:address/>
+          <tt:zip/>
+          <tt:city>Manama</tt:city>
+          <tt:country>Bahrain</tt:country>
+        </tt:location>
+      </tt:locations>
+      <tt:department>Sales</tt:department>
+      <tt:role>Collection</tt:role>
+    </item>
+    <item>
+      <title>Premium Partner Support Advisor</title>
+      <description>&lt;p&gt;SQL, Python and dashboards for the &lt;b&gt;team&lt;/b&gt;&lt;/p&gt;</description>
+      <pubDate>Mon, 26 Oct 2026 09:54:15 +0400</pubDate>
+      <link>https://propertyfinder.teamtailor.com/jobs/8612607-premium-partner-support-advisor</link>
+      <remoteStatus>none</remoteStatus>
+      <guid>34afdc10-f398-4036-871a-02539ccd2fd8</guid>
+      <company_name>Property Finder</company_name>
+      <company_uuid>ADtyF4IQMBQ</company_uuid>
+      <tt:locations>
+        <tt:location>
+          <tt:name>Property Finder Egypt</tt:name>
+          <tt:address/>
+          <tt:zip/>
+          <tt:city>Cairo</tt:city>
+          <tt:country>Egypt</tt:country>
+        </tt:location>
+      </tt:locations>
+      <tt:department>Customer Experience</tt:department>
+      <tt:role>Partner Support</tt:role>
+    </item>
+  </channel>
+</rss>

@@ -616,6 +616,9 @@ CREATE TABLE IF NOT EXISTS core.company (
 );
 -- a warehouse made before the column existed gets it (CREATE TABLE IF NOT EXISTS leaves it as it is)
 ALTER TABLE core.company ADD COLUMN IF NOT EXISTS starred boolean NOT NULL DEFAULT true;
+-- true: the site's remote jobs open to someone in Egypt are kept besides its Egypt jobs (remote-first employers, settings.yaml
+-- `remote: true`); false: only its jobs in Egypt, as before
+ALTER TABLE core.company ADD COLUMN IF NOT EXISTS remote boolean NOT NULL DEFAULT false;
 
 -- Your CVs, uploaded in the tracker (CV tab): their words are matched against each job's skills,
 -- and the newest is exported to career-ops.
