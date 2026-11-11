@@ -374,9 +374,7 @@ def extract_apify(conn) -> None:
     for digest, url in conn.execute("SELECT payload->>'text_hash', job_url FROM raw.job_posting"
                                     " WHERE source IN ('apify:x', 'apify:reddit') AND payload ? 'text_hash'"):
         seen.setdefault(digest, set()).add(url)
-    rows = sources.apify.apify_jobs(seen)
-    for board in sorted({r["source"] for r in rows}):
-        load(conn, board, [r for r in rows if r["source"] == board], wide=True)
+    sources.apify.apify_jobs(seen, store=lambda name, found: load(conn, found[0]["source"], found, wide=True))
     if line := sources.apify.spend_line():
         print(line)
 

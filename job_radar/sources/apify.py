@@ -5,7 +5,8 @@ with its maxItems and maxTotalChargeUsd (Apify stops the run at that cost), wait
 
 The budget guard: APIFY_TOKENS in .env (comma-separated, else APIFY_TOKEN) names every Apify account. Before each run,
 each account's spend this month and its own monthly limit (Apify's figures, users/me/limits) are read, and the run goes
-to the account with the most left once its cap and apify.margin_usd are kept back; with none left the board waits for
+to the account with the most left once its cap and apify.margin_usd are kept back; an account that refuses it (HTTP 402:
+its 5 concurrent runs are taken, or its usage limit; 403) hands it to the next; with none left the board waits for
 next month. The tokens come from .env and are never printed. Fallbacks with the same shape, not built (no key in either .env on
 2026-10-17): Bright Data's Web Scraper API and datasets, and Firecrawl's search and extract (provider: brightdata or
 firecrawl on a board would name them).
@@ -23,6 +24,8 @@ run log keeps, is what the collect cost."""
 from __future__ import annotations
 
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import time
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
@@ -45,6 +48,8 @@ FIELDS = {"title": ("title", "jobTitle", "job_title", "positionName", "position"
                      "date_posted", "datePublished", "job_posted_date", "createdAt"),
           "description": ("descriptionText", "description", "description.text", "jobDescription", "job_description",
                           "descriptionHtml", "description_text", "body", "textSnippet", "text")}
+PARALLEL = 8  # boards run at once
+STORE_LOCK = threading.Lock()
 WAIT_SECONDS = 240  # a run still going after this is left to finish on Apify; its jobs are read by the next run
 SPEND: dict[str, float | None] = {}  # board -> what its run cost this collect (None: Apify gave no figure); see spend_line()
 
@@ -87,7 +92,9 @@ def normalize(board: str, items: list[dict], base: str = "") -> list[dict]:
         if not (isinstance(title, str) and isinstance(url, str) and url.startswith("http")):
             continue
         body, posted, place = field(item, "description"), str(field(item, "posted") or "")[:10], field(item, "location")
-        rows.append(row(f"apify:{board}", None, " ".join(title.split())[:200], field(item, "company"),
+        # a remote job with no place (Wellfound: "remote": true, no location) is a Remote job, not "Unknown location"
+        remote = not place and any(item.get(k) is True for k in ("remote", "isRemote", "is_remote"))
+        rows.append(row(f"apify:{board}", "Remote" if remote else None, " ".join(title.split())[:200], field(item, "company"),
                         ", ".join(place) if isinstance(place, list) else str(place or ""), link(url),
                         posted if posted[:2].isdigit() else None,
                         text(body) if isinstance(body, str) and "<" in body else body,
@@ -135,9 +142,11 @@ def spend_line() -> str | None:
     return f"apify: spent ${total:.4f} on {n} run{'s' if n != 1 else ''} ({parts})"
 
 
-def apify_jobs(seen: dict[str, set[str]] | None = None) -> list[dict]:
+def apify_jobs(seen: dict[str, set[str]] | None = None, store=None) -> list[dict]:
     """Every enabled board's run, inside the month's budget; none enabled (the default) reads nothing. `seen` is the text
-    hash -> links of the social posts already stored (steps.extract_apify reads it), so a repost is dropped."""
+    hash -> links of the social posts already stored (steps.extract_apify reads it), so a repost is dropped. `store(name,
+    found)` is called with each board's postings before the board is held for the day, so a step killed between two boards
+    keeps what was paid for and the held boards are never lost."""
     SPEND.clear()
     cfg = SETTINGS.get("apify") or {}
     boards = {name: b for name, b in (cfg.get("boards") or {}).items() if b.get("enabled")}
@@ -149,10 +158,10 @@ def apify_jobs(seen: dict[str, set[str]] | None = None) -> list[dict]:
         print("apify: no APIFY_TOKENS or APIFY_TOKEN in .env, skipped")
         return []
     margin, every, rows = float(cfg.get("margin_usd", 0.5)), float(cfg.get("every_hours", 20)) * 3600, []
-    for name, b in boards.items():
+    def one(name: str, b: dict) -> list[dict]:
         if wait := waiting(f"apify-{name}"):  # one run a day, however many collects (GitHub's two, Airflow's)
             print(f"apify {name}: next run in {duration(wait)} (apify.every_hours)")
-            continue
+            return []
         cap, left, month = float(b["max_charge_usd"]), {}, {}
         for n, token in enumerate(accounts, 1):
             try:
@@ -161,17 +170,26 @@ def apify_jobs(seen: dict[str, set[str]] | None = None) -> list[dict]:
                 print(f"WARNING apify: account {n}'s usage could not be read ({type(e).__name__}), skipped")
                 continue
             left[n], month[n] = limit - used - margin - cap, (used, limit)
-        best = max(left, key=left.get, default=None)
-        if best is None:
+        if not left:
             print(f"WARNING apify {name}: no account's usage could be read: not run")
-            continue
-        if left[best] < 0:
+            return []
+        ranked = sorted((n for n in left if left[n] >= 0), key=left.get, reverse=True)  # most left first
+        if not ranked:
             print(f"apify {name}: no account has ${cap:.2f} left this month: next month")
-            continue
+            return []
         posts = b.get("posts")  # a social board: posts, not listings
         try:
             sent = social.prepare_input(posts["kind"], b["input"], int(posts["fresh_days"]), social.utcnow().date()) if posts else b["input"]
-            items = run(accounts[best - 1], b["actor"], sent, int(b["max_items"]), cap)
+            # an account that refuses the run (402: its 5 concurrent runs are taken, or its usage limit; 403) hands it to the next
+            for i, best in enumerate(ranked):
+                try:
+                    items = run(accounts[best - 1], b["actor"], sent, int(b["max_items"]), cap)
+                    break
+                except requests.HTTPError as e:
+                    status = e.response.status_code if e.response is not None else None
+                    if status not in (402, 403) or i == len(ranked) - 1:
+                        raise
+                    print(f"apify {name}: account {best} refused (HTTP {status}), trying the next")
             cost = getattr(items, "cost", None)
             SPEND[name] = cost
             if posts:
@@ -180,10 +198,14 @@ def apify_jobs(seen: dict[str, set[str]] | None = None) -> list[dict]:
                 print(f"apify {name}: {len(items)} items, {len(found)} posts kept" + (f" (dropped: {why})" if why else ""))
             else:
                 found = normalize(name, items, b.get("link_base", ""))
+            if store and found:
+                with STORE_LOCK:  # one database connection
+                    store(name, found)
             hold(f"apify-{name}", every)
         except requests.RequestException as e:  # one board's failure leaves the others to run
-            print(f"WARNING apify {name}: run failed ({type(e).__name__}), next run tries again")
-            continue
+            why = f" {e.response.status_code}: {e.response.text[:160]!r}" if getattr(e, "response", None) is not None else ""
+            print(f"WARNING apify {name}: run failed ({type(e).__name__}{why}), next run tries again")
+            return []
         used, limit = month[best]
         print(f"apify {name}: cost " + (f"${cost:.4f}" if cost is not None else "unknown") + f" (cap ${cap:.2f}), account {best} had"
               f" ${used:.2f} of ${limit:.2f} used this month before it")
@@ -193,5 +215,8 @@ def apify_jobs(seen: dict[str, set[str]] | None = None) -> list[dict]:
         # (LinkedIn Egypt's search gave 0 items, Seek's 50 items gave 0 postings on 2026-10-29)
         if not found:
             print(f"WARNING apify {name}: {len(items)} items, 0 postings: check its input or its fields")
-        rows += found
+        return found
+    with ThreadPoolExecutor(max_workers=PARALLEL) as pool:  # the boards' runs wait on Apify, not on us: all at once
+        results = list(pool.map(lambda board: one(*board), boards.items()))
+    rows = [posting for found in results for posting in found]
     return rows
