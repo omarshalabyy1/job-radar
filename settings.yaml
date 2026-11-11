@@ -473,7 +473,7 @@ remote_words: [remote*, work from home, wfh, عن بعد*]
 # Your companies: a job at any of these is starred (⭐) and listed first
 your_companies: [vodafone*, vois, _vois, orange, pwc*, pricewaterhouse*, deloitte*, dhl, nestle*, nestlé*, adib,
                  abu dhabi islamic*, eg bank, egbank, egyptian gulf bank*, etisalat*, e&*, advansys*, nawy,
-                 alignerr*, labelbox*, crossover*, sumerge*, finaira*,
+                 alignerr*, labelbox*, crossover*, sumerge*, finaira*, cyshield*, integrant*, infomineo*, avidbeam*, brightskies*, e-finance*, help ag*,
                  # AI memory and context startups of 50 people or fewer (2026-10-13), like Admyrix
                  admyrix, sentra*, cognee, letta, mem0, zep, uvi, gutt, corunner, memora,
                  # Egypt startups without a careers page found (2026-10-13): 30
@@ -790,3 +790,11 @@ companies:
   - {name: "Tamweely", link: "https://tamweely.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Tatweer Misr", link: "https://tatweermisr.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Tazkarti", link: "https://tazkarti.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
+  - {name: "CyShield", link: "https://careers.cyshield.com/", note: "Omar, 2026-11-11; the site shows an image-code check: pass it in scripts/open_blocked.py"}
+  # Cairo security, AI and data firms like CyShield (Omar, 2026-11-11)
+  - {name: "Integrant", link: "https://integrant.workable.com", note: "Cairo software and data firm; Workable"}
+  - {name: "Infomineo", link: "https://apply.workable.com/infomineo/", note: "Cairo research and data analytics firm; Workable (its careers page builds the list in JavaScript)"}
+  - {name: "Avidbeam", link: "https://avidbeam.com/careers", note: "Cairo AI video analytics firm"}
+  - {name: "Brightskies", link: "https://brightskiesinc.com/careers", note: "Cairo AI and high-performance computing firm"}
+  - {name: "e-finance", link: "https://www.efinance.com.eg/careers", note: "Egypt's government fintech and payments firm"}
+  - {name: "Help AG", link: "https://www.helpag.com/careers/", note: "e& cybersecurity firm with a Cairo office"}
