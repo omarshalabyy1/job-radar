@@ -757,7 +757,7 @@ def describe(conn) -> None:
                 break
             time.sleep(1)
             try:
-                r = sources.fetch("GET", url, hold_on_403=False,
+                r = sources.fetch("GET", page_url(url), hold_on_403=False,
                                   timeout=max(5, min(30, sources.time_left(DESCRIBE_SECONDS) - 5)))
             except sources.Held:  # the site asked us to wait, or refused: none of its pages this run
                 break
@@ -908,7 +908,26 @@ def export_career_ops(conn) -> None:
     print(f"export_career_ops: {len(jobs)} jobs{' and your CV' if cv else ''} in {folder}")
 
 
+SMARTRECRUITERS_JOB = re.compile(r"https://jobs\.smartrecruiters\.com/([^/?#]+)/(\d+)")
+
+
+def page_url(url: str) -> str:
+    """What describe reads for a job's page: a SmartRecruiters job page builds its text in JavaScript (no schema.org
+    JobPosting: 554 of 554 gave none on 2026-11-11), so its postings API, which has the job ad."""
+    if m := SMARTRECRUITERS_JOB.match(url):
+        return f"https://api.smartrecruiters.com/v1/companies/{m[1]}/postings/{m[2]}"
+    return url
+
+
 def page_description(page: bytes) -> str | None:
+    if page[:1] == b"{":  # SmartRecruiters' postings API (page_url): the job ad's sections, each HTML
+        try:
+            sections = (json.loads(page).get("jobAd") or {}).get("sections") or {}
+        except (ValueError, AttributeError):
+            return None
+        text = " ".join(BeautifulSoup(s["text"], "html.parser").get_text(" ", strip=True)
+                        for s in sections.values() if isinstance(s, dict) and s.get("text"))
+        return text or None
     soup = BeautifulSoup(page, "html.parser")
     for script in soup.find_all("script", type="application/ld+json"):
         try:

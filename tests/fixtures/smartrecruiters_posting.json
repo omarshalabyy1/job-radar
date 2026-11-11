@@ -1,0 +1,39 @@
+{
+ "id": "744000157855774",
+ "name": "SAP Spain: Job Opportunities for People with Disabilities",
+ "company": {
+  "name": "SAP IT Business Systeme",
+  "identifier": "SAPITBusinessSysteme"
+ },
+ "location": {
+  "city": "Madrid",
+  "region": "MD",
+  "country": "es",
+  "address": "Plaza Pablo Ruiz Picasso",
+  "remote": false,
+  "hybrid": true,
+  "latitude": "40.4505696",
+  "longitude": "-3.6925274",
+  "fullLocation": "Madrid, MD, Spain"
+ },
+ "jobAd": {
+  "sections": {
+   "companyDescription": {
+    "title": "Company Description",
+    "text": ""
+   },
+   "jobDescription": {
+    "title": "Job Description",
+    "text": "<p><strong>What you'll bring</strong></p><p>You come from a business, technology, or engineering background and are ready to contribute to SAP's growth in Spain. You are motivated, adaptable, and curious about the role technology plays in transforming how organisations work.</p><ul><li>Academic background in business management, economics, engineering, or equivalent professional experience</li><li>Results-oriented approach with strong organisational skills and the ability to manage tasks reliably and with attention to detail</li><li>Ability to collaborate across cross-functional teams, with flexibility and openness to change</li><li>Genuine curiosity about innovation and digital technologies, including an interest in AI and its business applications</li><li>Learning agility and problem-solving ability, with a focus on continuous improvement</li><li>Fluency in English is required for this role</li></ul><p>In addition to the skills and experience specific to this role, all positions at SAP require candidates who are comfortable using AI tools â€” including agentic AI â€” in their day-to-day work, from crafting effective inputs and automating routine tasks, to evaluating AI-generated outputs for quality and driving adoption of AI practices within their teams.</p><p><strong>What you'll build</strong></p><p>You'll join one of SAP Spain's key business areas and contribute to work that spans operations, customer relationships, and technology.</p><ul><li>Contribute to your area of placement â€” Administrative &amp; Corporate Services, Sales &amp; Business Development, Consulting &amp; Advisory Services, or Technology &amp; IT</li><li>Support internal processes, customer-facing activities, or technical initiatives depending on the team you join</li><li>Collaborate with colleagues across SAP Spain and the wider global organisation</li><li>Apply learning agility to develop skills in SAP's solutions, tools, and ways of working</li><li>Contribute to the adoption of AI practices and digital tools in your area</li><li>Grow through SAP's learning programmes, certifications, and mentoring opportunities</li></ul><p><strong>Where you belong</strong></p><p>SAP Spain is building a People With Disabilities talent pipeline across Barcelona and Madrid. By applying, you join our talent community and may be considered for roles that match your profile as they become available â€” across Administrative &amp; Corporate Services, Sales &amp; Business Development, Consulting &amp; Advisory Services, and Technology &amp; IT. We are committed to inclusive hiring and will provide accessibility accommodations to any candidate who needs them. Diverse perspectives are valued here, and career development is part of what we offer.</p><p>Equal Employment Opportunity (EEO) Statement</p><p>Our company does not discriminate in employment on the basis of race, color, religion, sex (including pregnancy and gender identity), national origin, political affiliation, sexual orientation, marital status, disability, genetic information, age, membership in an employee organization, retaliation, parental status, military service, or other non-merit factor.</p>"
+   },
+   "qualifications": {
+    "title": "Qualifications",
+    "text": ""
+   },
+   "additionalInformation": {
+    "title": "Additional Information",
+    "text": "<div sr-tagline=\"\"></div><p>About SAP<br>\nWith a global network of customers, partners, employees, and thought leaders, SAP helps the world run better and improves peopleâ€™s lives.<br>\nAs a leader in enterprise applications and business AI, SAP stands at the nexus of business and technology. For over 50 years, organizations have trusted SAP to bring out their best by uniting business-critical operations spanning finance, procurement, HR, supply chain, and customer experience.<br>\n&#xa0;<br>\nWe win with inclusion<br>\n&#xa0;<br>\nSAPâ€™s culture of inclusion, focus on health and well-being, and flexible working models help ensure that everyone, regardless of background, feels included and can run at their best. At SAP, we believe we are made stronger by the unique capabilities and qualities that each person brings to our company, and we invest in our employees to inspire confidence and help everyone realize their full potential. We ultimately believe in unleashing all talent and creating a better world.<br>\n&#xa0;<br>\nSAP is committed to the values of Equal Employment Opportunity and provides accessibility accommodations to applicants with physical and/or mental disabilities. If you are interested in applying for employment with SAP and are in need of accommodation or special assistance to navigate our website or complete your application, please send an email with your request to the Recruiting Operations Team: Careers@sap.com.<br>\n&#xa0;<br>\nFor SAP employees: Only permanent roles are eligible for the SAP Employee Referral Program, according to the eligibility rules set in the SAP Referral Policy. Specific conditions may apply for roles in Vocational Training.<br>\n&#xa0;<br>\nQualified applicants will receive consideration for employment without regard to age, race, religion, national origin, ethnicity, gender (including pregnancy and childbirth), sexual orientation, gender identity or expression, protected veteran status, or disability, in compliance with applicable federal, state, and local legal requirements.<br>\n&#xa0;<br>\nSuccessful candidates might be required to undergo a background verification with an external vendor.<br>\n&#xa0;<br>\nAI Usage in the Recruitment Process<br>\n&#xa0;<br>\nFor information on the responsible use of AI in our recruitment process, please refer to our Guidelines for Ethical Usage of AI in the Recruiting Process.<br>\n&#xa0;<br>\nPlease note that any violation of these guidelines may result in disqualification from the hiring process.</p>"
+   }
+  }
+ }
+}
