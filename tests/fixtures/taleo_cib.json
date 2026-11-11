@@ -1,0 +1,64 @@
+{
+ "requisitionList": [
+  {
+   "jobId": "125116",
+   "contestNo": "260002VH",
+   "column": [
+    "PREMISES MODIFICATIONS OFFICER",
+    "[\"Egypt-Cairo-BOOMERANG\"]"
+   ],
+   "locationsColumns": [
+    1
+   ]
+  },
+  {
+   "jobId": "122801",
+   "contestNo": "260002IL",
+   "column": [
+    "AI Solution Architect ",
+    "[\"Egypt-Giza-GIZA HEAD OFFICE\"]"
+   ],
+   "locationsColumns": [
+    1
+   ]
+  },
+  {
+   "jobId": "124875",
+   "contestNo": "260002UP",
+   "column": [
+    "TELLER",
+    "[\"Egypt-Cairo-ZAMALEK BRANCH\"]"
+   ],
+   "locationsColumns": [
+    1
+   ]
+  },
+  {
+   "jobId": "124838",
+   "contestNo": "260002UO",
+   "column": [
+    "TELLER",
+    "[\"Egypt-Cairo-ABBASSIA BRANCH\"]"
+   ],
+   "locationsColumns": [
+    1
+   ]
+  },
+  {
+   "jobId": "125078",
+   "contestNo": "260002VD",
+   "column": [
+    "Employment Officer",
+    "[\"Egypt-Giza-SMART VILLAGE BLDG. 4\"]"
+   ],
+   "locationsColumns": [
+    1
+   ]
+  }
+ ],
+ "pagingData": {
+  "currentPageNo": 1,
+  "pageSize": 25,
+  "totalCount": 82
+ }
+}

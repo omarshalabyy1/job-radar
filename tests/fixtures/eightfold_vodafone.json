@@ -1,0 +1,60 @@
+{
+ "status": 200,
+ "data": {
+  "count": 37,
+  "positions": [
+   {
+    "id": 563018697957486,
+    "displayJobId": "289478",
+    "name": "AI & Automation Engineer - VOIS",
+    "locations": [
+     "Giza, Egypt"
+    ],
+    "postedTs": 1794230939,
+    "department": "DE AI Factory",
+    "workLocationOption": "onsite",
+    "positionUrl": "/careers/job/563018697957486",
+    "location": "Giza, Egypt"
+   },
+   {
+    "id": 563018698180483,
+    "displayJobId": "291276",
+    "name": "Customer Delivery Sr Project Manager - German Speaker (VOIS)",
+    "locations": [
+     "Giza, Egypt"
+    ],
+    "postedTs": 1794217539,
+    "department": "Group TES",
+    "workLocationOption": "hybrid",
+    "positionUrl": "/careers/job/563018698180483",
+    "location": "Giza, Egypt"
+   },
+   {
+    "id": 563018698121432,
+    "displayJobId": "290830",
+    "name": "Sr. Infrastructure Security Specialist (VOIS)",
+    "locations": [
+     "Giza, Egypt"
+    ],
+    "postedTs": 1794217171,
+    "department": "Digital Workplace Solutions",
+    "workLocationOption": "hybrid",
+    "positionUrl": "/careers/job/563018698121432",
+    "location": "Giza, Egypt"
+   },
+   {
+    "id": 563018698352477,
+    "displayJobId": "292599",
+    "name": "Senior Full Stack Developer",
+    "locations": [
+     "Giza, Egypt"
+    ],
+    "postedTs": 1794215293,
+    "department": "ENTERPRISE BUSINESS UNIT",
+    "workLocationOption": "onsite",
+    "positionUrl": "/careers/job/563018698352477",
+    "location": "Giza, Egypt"
+   }
+  ]
+ }
+}

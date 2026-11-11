@@ -190,7 +190,7 @@ def test_a_site_still_reading_when_the_budget_ends_is_stamped_and_one_never_star
     it stays first in line."""
     stuck = threading.Event()
     monkeypatch.setitem(sources.companies.READERS, "rss", lambda company, api: [] if company == "Quick" or not stuck.wait(30) else [])
-    monkeypatch.setattr(sources.base, "STARTED", time.monotonic() + sources.companies.SITE_SECONDS + 1.5 - config.EXTRACT_SECONDS)
+    monkeypatch.setattr(sources.base, "STARTED", time.monotonic() + sources.companies.SITE_SECONDS + 1.5 - config.COMPANY_SECONDS)
     began = time.monotonic()
     names = ["Quick", "Slow 1", "Slow 2", "Slow 3", "Slow 4", "Never started"]  # 4 threads: Quick's frees one for Slow 4
     try:

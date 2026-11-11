@@ -1,0 +1,54 @@
+{
+ "items": [
+  {
+   "TotalJobsCount": 12,
+   "requisitionList": [
+    {
+     "Id": "7772",
+     "Title": "Senior Internal Auditor",
+     "PostedDate": "2026-11-09",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": ""
+    },
+    {
+     "Id": "10475",
+     "Title": "Internal Audit Manager B",
+     "PostedDate": "2026-11-08",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": "Manage a team of senior internal auditors and internal auditors in executing internal audit activities of an assigned function or project as per the Internal Audit & Support Director guidance.\nDevelop and execute adequate and comprehensive internal audit programs as per OCI standards and the pre-defined schedules and ensure the reliability and proper implementation of current policies and procedures.\n"
+    },
+    {
+     "Id": "14266",
+     "Title": "Construction Manager A - Electrical",
+     "PostedDate": "2026-11-03",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": ""
+    },
+    {
+     "Id": "14269",
+     "Title": "Project Director",
+     "PostedDate": "2026-11-03",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": ""
+    },
+    {
+     "Id": "14267",
+     "Title": "Project Manager",
+     "PostedDate": "2026-11-03",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": ""
+    }
+   ]
+  }
+ ]
+}

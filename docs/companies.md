@@ -80,7 +80,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Microsoft | [apply.careers.microsoft.com](https://apply.careers.microsoft.com/careers?location=Egypt) | careers page (platform found on the first read) |  |
 | MNT-Halan | [jobs.halan.com](https://jobs.halan.com/) | careers page (platform found on the first read) |  |
 | Mondelez | [wd3.myworkdaysite.com](https://wd3.myworkdaysite.com/recruiting/mdlz/External?locationCountry=d865e83093ad42319653b08e61f7db49) | careers page (platform found on the first read) |  |
-| MoneyFellows | [www.moneyfellows.com](https://www.moneyfellows.com/en-us/career-details-page/) | careers page (platform found on the first read) |  |
+| MoneyFellows | [moneyfellows.pinpointhq.com](https://moneyfellows.pinpointhq.com/) | careers page (platform found on the first read) |  |
 | Mountain View | [www.mountainviewegypt.com](https://www.mountainviewegypt.com/careers) | careers page (platform found on the first read) |  |
 | Mylerz | [www.mylerz.com](https://www.mylerz.com/career) | careers page (platform found on the first read) |  |
 | National Bank of Egypt | [nbe.taleo.net](https://nbe.taleo.net/careersection/careersection/ex/jobsearch.ftl?lang=en) | Taleo page |  |
@@ -109,7 +109,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | SODIC | [www.sodic.com](https://www.sodic.com/careers) | careers page (platform found on the first read) |  |
 | SOUM (not starred) | [jobs.lever.co](https://jobs.lever.co/soum) | Lever, public API |  |
 | Sumerge | [apply.workable.com](https://apply.workable.com/sumerge-1/) | Workable, public API |  |
-| Sutherland | [www.jobs.sutherlandglobal.com](https://www.jobs.sutherlandglobal.com/job-results#/egypt) | careers page (platform found on the first read) |  |
+| Sutherland | [jobs.smartrecruiters.com](https://jobs.smartrecruiters.com/Sutherland) | SmartRecruiters, public API |  |
 | Swvl | [apply.workable.com](https://apply.workable.com/swvl/) | Workable, public API |  |
 | Sympl | [sympl.ai](https://sympl.ai/) | careers page (platform found on the first read) |  |
 | Synapse Analytics | [synapseanalytics.recruitee.com](https://synapseanalytics.recruitee.com/) | Recruitee, public API |  |
@@ -127,14 +127,14 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Valu | [careers.smartrecruiters.com](https://careers.smartrecruiters.com/ValU1) | SmartRecruiters, public API |  |
 | Vezeeta | [apply.workable.com](https://apply.workable.com/vezeeta/) | Workable, public API |  |
 | Visa | [visa.wd5.myworkdayjobs.com](https://visa.wd5.myworkdayjobs.com/Visa?locationCountry=d865e83093ad42319653b08e61f7db49) | Workday, through the 28,000-company feed |  |
-| Vodafone | [jobs.vodafone.com](https://jobs.vodafone.com/careers?location=Egypt) | careers page (platform found on the first read) |  |
+| Vodafone | [jobs.vodafone.com](https://jobs.vodafone.com/careers?location=Egypt&domain=vodafone.com) | careers page (platform found on the first read) |  |
 | WE | [www.te.eg](https://www.te.eg/web/guest/about-te/careers-and-training/jobs) | careers page (platform found on the first read) |  |
 | Yodawy | [www.yodawy.com](https://www.yodawy.com/) | careers page (platform found on the first read) |  |
 | 34ML | [34ml.com](https://34ml.com/careers/) | careers page (platform found on the first read) |  |
 | ABS.AI | [absai.dev](https://absai.dev/en/careers) | careers page (platform found on the first read) |  |
 | AIM Technologies | [www.aimtechnologies.co](https://www.aimtechnologies.co/careers) | careers page (platform found on the first read) |  |
 | Brite | [gobrite.net](https://gobrite.net/careers/) | careers page (platform found on the first read) |  |
-| Convertedin | [careers.convertedin.com](https://careers.convertedin.com/jobs) | careers page (platform found on the first read) |  |
+| Convertedin | [careers.convertedin.com](https://careers.convertedin.com/jobs.rss) | careers page (platform found on the first read) |  |
 | Coral Technology | [www.thecoralplatform.com](https://www.thecoralplatform.com/careers) | careers page (platform found on the first read) |  |
 | div Systems | [teams.div-systems.com](https://teams.div-systems.com) | careers page (platform found on the first read) |  |
 | dKilo | [dkilo.com](https://dkilo.com/careers) | careers page (platform found on the first read) |  |
@@ -229,7 +229,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Homzmart | [careers.smartrecruiters.com](https://careers.smartrecruiters.com/Homzmart) | SmartRecruiters, public API | Egypt employer shortlist; SmartRecruiters 2026-11-09: 10 postings in Egypt (1 tech, 0 on your roles) |
 | Cequens | [apply.workable.com](https://apply.workable.com/cequens/) | Workable, public API | Egypt employer shortlist; its own site names this Workable board (API not asked: Workable answers 429 to the sandbox) |
 | Hugging Face (+ remote) | [apply.workable.com](https://apply.workable.com/huggingface/) | Workable, public API | remote-first shortlist; its own site names this Workable board (API not asked: Workable answers 429 to the sandbox) |
-| ArabyAds | [arabyads.com](https://arabyads.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
+| ArabyAds | [careers.arabyads.com](https://careers.arabyads.com/jobs.rss) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Credit Agricole Egypt | [ca-egypt.com](https://ca-egypt.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Dayra | [dayra.co](https://dayra.co/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Dsquares | [dsquares.com](https://dsquares.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
@@ -237,12 +237,12 @@ there, then run the script. The tracker's Companies page shows how each site was
 | HC Securities | [hc-si.com](https://hc-si.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Intcore | [intcore.com](https://intcore.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Kashier | [kashier.io](https://kashier.io/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
-| Luciq | [luciq.ai](https://luciq.ai/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
+| Luciq | [instabug.bamboohr.com](https://instabug.bamboohr.com/careers) | BambooHR, through the 28,000-company feed | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Lynks | [lynks.com](https://lynks.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Madinet Masr | [madinetmasr.com](https://madinetmasr.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Mostaql | [mostaql.com](https://mostaql.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Naeem Holding | [naeemholding.com](https://naeemholding.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
-| Orascom Construction | [orascom.com](https://orascom.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
+| Orascom Construction | [fa-esco-saasfaprod1.fa.ocs.oraclecloud.com](https://fa-esco-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs) | Oracle Cloud page | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Orascom Development | [orascomdh.com](https://orascomdh.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Pharco | [pharco.com](https://pharco.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | ShipBlu | [shipblu.com](https://shipblu.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |

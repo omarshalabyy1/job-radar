@@ -1,0 +1,161 @@
+{
+ "total": 6,
+ "jobPostings": [
+  {
+   "title": "Head of Sales and RTM - Egypt",
+   "externalPath": "/job/Cairo-Egypt/Head-of-Sales-and-RTM---Egypt_R-180896",
+   "locationsText": "Cairo, Egypt",
+   "postedOn": "Posted 12 Days Ago",
+   "bulletFields": [
+    "R-180896"
+   ]
+  },
+  {
+   "title": "Sr Analyst, SC Finance & External Manufacturing, MENAP",
+   "externalPath": "/job/Cairo-Egypt/Sr-Analyst--SC-Finance---External-Manufacturing--MENAP_R-178738-1",
+   "locationsText": "Cairo, Egypt",
+   "postedOn": "Posted 18 Days Ago",
+   "bulletFields": [
+    "R-178738"
+   ]
+  },
+  {
+   "title": "Perfect Store TT Manager",
+   "externalPath": "/job/Cairo-Egypt/Perfect-Store-TT-Manager_R-181629-1",
+   "locationsText": "Cairo, Egypt",
+   "postedOn": "Posted Today",
+   "bulletFields": [
+    "R-181629"
+   ]
+  },
+  {
+   "title": "Maintenance & Reliability Engineer, CTOR",
+   "externalPath": "/job/10th-Ramadan-Egypt/Maintenance---Reliability-Engineer--CTOR_R-179207",
+   "locationsText": "10th Ramadan, Egypt       ",
+   "postedOn": "Posted Today",
+   "bulletFields": [
+    "R-179207"
+   ]
+  }
+ ],
+ "facets": [
+  {
+   "facetParameter": "jobFamilyGroup",
+   "descriptor": "Function",
+   "values": [
+    {
+     "descriptor": "Manufacturing",
+     "id": "05fb736b3afb01f13130b8e2af00bd1c",
+     "count": 2
+    },
+    {
+     "descriptor": "Sales",
+     "id": "05fb736b3afb01cd96cdbae2af00c51c",
+     "count": 2
+    },
+    {
+     "descriptor": "Finance",
+     "id": "05fb736b3afb01b93594b4e2af00b31c",
+     "count": 1
+    },
+    {
+     "descriptor": "Product Quality, Safety and Compliance",
+     "id": "05fb736b3afb01ef5112bae2af00c31c",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "facetParameter": "workerSubType",
+   "descriptor": "Job Type",
+   "values": [
+    {
+     "descriptor": "Regular",
+     "id": "05fb736b3afb01b1cf5af54ab8003484",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "facetParameter": "timeType",
+   "descriptor": "Time Type",
+   "values": [
+    {
+     "descriptor": "Full time",
+     "id": "2f93c8d6eb7901c8136961a1e3115a00",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "facetParameter": "locationMainGroup",
+   "values": [
+    {
+     "facetParameter": "locationHierarchy1",
+     "descriptor": "Region",
+     "values": [
+      {
+       "descriptor": "Asia, Middle East & Africa",
+       "id": "05fb736b3afb01942fb4ab10b800d57f",
+       "count": 6
+      }
+     ]
+    },
+    {
+     "facetParameter": "locationCountry",
+     "descriptor": "Country",
+     "values": [
+      {
+       "descriptor": "Egypt",
+       "id": "d865e83093ad42319653b08e61f7db49",
+       "count": 6
+      }
+     ]
+    },
+    {
+     "facetParameter": "locationRegionStateProvince",
+     "descriptor": "State/Province",
+     "values": [
+      {
+       "descriptor": "Alexandria",
+       "id": "c540e0e745464c60a38a302854ddc671",
+       "count": 1
+      },
+      {
+       "descriptor": "Cairo",
+       "id": "292e38e19a834a79864f0c3c6c3625af",
+       "count": 3
+      },
+      {
+       "descriptor": "Sharkia",
+       "id": "05ef9ca1c35848b18a8b1ff4d995558d",
+       "count": 2
+      }
+     ]
+    },
+    {
+     "facetParameter": "locations",
+     "descriptor": "Locations",
+     "values": [
+      {
+       "descriptor": "10th Ramadan, Egypt       ",
+       "id": "05fb736b3afb01eab80a6925b900ccee",
+       "count": 2
+      },
+      {
+       "descriptor": "Borg El Arab, Alexandria, Egypt",
+       "id": "05fb736b3afb01b9a2766a25b900d1ee",
+       "count": 1
+      },
+      {
+       "descriptor": "Cairo, Egypt",
+       "id": "05fb736b3afb01bdca546625b900c2ee",
+       "count": 3
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "userAuthenticated": false
+}

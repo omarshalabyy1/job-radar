@@ -1,0 +1,40 @@
+{
+ "hits": {
+  "total": {
+   "value": 2,
+   "relation": "eq"
+  },
+  "hits": [
+   {
+    "_id": "c6b7e3cd19ab0e5b97e50c771b465088cbd0b0edc4993a7a834537939f95b84b",
+    "_source": {
+     "language": "en",
+     "url": "https://careers.ibm.com/careers/JobDetail?jobId=140863",
+     "dcdate": "2026-11-08",
+     "title": "Data Engineer-Data Integration",
+     "entitled": "",
+     "field_keyword_05": "Egypt",
+     "field_keyword_08": "Data & Analytics",
+     "field_keyword_17": "Hybrid",
+     "field_keyword_18": "Professional",
+     "field_keyword_19": "Giza, EG"
+    }
+   },
+   {
+    "_id": "0db9ec28c8064262a4696b1dc309b3a89e2f6285a7e3a23ef5dc6dce04ddf2a2",
+    "_source": {
+     "language": "en",
+     "url": "https://careers.ibm.com/careers/JobDetail?jobId=139922",
+     "dcdate": "2026-11-05",
+     "title": "Senior MERN Cloud Full Stack Developer - Openshift",
+     "entitled": "",
+     "field_keyword_05": "Egypt",
+     "field_keyword_08": "Software Engineering",
+     "field_keyword_17": "",
+     "field_keyword_18": "Professional",
+     "field_keyword_19": "Giza, EG"
+    }
+   }
+  ]
+ }
+}

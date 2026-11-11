@@ -23,6 +23,7 @@ SEEN_DAYS = 30
 # fit waits for the next run.
 EXTRACT_SECONDS = 150
 DESCRIBE_SECONDS = 60
+COMPANY_SECONDS = 600  # extract_companies reads 238 career sites: 150 s left 35-49 of them, and 30 never read (audit 2026-11-10)
 # boards that only list a job; their own link is not where it is applied for
 BOARD_HOSTS = ("indeed.", "linkedin.", "bayt.", "tanqeeb.", "himalayas.", "adzuna.", "jooble.", "naukrigulf.", "gulftalent.")
 

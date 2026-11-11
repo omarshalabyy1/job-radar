@@ -1,0 +1,192 @@
+{
+ "data": [
+  {
+   "id": "196855",
+   "benefits_header": "Is This Role Right for You?",
+   "compensation": null,
+   "compensation_minimum": null,
+   "compensation_maximum": null,
+   "compensation_currency": null,
+   "compensation_frequency": null,
+   "compensation_visible": false,
+   "deadline_at": "2026-12-31T23:59:59+04:00",
+   "description": "   About Tabby     Tabby is a GCC based fast-growing financial technology company. We help people shop and pay more easily using flexible payment options like Buy Now, Pay Later. We work with major brands and support millions of customers across the region.     We’re also a financial company, please",
+   "employment_type": "full_time",
+   "employment_type_text": "Full Time",
+   "key_responsibilities_header": "What You’ll Do",
+   "reporting_to": "romans.solovjovs@tabby.ai",
+   "skills_knowledge_expertise_header": "What We Offer",
+   "title": "Customer Service Ambassador",
+   "url": "https://tabby.pinpointhq.com/en/postings/53c2f99c-2300-4c56-9b75-5cfe3569b263",
+   "path": "/en/postings/53c2f99c-2300-4c56-9b75-5cfe3569b263",
+   "workplace_type": "onsite",
+   "workplace_type_text": "Onsite",
+   "job": {
+    "id": "215121",
+    "requisition_id": "",
+    "department": {
+     "id": "49987",
+     "name": "Customer Support Ops"
+    },
+    "division": {
+     "id": "2430",
+     "name": "Customer Experience"
+    },
+    "structure_custom_group_one": {
+     "id": "5976",
+     "name": "Tabby",
+     "title": "Brand"
+    }
+   },
+   "location": {
+    "id": "25431",
+    "city": "Cairo",
+    "name": "Egypt",
+    "postal_code": "",
+    "province": "Egyt",
+    "street_address": ""
+   }
+  },
+  {
+   "id": "566436",
+   "benefits_header": "Job Benefits",
+   "compensation": null,
+   "compensation_minimum": null,
+   "compensation_maximum": null,
+   "compensation_currency": null,
+   "compensation_frequency": null,
+   "compensation_visible": false,
+   "deadline_at": null,
+   "description": "   Role Overview    We’re on the lookout for an Instructional Designer who can turn complex product changes into crystal-clear, agent-friendly training. You’ll work closely with Product, CX Ops, and Training teams to ensure agents are prepared for new features, policy changes, and process rollouts. ",
+   "employment_type": "full_time",
+   "employment_type_text": "Full Time",
+   "key_responsibilities_header": "Key Responsibilities",
+   "reporting_to": "mariam.aerabe@tabby.ai",
+   "skills_knowledge_expertise_header": "Skills, Knowledge & Expertise",
+   "title": "Instructional Designer ",
+   "url": "https://tabby.pinpointhq.com/en/postings/66e80c20-5f34-427f-a5df-69cee29e5125",
+   "path": "/en/postings/66e80c20-5f34-427f-a5df-69cee29e5125",
+   "workplace_type": "onsite",
+   "workplace_type_text": "Onsite",
+   "job": {
+    "id": "569101",
+    "requisition_id": "3079",
+    "department": {
+     "id": "49986",
+     "name": "Training and Quality"
+    },
+    "division": {
+     "id": "2430",
+     "name": "Customer Experience"
+    },
+    "structure_custom_group_one": {
+     "id": "5976",
+     "name": "Tabby",
+     "title": "Brand"
+    }
+   },
+   "location": {
+    "id": "25431",
+    "city": "Cairo",
+    "name": "Egypt",
+    "postal_code": "",
+    "province": "Egyt",
+    "street_address": ""
+   }
+  },
+  {
+   "id": "541833",
+   "benefits_header": "Job Benefits",
+   "compensation": null,
+   "compensation_minimum": null,
+   "compensation_maximum": null,
+   "compensation_currency": null,
+   "compensation_frequency": null,
+   "compensation_visible": true,
+   "deadline_at": null,
+   "description": "  BNPL businesses don't run on a single core system — they run on a chain of vendors: KYC providers doing identity checks in milliseconds, bureau data feeding underwriting decisions, processors moving money at checkout, and collections agencies chasing missed payments on our behalf. When any link in",
+   "employment_type": "full_time",
+   "employment_type_text": "Full Time",
+   "key_responsibilities_header": "Key Responsibilities",
+   "reporting_to": "abdullah.alkhattaf@tabby.sa",
+   "skills_knowledge_expertise_header": "Skills, Knowledge & Expertise",
+   "title": "Senior Analyst, Vendor Management",
+   "url": "https://tabby.pinpointhq.com/en/postings/c68f0e5e-0f9d-4700-a940-68897bb4ce9c",
+   "path": "/en/postings/c68f0e5e-0f9d-4700-a940-68897bb4ce9c",
+   "workplace_type": "onsite",
+   "workplace_type_text": "Onsite",
+   "job": {
+    "id": "546021",
+    "requisition_id": "2993",
+    "department": {
+     "id": "51056",
+     "name": "Risk Management"
+    },
+    "division": {
+     "id": "2438",
+     "name": "Risk & Credit"
+    },
+    "structure_custom_group_one": {
+     "id": "5976",
+     "name": "Tabby",
+     "title": "Brand"
+    }
+   },
+   "location": {
+    "id": "25430",
+    "city": "Riyadh",
+    "name": "KSA",
+    "postal_code": "",
+    "province": "Saudi Arabia",
+    "street_address": ""
+   }
+  },
+  {
+   "id": "602376",
+   "benefits_header": "Benefits:",
+   "compensation": null,
+   "compensation_minimum": null,
+   "compensation_maximum": null,
+   "compensation_currency": null,
+   "compensation_frequency": null,
+   "compensation_visible": false,
+   "deadline_at": null,
+   "description": "  Tabby creates financial freedom in the way people shop, earn and save by reshaping their relationship with money. Over 25 million users choose Tabby to stay in control of their spending and make the most out of their money.  The company’s flagship offering allows shoppers to split their payments o",
+   "employment_type": "full_time",
+   "employment_type_text": "Full Time",
+   "key_responsibilities_header": "What you will be doing",
+   "reporting_to": null,
+   "skills_knowledge_expertise_header": "What you will need",
+   "title": "Senior Marketing Analyst",
+   "url": "https://tabby.pinpointhq.com/en/postings/6bec2358-10bf-43ab-a764-1b6086921db5",
+   "path": "/en/postings/6bec2358-10bf-43ab-a764-1b6086921db5",
+   "workplace_type": "remote",
+   "workplace_type_text": "Fully remote",
+   "job": {
+    "id": "602162",
+    "requisition_id": null,
+    "department": {
+     "id": "76420",
+     "name": "Marketing, Analytics"
+    },
+    "division": {
+     "id": "2426",
+     "name": "Analytics"
+    },
+    "structure_custom_group_one": {
+     "id": "5976",
+     "name": "Tabby",
+     "title": "Brand"
+    }
+   },
+   "location": {
+    "id": "25231",
+    "city": "Belgrade",
+    "name": "Remote",
+    "postal_code": "/",
+    "province": "/",
+    "street_address": "/"
+   }
+  }
+ ]
+}
