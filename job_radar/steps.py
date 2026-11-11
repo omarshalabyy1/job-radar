@@ -31,7 +31,7 @@ from psycopg.types.json import Jsonb
 
 from . import fx, runlog, sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
-from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
+from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, COMPANY_SECONDS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
                      ROLE_LABEL, ROOT, SEEN_DAYS, WORK_DAYS,
                      NOT_REMOTE, SETTINGS, hidden_reason, in_reach, is_target, place_of, reasons, role_of, too_senior)
 from .digest import digest, send, subject
@@ -252,7 +252,7 @@ def extract_companies(conn) -> None:
     # and no batch starts once the step's time budget is nearly spent
     for start in range(0, len(queue), 50):
         batch = queue[start:start + 50]
-        if sources.time_left(EXTRACT_SECONDS) < 70:
+        if sources.time_left(COMPANY_SECONDS) < 70:
             print(f"extract_companies: time budget reached, {len(queue) - start} sites wait for the next run")
             left = len(queue) - start
             break

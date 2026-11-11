@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
+import ast
 import gzip
+import html
 import json
 import re
 import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, wait
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 
-from ..config import EXTRACT_SECONDS, HOME, ONSITE_PLACES, PHENOM_SEARCHES, PLACES, OUTPUT, place_of, role_of
-from .base import (CHALLENGE, SITE, Challenge, ERRORS, Held, duration, fetch, get, hold, rendered, request, retry_after, row,
-                   since, time_left, waiting)
+from ..config import COMPANY_SECONDS, HOME, ONSITE_PLACES, PHENOM_SEARCHES, PLACES, OUTPUT, place_of, role_of
+from .base import (CHALLENGE, SITE, Challenge, ERRORS, Held, duration, fetch, get, hold, rendered, request, retry_after, relative_date,
+                   row, since, time_left, waiting)
 
 
 PORTAL_FEED = "https://riley-dorrington.github.io/job-board-data/data/chunks"
@@ -38,7 +40,7 @@ def company_portals() -> list[dict]:
     def chunk(name: str) -> list[dict] | None:
         """One chunk's jobs in scope (None: too little time was left to start it). Filtered here, so its ~25,000
         jobs are freed at once instead of waiting in memory until the chunks before it are read."""
-        if time_left(EXTRACT_SECONDS) < CHUNK_SECONDS:
+        if time_left(COMPANY_SECONDS) < CHUNK_SECONDS:
             return None
         data = gzip.decompress(fetch("GET", f"{PORTAL_FEED}/{name}", timeout=CHUNK_SECONDS).content)
         return [row(j.get("ats", "portal").lower(), None, j["title"], j.get("company"), j["location"], j["url"],
@@ -63,7 +65,7 @@ def company_portals() -> list[dict]:
     # not `with`: its exit waits for every chunk, and a chunk still downloading when the budget ends is left behind
     pool = ThreadPoolExecutor(CHUNK_THREADS)
     futures = {pool.submit(chunk, name): name for name in todo}
-    done, _ = wait(futures, timeout=max(0, time_left(EXTRACT_SECONDS)))
+    done, _ = wait(futures, timeout=max(0, time_left(COMPANY_SECONDS)))
     pool.shutdown(wait=False, cancel_futures=True)
     found = {}
     for future in (f for f in futures if f in done):  # the feed's order
@@ -105,6 +107,8 @@ def company_sites(sites: list[tuple], threads: int = 4) -> tuple[list[dict], lis
         places = {HOME, "Remote"} if flags and flags[0] else {HOME}
         SITE.until = time.monotonic() + SITE_SECONDS  # every request and page wait of this site ends by then
         note = None
+        if platform == "page":  # detect() never runs again for a page: one stored before its platform had a reader is read by it now
+            platform, api = next(((p, m.group(1)) for p, pattern in ATS_PATTERNS if (m := re.search(pattern, url))), (platform, api))
         if platform in (None, "blocked", "forbidden", "unreachable"):
             try:
                 platform, api, note = detect(url)
@@ -131,7 +135,7 @@ def company_sites(sites: list[tuple], threads: int = 4) -> tuple[list[dict], lis
     # gave up on them every time (40 sites never read, 2026-10-11). One never started is left first in line.
     pool = ThreadPoolExecutor(threads)
     futures = {pool.submit(read, site): site for site in sites}
-    done, _ = wait(futures, timeout=max(0, time_left(EXTRACT_SECONDS) - SITE_SECONDS))
+    done, _ = wait(futures, timeout=max(0, time_left(COMPANY_SECONDS) - SITE_SECONDS))
     pool.shutdown(wait=False, cancel_futures=True)
     results = []
     for f in (f for f in futures if f in done):  # the sites' order
@@ -162,6 +166,13 @@ ATS_PATTERNS = [
     ("recruitee", r"\b(?!www\.|app\.|api\.)([\w-]+)\.recruitee\.com"),
     ("personio", r"\b([\w-]+)\.jobs\.personio\.(?:de|com)"),
     ("teamtailor", r"\b(?!www\.|app\.|api\.|career\.)([\w-]+)\.teamtailor\.com"),
+    ("pinpoint", r"\b(?!www\.|app\.)([\w-]+)\.pinpointhq\.com"),
+    ("zoho", r"(https://[\w-]+\.zohorecruit\.com/jobs/\w+)"),
+    ("taleo", r"(https://[\w-]+\.taleo\.net/careersection/[\w-]+)/(?:jobsearch|joblist)\.ftl"),
+    ("workday", r"(https://[\w.-]+\.myworkdaysite\.com/recruiting/[\w-]+/[\w-]+)"),
+    ("oracle_hcm", r"(https://[\w.-]+/hcmUI/CandidateExperience/\w+/sites/[\w-]+/jobs[^\s\"'<>#]*)"),
+    ("eightfold", r"(https://[\w.-]+/careers\?[^\s\"'<>#]*\bdomain=[\w.-]+[^\s\"'<>#]*)"),
+    ("ibm", r"(https://www\.ibm\.com/careers/search[^\s\"'<>#]*)"),
 ]
 
 
@@ -199,6 +210,8 @@ def detect(url: str) -> tuple[str, str | None, str | None]:
     if re.search(r"jobTitle-link|rmkcdn|successfactors", page):
         return "successfactors", f"{parts.scheme}://{parts.netloc}", None
     if page.lstrip()[:200].startswith(("<?xml", "<rss")):
+        if "teamtailor.com/locations" in page:  # a Teamtailor site on its own domain (careers.<company>.com)
+            return "teamtailor", parts.netloc, None
         return "rss", url, None
     try:  # a job board its JavaScript loads (an embedded Greenhouse or Workable list ...)
         page = rendered(url)
@@ -209,6 +222,7 @@ def detect(url: str) -> tuple[str, str | None, str | None]:
     for platform, pattern in ATS_PATTERNS:
         if m := re.search(pattern, page):
             return platform, m.group(1), None
+    SITE.page = (url, page)  # career_page reads this very page: rendering it twice used the site's whole minute
     return "page", url, None
 
 
@@ -296,7 +310,7 @@ def teamtailor(company: str, slug: str) -> list[dict]:
     countries, and whether it is done remotely (fully) or hybrid."""
     locations = "{https://teamtailor.com/locations}"
     rows = []
-    for item in ET.fromstring(get(f"https://{slug}.teamtailor.com/jobs.rss").content).iter("item"):
+    for item in ET.fromstring(get(f"https://{slug if '.' in slug else slug + '.teamtailor.com'}/jobs.rss").content).iter("item"):
         title = (item.findtext("title") or "").strip()
         places = [", ".join(filter(None, [(l.findtext(locations + "city") or "").strip(), (l.findtext(locations + "country") or "").strip()]))
                   for l in item.iter(locations + "location")]
@@ -330,16 +344,30 @@ def personio(company: str, slug: str) -> list[dict]:
 def career_page(company: str, url: str) -> list[dict]:
     """A careers page on no known platform, rendered with Playwright: every link on it whose words
     are one of the roles, in a place its title or the text around it names (a job naming no place
-    is left out: many of your companies hire abroad too)."""
-    soup = BeautifulSoup(rendered(url), "html.parser")
+    is left out: many of your companies hire abroad too, unless the page names no place at all: then its jobs are the
+    company's own, in Egypt)."""
+    kept, SITE.page = getattr(SITE, "page", None), None
+    soup = BeautifulSoup(kept[1] if kept and kept[0] == url else rendered(url), "html.parser")
+    anywhere = place_of(soup.get_text(" ", strip=True))
     rows, urls = [], set()
     for a in soup.find_all("a", href=True):
         title, job_url = a.get_text(" ", strip=True), urljoin(url, a["href"])
-        context = a.parent.get_text(" ", strip=True) if a.parent else ""
-        if role_of(title) and place_of(context) and job_url not in urls:
+        if not role_of(title) or re.search(r"/(?:category|tag)/", job_url):  # a category of a blog is not a job
+            continue
+        context, card = "", a
+        for _ in range(3):  # the link's parent, or the card around it when the place sits beside the link (not a long list)
+            card = card.parent
+            text = card.get_text(" ", strip=True) if card else ""
+            if card is None or card.name in ("body", "html", "[document]") or (context and len(text) > 400):
+                break
+            context = text
+            if place_of(context):
+                break
+        place = place_of(context) or (None if anywhere else HOME)
+        if place and job_url not in urls:
             urls.add(job_url)
             # the place its text names, not the text: Capgemini's link text is title, city and team in one line
-            rows.append(row(company.lower(), None, title, company, place_of(context), job_url,
+            rows.append(row(company.lower(), None, title, company, place, job_url,
                             None, None, {"title": title, "context": context[:500]}))
     return rows
 
@@ -415,6 +443,165 @@ def rss(company: str, feed: str) -> list[dict]:
     return rows
 
 
+def pinpoint(company: str, slug: str) -> list[dict]:
+    """Every open job of a company on Pinpoint, through its public postings.json."""
+    rows = []
+    for j in get(f"https://{slug}.pinpointhq.com/postings.json").json()["data"]:
+        where = j.get("location") or {}
+        location = ", ".join(filter(None, [where.get("city"), where.get("province"), where.get("name")]))
+        if role_of(j["title"]) and place_of(location):
+            rows.append(row(company.lower(), None, j["title"].strip(), company, location, j["url"], None,
+                            BeautifulSoup(j.get("description") or "", "html.parser").get_text(" ", strip=True) or None, j))
+    return rows
+
+
+def oracle_hcm(company: str, url: str) -> list[dict]:
+    """Every open job of a company on Oracle Recruiting (a careers address ending /sites/<site>/jobs), newest first,
+    through its requisitions API: 50 a page, at most 5 pages. The address's own locationId (a country) is asked for."""
+    parts = urlsplit(html.unescape(url))
+    language, site = re.search(r"/CandidateExperience/(\w+)/sites/([\w-]+)", parts.path).groups()
+    location_id = (parse_qs(parts.query).get("locationId") or [None])[0]
+    rows, seen = [], set()
+    for offset in range(0, 250, 50):
+        finder = f"findReqs;siteNumber={site},limit=50,offset={offset},sortBy=POSTING_DATES_DESC" + (f",locationId={location_id}" if location_id else "")
+        item = fetch("GET", f"https://{parts.netloc}/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+                            f"?onlyData=true&expand=requisitionList&finder={finder}").json()["items"][0]
+        for j in item.get("requisitionList") or []:
+            location = (j.get("PrimaryLocation") or "") + (" (remote)" if "remote" in (j.get("WorkplaceType") or "").lower() else "")
+            if j["Id"] not in seen and role_of(j["Title"]) and place_of(location):
+                seen.add(j["Id"])
+                rows.append(row(company.lower(), None, j["Title"], company, location,
+                                f"https://{parts.netloc}/hcmUI/CandidateExperience/{language}/sites/{site}/job/{j['Id']}",
+                                j.get("PostedDate"), BeautifulSoup(j.get("ShortDescriptionStr") or "", "html.parser").get_text(" ", strip=True) or None, j))
+        if offset + 50 >= (item.get("TotalJobsCount") or 0):
+            break
+    return rows
+
+
+def eightfold(company: str, url: str) -> list[dict]:
+    """An Eightfold career site (Vodafone): its jobs of the address's location, newest first, 10 a page, through its
+    search API (the address names its tenant: ...?location=Egypt&domain=vodafone.com)."""
+    parts = urlsplit(html.unescape(url))
+    query, rows, start = parse_qs(parts.query), [], 0
+    while start < 100:
+        data = fetch("GET", f"{parts.scheme}://{parts.netloc}/api/pcsx/search?" + urlencode(
+            {"domain": query["domain"][0], "location": (query.get("location") or [""])[0], "start": start, "sort_by": "timestamp"})).json()["data"]
+        for p in data.get("positions") or []:
+            location = p.get("location") or ", ".join(p.get("locations") or [])
+            if p.get("workLocationOption") in ("remote", "hybrid"):
+                location += f" ({p['workLocationOption']})"
+            if role_of(p["name"]) and place_of(location):
+                posted = str(datetime.fromtimestamp(p["postedTs"], timezone.utc).date()) if p.get("postedTs") else None
+                rows.append(row(company.lower(), None, p["name"], company, location, f"{parts.scheme}://{parts.netloc}{p['positionUrl']}",
+                                posted, None, p))
+        start += 10
+        if start >= (data.get("count") or 0):
+            break
+    return rows
+
+
+def ibm(company: str, url: str) -> list[dict]:
+    """IBM's jobs in the country its careers address names (field_keyword_05[0]=Egypt), newest first, through the search API
+    its careers page asks (the page builds its list in the browser): 30 a page, at most 5 pages."""
+    country = (parse_qs(urlsplit(html.unescape(url)).query).get("field_keyword_05[0]") or ["Egypt"])[0]
+    rows = []
+    for start in range(0, 150, 30):
+        filter_ = {"term": {"field_keyword_05": country}}
+        data = fetch("POST", "https://www-api.ibm.com/search/api/v2", headers={"Accept": "application/json"}, json={
+            "appId": "careers", "scopes": ["careers2"], "query": {"bool": {"must": [filter_]}}, "post_filter": filter_,
+            "size": 30, "from": start, "sort": [{"dcdate": "desc"}, {"_score": "desc"}], "lang": "zz", "localeSelector": {},
+            "sm": {"query": "", "lang": "zz"},
+            "_source": ["title", "url", "description", "dcdate", "field_keyword_05", "field_keyword_17"]}).json()["hits"]
+        for hit in data["hits"]:
+            j = hit["_source"]
+            location = j.get("field_keyword_05", "") + (f" ({j['field_keyword_17'].lower()})" if j.get("field_keyword_17") in ("Hybrid", "Remote") else "")
+            if role_of(j["title"]) and place_of(location):
+                rows.append(row(company.lower(), None, j["title"], company, location, j["url"], j.get("dcdate"), j.get("description"), j))
+        if start + 30 >= data["total"]["value"]:
+            break
+    return rows
+
+
+def zoho(company: str, url: str) -> list[dict]:
+    """Every open job of a company on Zoho Recruit: its careers page carries them as JSON in one input (id=jobs)."""
+    box = BeautifulSoup(get(url).text, "html.parser").find("input", id="jobs")
+    if box is None:
+        raise ValueError(f"{url}: its page no longer carries the jobs input")
+    rows = []
+    for j in json.loads(box["value"]):
+        location = ", ".join(filter(None, [j.get("City"), j.get("Country")]))
+        if j.get("Publish") and role_of(j["Posting_Title"]) and place_of(location):
+            rows.append(row(company.lower(), None, j["Posting_Title"], company, location, f"{url}/{j['id']}", j.get("Date_Opened"),
+                            BeautifulSoup(j.get("Job_Description") or "", "html.parser").get_text(" ", strip=True) or None, j))
+    return rows
+
+
+def taleo(company: str, base: str) -> list[dict]:
+    """Every open job of a company on Taleo (base: https://<host>/careersection/<section>), newest first, through its REST
+    search, 25 a page, at most 8 pages. The portal id it asks with is in the section's search page. A classic section with
+    no REST search (e& Egypt: no portal id) lists its newest 100 jobs in that page itself: they are read from there."""
+    host = base.split("/careersection/")[0]
+    page = get(f"{base}/jobsearch.ftl", lang="en", dropListSize=100).text
+    portal = re.search(r"portal(?:No)?[=:]\s*'?(\d{6,})", page)
+    if not portal:
+        if listed := re.search(r"api\.fillList\('requisitionListInterface', 'listRequisition', (\[.*?\])\);", page, re.S):
+            return taleo_classic(company, base, ast.literal_eval(listed.group(1)))
+        raise ValueError(f"{base}: its search page names no portal id")
+    rows, seen = [], set()
+    for number in range(1, 9):
+        body = {"multilineEnabled": False, "sortingSelection": {"sortBySelectionParam": "3", "ascendingSortingOrder": "false"},
+                "fieldData": {"fields": {"KEYWORD": "", "LOCATION": ""}, "valid": True},
+                "filterSelectionParam": {"searchFilterSelections": []},
+                "advancedSearchFiltersSelectionParam": {"searchFilterSelections": []}, "pageNo": number}
+        data = fetch("POST", f"{host}/careersection/rest/jobboard/searchjobs?lang=en&portal={portal.group(1)}", json=body,
+                     headers={"Accept": "application/json", "tz": "GMT+02:00", "X-Requested-With": "XMLHttpRequest"}).json()
+        for j in data.get("requisitionList") or []:
+            title, places = j["column"][0].strip(), json.loads(j["column"][1]) if len(j["column"]) > 1 else []
+            location = places[0] if places else ""
+            if j["contestNo"] not in seen and role_of(title) and place_of(location):
+                seen.add(j["contestNo"])
+                rows.append(row(company.lower(), None, title, company, location, f"{base}/jobdetail.ftl?job={j['contestNo']}",
+                                None, None, j))
+        paging = data.get("pagingData") or {}
+        if number * (paging.get("pageSize") or 25) >= (paging.get("totalCount") or 0):
+            break
+    return rows
+
+
+def taleo_classic(company: str, base: str, fields: list[str]) -> list[dict]:
+    """A classic Taleo page's job list: 35 fields a job (3: its number, 4: its title, URL-encoded, 13: posted, 09/Nov/2026).
+    It names no place: the section is the company's own in Egypt (e& Egypt), so HOME, as for SuccessFactors."""
+    rows = []
+    for i in range(0, len(fields) - 34, 35):
+        number, title, posted = fields[i + 3], unquote(fields[i + 4]).strip(), fields[i + 13]
+        if role_of(title):
+            day = datetime.strptime(posted, "%d/%b/%Y").date().isoformat() if posted else None
+            rows.append(row(company.lower(), None, title, company, HOME, f"{base}/jobdetail.ftl?job={number}", day, None,
+                            {"contestNo": number}))
+    return rows
+
+
+def workday(company: str, base: str) -> list[dict]:
+    """A company's jobs in Egypt on a Workday site whose address is on myworkdaysite.com (the myworkdayjobs.com ones come
+    through the 28,000-company feed), through its cxs search, 20 a page, at most 10 pages."""
+    host, tenant, site = re.match(r"https://([\w.-]+)/recruiting/([\w-]+)/([\w-]+)", base).groups()
+    rows = []
+    for offset in range(0, 200, 20):
+        data = fetch("POST", f"https://{host}/wday/cxs/{tenant}/{site}/jobs", headers={"Accept": "application/json"},
+                     json={"appliedFacets": {}, "limit": 20, "offset": offset, "searchText": "Egypt"}).json()
+        for j in data.get("jobPostings") or []:
+            location = " ".join((j.get("locationsText") or "").split())
+            if role_of(j["title"]) and place_of(location):
+                ago = j.get("postedOn", "").lower().replace("posted", "").strip()
+                posted = date.today() if ago == "today" else relative_date(ago)
+                rows.append(row(company.lower(), None, j["title"], company, location, base + j["externalPath"],
+                                str(posted) if posted else None, None, j))
+        if offset + 20 >= (data.get("total") or 0):
+            break
+    return rows
+
+
 READERS = {"workable": workable, "greenhouse": greenhouse, "lever": lever, "ashby": ashby, "phenom": phenom,
            "smartrecruiters": smartrecruiters, "recruitee": recruitee, "personio": personio, "teamtailor": teamtailor,
-           "successfactors": successfactors, "successfactors_classic": successfactors_classic, "rss": rss, "page": career_page}
+           "successfactors": successfactors, "successfactors_classic": successfactors_classic, "rss": rss, "page": career_page,
+           "pinpoint": pinpoint, "oracle_hcm": oracle_hcm, "eightfold": eightfold, "zoho": zoho, "taleo": taleo, "workday": workday, "ibm": ibm}

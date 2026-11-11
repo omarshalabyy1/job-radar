@@ -1,0 +1,54 @@
+{
+ "items": [
+  {
+   "TotalJobsCount": 85,
+   "requisitionList": [
+    {
+     "Id": "159",
+     "Title": "Raya Returnship Program 2027",
+     "PostedDate": "2026-11-08",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": ""
+    },
+    {
+     "Id": "160",
+     "Title": "Head (Investments & Investor Relations)",
+     "PostedDate": "2026-11-08",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": ""
+    },
+    {
+     "Id": "157",
+     "Title": "Executive (Personnel)",
+     "PostedDate": "2026-11-08",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": "Executive (Personnel)"
+    },
+    {
+     "Id": "161",
+     "Title": "Senior Executive (Customer Experience)",
+     "PostedDate": "2026-11-08",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": "Raya Auto is seeking a Senior Executive (Customer Experience) to support customer relationship management activities, handle customer inquiries and follow up on customer requests to ensure a smooth and positive customer experience. Candidates should have previous experience in the automotive industry or call center operations."
+    },
+    {
+     "Id": "156",
+     "Title": "Head (Operations)",
+     "PostedDate": "2026-11-05",
+     "PrimaryLocation": "Egypt",
+     "PrimaryLocationCountry": "EG",
+     "WorkplaceType": "",
+     "ShortDescriptionStr": ""
+    }
+   ]
+  }
+ ]
+}

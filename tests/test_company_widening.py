@@ -110,7 +110,7 @@ def test_sites_left_for_time_are_counted_and_are_first_in_line_next_run(conn, mo
     for i in range(3):
         conn.execute("INSERT INTO core.company (company, careers_url, platform) VALUES (%s, %s, 'greenhouse')",
                      (f"zz late {i}", f"https://test.example/late{i}"))
-    monkeypatch.setattr(base, "STARTED", time.monotonic() - config.EXTRACT_SECONDS + 30)  # 30 s left: below the 70 s a batch needs
+    monkeypatch.setattr(base, "STARTED", time.monotonic() - config.COMPANY_SECONDS + 30)  # 30 s left: below the 70 s a batch needs
     monkeypatch.setattr(steps.sources, "company_sites", lambda sites, threads=4: pytest.fail("no batch may start"))
     steps.extract_companies(RolledBack(conn))
     line = next(l for l in capsys.readouterr().out.splitlines() if l.startswith("extract_companies: ") and " due, " in l)
