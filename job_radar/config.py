@@ -9,7 +9,7 @@ import yaml
 from dotenv import load_dotenv
 
 HOURS_OLD = 24  # every run looks back this far: a run after the laptop was asleep or off backfills the last day
-KEEP_DAYS = 5  # a job first seen longer ago is archived (core.job_archive) and deleted by transform, unless you noted or applied to it (Omar, 2026-10-29; was 30)
+KEEP_DAYS = 5  # a job posted (else first seen) longer ago is archived (core.job_archive) and deleted by transform, unless you noted or applied to it (Omar, 2026-10-29; was 30)
 # the AI steps (eligibility, embed, grade), the descriptions shared between postings and the raw postings look back
 # this far: a job is judged once, in its first days; raw postings not seen again for this long are deleted
 WORK_DAYS = 5
@@ -21,9 +21,11 @@ CLOSED_AFTER_DAYS = 2
 SEEN_DAYS = 30
 # Each extract step (Airflow runs them one by one) gets 150 seconds and describe 60; what does not
 # fit waits for the next run.
-EXTRACT_SECONDS = 150
-DESCRIBE_SECONDS = 60
+EXTRACT_SECONDS = 420  # Omar, 2026-11-10: every run reads everything, not a shallow slice (was 150)
+REREAD_HOURS = 1  # a site or board read in the last hour is not read again (a rerun right after a crash resumes); was 20: a run now reads all
+MARKET_SECONDS = 600  # extract_market: 157 active boards used the 150 s before any of the 377 candidates was read
 COMPANY_SECONDS = 600  # extract_companies reads 238 career sites: 150 s left 35-49 of them, and 30 never read (audit 2026-11-10)
+DESCRIBE_SECONDS = 300
 # boards that only list a job; their own link is not where it is applied for
 BOARD_HOSTS = ("indeed.", "linkedin.", "bayt.", "tanqeeb.", "himalayas.", "adzuna.", "jooble.", "naukrigulf.", "gulftalent.")
 
@@ -172,15 +174,18 @@ def is_target(company: str) -> bool:
     return re.search(TARGET_COMPANIES, company, re.I) is not None
 
 
-def hidden_reason(status: str, restriction: str | None, score, features: dict = FEATURES) -> str | None:
+def hidden_reason(status: str, restriction: str | None, score, features: dict = FEATURES, years=None) -> str | None:
     """Why the email and the tracker leave a job out, as the switches stand now, or None: only a job with no
     status of yours ('new'). Its restriction hides it with features.eligibility alone; 'score N' (3 or lower)
-    hides it with features.auto_hide and features.grade both on. Read at run time, so a switch turned off stops
+    hides it with features.auto_hide and features.grade both on; 'asks N+ years' hides it when it asks
+    experience.hide_min_years or more. Read at run time, so a switch turned off stops
     hiding on the next run and turned on hides again; the facts themselves (mart.job_status) are never changed."""
     if status != "new":
         return None
     if isinstance(restriction, str) and restriction and features["eligibility"]:  # pandas gives NaN for none
         return restriction
+    if years is not None and years == years and years >= EXPERIENCE["hide_min_years"]:  # years == years: not NaN
+        return f"asks {int(years)}+ years"
     if features["auto_hide"] and features["grade"] and score is not None and score == score and score <= 3:  # score == score: not NaN
         return f"score {int(score)}"
     return None

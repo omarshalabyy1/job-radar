@@ -60,7 +60,9 @@ def board(site: str, places: list[tuple]) -> list[dict]:
         logging.getLogger(f"JobSpy:{name}").addHandler(BLOCKED)
     rows = []
     for place, location, country in places:
-        for _, label, term, _ in ROLES:
+        for (_, label, term, _), role in zip(ROLES, SETTINGS["roles"]):
+            if site == "bayt":  # Bayt answers 0 to Indeed's "a" OR "b" term, every day, without an error
+                term = role["search"][0]
             if site in BLOCKED.boards or waiting(site):
                 print(f"{site}: held for {duration(waiting(site))} more, the rest waits")
                 return rows
@@ -93,21 +95,25 @@ def freehire() -> list[dict]:
     falsely refreshed. 1 second apart."""
     rows = []
     for keyword in KEYWORDS:
-        for where in ({"work_mode": "remote"}, {"countries": "eg"}):
+        # Egypt's jobs are dated to the day (midnight): at noon yesterday's is 36 hours old, so Egypt gets 3 days (a job stored
+        # is not stored twice)
+        for where in ({"work_mode": "remote"}, {"countries": "eg", "posted_within_days": 3}):
             if time_left(EXTRACT_SECONDS) < 15:
                 print("freehire: time budget reached, the rest waits for the next run")
                 return rows
             time.sleep(1)
             try:
-                jobs = get("https://freehire.me/api/v1/agent/jobs/search", q=keyword, limit=100, posted_within_days=1,
+                jobs = get("https://freehire.me/api/v1/agent/jobs/search", q=keyword, limit=100,
                            semantic_ratio=0, include_description="true", description_format="text",
-                           **where).json().get("data", [])
+                           **{"posted_within_days": 1, **where}).json().get("data", [])
             except Held as e:  # keep what the searches before it found
                 held("freehire", e)
                 return rows
             for j in jobs:
                 reality, mode = j.get("reality") or {}, j.get("work_mode") or ""
                 place_text = "Worldwide" if "global" in (j.get("regions") or []) else j.get("location") or ""
+                if "eg" in (j.get("countries") or []) and not place_of(place_text):  # "Almazah, EG": the countries say Egypt
+                    place_text = f"{place_text}, Egypt" if place_text else "Egypt"
                 location = f"{place_text} ({mode})" if mode else place_text
                 if (reality.get("class") == "fresh" and not reality.get("fake_freshness") and j.get("url")
                         and role_of(j.get("title") or "") and place_of(location)):
@@ -129,13 +135,17 @@ def jooble() -> list[dict]:
         keyword, (place, location, _) = args
         if time_left(EXTRACT_SECONDS) < 15:  # Indeed and Bayt came first in the same step
             return []
-        r = fetch("POST", f"https://jooble.org/api/{key}", json={"keywords": keyword, "location": location})
+        # "Remote" has no place of its own: its 30 jobs are the newest created, not the 7,000 most relevant
+        payload = {"keywords": keyword, "location": location, **({"datecreatedfrom": since()} if place == "Remote" else {})}
+        r = fetch("POST", f"https://jooble.org/api/{key}", json=payload)
         return [row("jooble", place, j["title"], j.get("company"), j.get("location"), j["link"],
                     (j.get("updated") or "")[:10], j.get("snippet"), j)
                 for j in r.json().get("jobs", []) if (j.get("updated") or "")[:10] >= since() and role_of(j["title"])]
 
     with ThreadPoolExecutor(4) as pool:
-        return [r for rows in pool.map(search, [(k, p) for k in KEYWORDS for p in PLACES]) for r in rows]
+        # Jooble has no remote filter, but its location "Remote" holds the remote jobs (most tied to the USA: the extract drops those)
+        return [r for rows in pool.map(search, [(k, p) for k in KEYWORDS for p in [*PLACES, ("Remote", "Remote", "")]])
+                for r in rows]
 
 
 def linkedin() -> list[dict]:

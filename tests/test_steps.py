@@ -529,8 +529,8 @@ def test_a_board_with_no_posting_for_7_days_is_a_warning_unless_it_is_empty_by_d
     quiet("zz_gave", 9)
     assert steps.drop_warning(rolled, "zz_gave", 3, 3) is None
     # the boards that always give none, and a company board, are named and left out
-    assert {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely", "relomote", "startup_jobs", "ycombinator", "jobicy", "wuzzuf", "tanqeeb", "gulftalent"} <= steps.EMPTY_BY_DESIGN
-    for board in ("remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely", "relomote", "startup_jobs", "ycombinator", "jobicy", "wuzzuf", "tanqeeb", "gulftalent", "greenhouse:acme"):
+    assert {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely", "relomote", "startup_jobs", "ycombinator", "jobicy"} <= steps.EMPTY_BY_DESIGN and not {"wuzzuf", "tanqeeb", "gulftalent"} & steps.EMPTY_BY_DESIGN
+    for board in ("remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely", "relomote", "startup_jobs", "ycombinator", "jobicy", "greenhouse:acme"):
         quiet(board, 9)
         assert steps.drop_warning(rolled, board, 0, 0) is None
     # a board that gave postings in the last 7 days keeps its own, older warning
@@ -684,16 +684,16 @@ def test_a_website_job_that_becomes_yours_is_new_from_that_day(conn):
 
 
 def test_a_career_site_read_yesterday_is_read_again_today(conn, monkeypatch):
-    """extract_companies (rolled back): a site checked 22 hours ago is due (the run is daily, and checked_at is stamped
-    after the step starts); one checked 10 hours ago (a second collect the same day) is not."""
-    for name, hours in (("zz due", 22), ("zz fresh", 10)):
-        conn.execute("INSERT INTO core.company (company, careers_url, checked_at) VALUES (%s, %s, now() - make_interval(hours => %s))",
-                     (name, f"https://test.example/{name}", hours))
+    """extract_companies (rolled back): every run reads every site (Omar, 2026-11-10): one checked 22 hours ago is due, and so is
+    one checked 10 hours ago; one checked 30 minutes ago (a rerun right after a crash) is not (config.REREAD_HOURS)."""
+    for name, minutes in (("zz due", 22 * 60), ("zz ten", 10 * 60), ("zz fresh", 30)):
+        conn.execute("INSERT INTO core.company (company, careers_url, checked_at) VALUES (%s, %s, now() - make_interval(mins => %s))",
+                     (name, f"https://test.example/{name}", minutes))
     asked = []
     monkeypatch.setattr(steps, "online", lambda: True)
     monkeypatch.setattr(steps.sources, "company_sites", lambda sites: asked.extend(s[0] for s in sites) or ([], []))
     steps.extract_companies(RolledBack(conn))
-    assert "zz due" in asked and "zz fresh" not in asked
+    assert "zz due" in asked and "zz ten" in asked and "zz fresh" not in asked
 
 
 def test_career_sites_are_counted_once_a_step_and_an_unchanged_portals_feed_is_not_silent(conn, monkeypatch, capsys):

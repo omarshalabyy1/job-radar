@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import re
 import time
@@ -12,7 +13,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from ..config import EXTRACT_SECONDS, KEYWORDS, RELOMOTE_PAGES, REMOTE_OPEN_TO, kept, place_of, role_of
+from ..config import EXTRACT_SECONDS, KEYWORDS, RELOMOTE_PAGES, REMOTE_OPEN_TO, SETTINGS, kept, place_of, role_of
 from .base import Held, changed, get, held, hold, relative_date, row, since, time_left, week
 
 
@@ -89,6 +90,67 @@ def remotive() -> list[dict]:
     hold("remotive.com", 6 * 3600)
     return remote_board("remotive", jobs, "title", "company_name", "candidate_required_location", "url",
                         "publication_date", "description")
+
+
+def inclusivelyremote() -> list[dict]:
+    """Inclusively Remote, through its WordPress REST API (job_listing, newest first, 100 a page): the company, where the
+    job is open ("Remote Jobs Worldwide", "Remote Jobs in Europe") and the employer's own apply link (payload apply_url)
+    are the site's own fields. Reads pages until one holds a job older than a week."""
+    fields = "id,date,link,title,content,metas"
+    jobs = []
+    for page in (1, 2, 3):
+        batch = get("https://inclusivelyremote.com/wp-json/wp/v2/job_listing", per_page=100, page=page, orderby="date",
+                    order="desc", _fields=fields).json()
+        for j in batch:
+            m = j.get("metas") or {}
+            places = m.get("_job_location") or {}
+            jobs.append({"id": j["id"], "title": html.unescape(j["title"]["rendered"]).replace(" ", " ").strip(),
+                         "company": m.get("_job_employer_name"), "where": ", ".join(places.values()) or "Worldwide",
+                         "url": j["link"], "date": j["date"], "apply_url": m.get("_job_apply_url"),
+                         "experience": m.get("_job_experience"), "career_level": m.get("_job_career_level"),
+                         "description": BeautifulSoup(j["content"]["rendered"], "html.parser").get_text(" ", strip=True)})
+        if not batch or min(j["date"][:10] for j in batch) < week():
+            break
+    return remote_board("inclusivelyremote", jobs, "title", "company", "where", "url", "date", "description")
+
+
+def hireeing(seen: set[str]) -> list[dict]:
+    """Hireeing (remote software and data jobs): the first list page of each of your roles' first search phrase
+    (/jobs?q=), then the page of each job not stored yet (`seen`) whose link words match your roles, read from its
+    JobPosting JSON-LD: remote (TELECOMMUTE), posted in the last week; the countries it names, else worldwide."""
+    urls = []
+    for role in SETTINGS["roles"]:
+        listing = get("https://hireeing.com/jobs", q=role["search"][0]).text
+        urls += [urljoin("https://hireeing.com", href) for href in re.findall(r'href="(/jobs/[^"]+)"', listing)]
+        time.sleep(1)
+    rows = []
+    for url in dict.fromkeys(urls):
+        words = re.sub(r"-[0-9a-f]{8}$", "", url.rsplit("/", 1)[1]).replace("-", " ")
+        if url in seen or not role_of(words):
+            continue
+        if time_left(EXTRACT_SECONDS) < 15:
+            print("hireeing: time budget reached, the rest waits for the next run")
+            break
+        try:
+            page = get(url).text
+        except Held as e:  # keep what the pages before it found
+            held("hireeing", e)
+            break
+        posting = next((p for p in (json.loads(b) for b in re.findall(r'ld\+json">(.*?)</script>', page, re.S))
+                        if isinstance(p, dict) and p.get("@type") == "JobPosting"), None)
+        if not posting:
+            changed("hireeing", f"no JobPosting data on {url}")
+            break
+        countries = [c.get("name") for c in posting.get("applicantLocationRequirements") or [] if c.get("name")]
+        location = f"{', '.join(countries) or 'Worldwide'} (remote)"
+        day = (posting.get("datePosted") or "")[:10]
+        if (posting.get("jobLocationType") == "TELECOMMUTE" and day >= week() and role_of(posting.get("title") or "")
+                and place_of(location)):
+            text = BeautifulSoup(posting.get("description") or "", "html.parser").get_text(" ", strip=True)
+            rows.append(row("hireeing", None, posting["title"], (posting.get("hiringOrganization") or {}).get("name"), location,
+                            url, day, text, {k: v for k, v in posting.items() if k != "description"}))
+        time.sleep(1)
+    return rows
 
 
 def unmojibake(text):

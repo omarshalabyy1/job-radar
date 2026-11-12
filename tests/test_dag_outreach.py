@@ -114,7 +114,7 @@ def test_the_dag_does_not_pick_the_mode_the_settings_do(monkeypatch, tmp_path, m
 
 
 def test_the_shipped_settings_leave_the_dags_idle():
-    assert SETTINGS["outreach"]["enabled"] is False and SETTINGS["outreach"]["mode"] == "dry_run"
+    assert SETTINGS["outreach"]["mode"] == "dry_run"  # enabled is true since 2026-11-10 (Omar: dry run on); only live sends
 
 
 # ---------------------------------------------------------------------------------------------------------------- the steps

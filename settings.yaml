@@ -19,26 +19,26 @@ schedule:
 
 # Each smart feature on or off (true / false). The pipeline follows on its next run; the tracker after `docker restart job-radar-tracker-1`.
 features:
-  grade: true               # Claude scores each job 0-10 against your CVs (model and daily cap: claude: below)
+  grade: false              # Claude scores each job 0-10 against your CVs (model and daily cap: claude: below)
   eligibility: true         # on: hide jobs someone living in Cairo cannot legally take: the eligibility step reads the board's own
                             # "who can apply" field (Daily Remote, Remotive, Jobicy ...; the extracts never store a job that field bars), else asks Claude Haiku (claude-haiku-5-5, jobs
                             # outside ai_places with a description); the tracker and the emails leave them out (Show hidden jobs shows them)
   auto_hide: true           # hide a job Claude scored 0-3 (needs grade on; a tracker toggle shows them); a restriction hides a job by eligibility alone
   top5: true                # "Top 5 today" at the top of each email
   follow_up: true           # "Follow up" reminders in the Egypt email
-  tailor: true              # draft CV, cover letter and notes for scores 8+
+  tailor: false             # draft CV, cover letter and notes for scores 8+
   track_applications: true  # read Gmail every hour for news on your applications
   manual_collect_emails: false  # false: only the 12pm collect (and its catch-up) sends the emails; a Trigger only fills the tracker
-  embeddings: true          # local Ollama vectors: how close each job is to your CV (CV match); a CV is embedded again only when it changed
-  follow_up_drafts: true    # draft a follow-up email (never sent) when an application is 7 or 14 days old with no answer
-  interview_prep: true      # draft interview notes when your mailbox shows an interview invite
+  embeddings: false         # local Ollama vectors: how close each job is to your CV (CV match); a CV is embedded again only when it changed
+  follow_up_drafts: false   # draft a follow-up email (never sent) when an application is 7 or 14 days old with no answer
+  interview_prep: false     # draft interview notes when your mailbox shows an interview invite
   market: true              # the website (Fennec): also keep every other tech job (any role, level and country) the sources
                             # bring, with in_scope false; your emails, grades, embeddings and tracker see only in_scope jobs
   market_harvest: true      # the website: also read every company board the other sources' postings link to (grows the
                             # boards waiting to be read, 40 a run; on since 2026-10-17)
   market_more: false        # the website: also every tech job of the remote boards' feeds (Jobicy, Arbeitnow, Remote OK,
                             # Working Nomads) and Germany's job agency (Bundesagentur); the last step of the growth
-  outreach_drafts: true     # draft a cold email (never sent) to a startup's founder for its roles scored 7+, when data/contacts.csv
+  outreach_drafts: false    # draft a cold email (never sent) to a startup's founder for its roles scored 7+, when data/contacts.csv
                             # has their email (output/outreach/); find them with python -m job_radar.research founders
 # The AI features (grade, tailor, embeddings) run on jobs in these places only. Egypt = Cairo/Giza
 # onsite and hybrid and Egypt's remote jobs. Add Remote, UAE ... to widen them.
@@ -110,7 +110,7 @@ search_words: [data engineer, analytics engineer, ETL developer, databricks, AI 
 linkedin:
   max_jobs: 50
   # a run that worked holds the next for this many hours: a manual collect the same day costs nothing
-  every_hours: 20
+  every_hours: 1
   words: [data engineer, AI engineer, BI developer, data analyst]
   places: {Egypt: Egypt, UAE: United Arab Emirates, Saudi Arabia: Saudi Arabia}
 
@@ -354,7 +354,7 @@ apply:
 # enabled is true AND mode is live; dry_run writes each email it would send to output/outreach/outbox/ and sends nothing. A file
 # output/outreach.stop also stops it. Omar's go: flip mode to live and enabled to true himself.
 outreach:
-  enabled: false            # the kill switch: false = nothing is written or sent
+  enabled: true             # the kill switch: false = nothing is written or sent (Omar, 2026-11-10: dry run on)
   mode: dry_run             # dry_run: write .eml files; live: send through Gmail (needs enabled: true as well)
   daily_total: 20           # emails a day (Cairo day), all mailboxes; a paused mailbox's share of this is removed, not moved
   per_mailbox: 10           # emails a day from one mailbox
@@ -442,6 +442,7 @@ experience:
   senior: [senior, sr, expert, iii, خبير*]
   entry_max_years: 1    # asks for this many years or fewer: entry and junior
   senior_min_years: 5   # asks for this many years or more: senior
+  hide_min_years: 5     # asks for this many years or more: hidden from the tracker and the emails (Omar's CV shows about 2)
 
 # The places, in the order the email lists them (after your home and Remote). A location takes the
 # first place whose words it has, so keep USA before Europe: "Vienna, Virginia" is the USA.

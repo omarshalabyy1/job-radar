@@ -129,7 +129,7 @@ def reply(sender, subject="Re: Late stock data", text="Thanks, let's talk.", at=
 
 def test_the_settings_ship_off_and_in_dry_run():
     s = config.SETTINGS["outreach"]
-    assert s["enabled"] is False and s["mode"] == "dry_run"
+    assert s["mode"] == "dry_run"  # enabled: true since 2026-11-10 (Omar: dry run on); only mode live sends
     assert (s["daily_total"], s["per_mailbox"], s["hourly"]) == (20, 10, 5)
     assert s["gap_minutes"] == [2, 10] and s["followup_days"] == [7, 14] and s["bounce_limit"] == 0.03
 

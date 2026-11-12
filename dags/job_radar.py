@@ -93,7 +93,7 @@ def alert(context) -> None:
                     str(ti.try_number)], cwd="/opt/job-radar", timeout=120, check=False)
 
 
-DEFAULTS = {"retries": 0, "execution_timeout": timedelta(seconds=240), "on_failure_callback": alert}
+DEFAULTS = {"retries": 0, "execution_timeout": timedelta(seconds=480), "on_failure_callback": alert}
 
 
 def step(name: str, **kwargs) -> BashOperator:
@@ -115,13 +115,15 @@ with DAG(
     # The paid ones (LinkedIn, Apify) are never retried: a retry would start a second paid run.
     extracts = [step(name, retries=2, retry_delay=timedelta(minutes=2))
                 for name in ("extract_boards", "extract_bayt", "extract_remote", "extract_startups", "extract_egypt",
-                             "extract_gulf", "extract_workable", "extract_freehire", "extract_companies", "extract_portals",
-                             "extract_market", "extract_email")]
+                             "extract_gulf", "extract_workable", "extract_freehire", "extract_portals",
+                             "extract_email")]
+    extracts.append(step("extract_companies", retries=2, retry_delay=timedelta(minutes=2), execution_timeout=timedelta(seconds=720)))  # 238 career sites, up to 600 s
+    extracts.append(step("extract_market", retries=2, retry_delay=timedelta(minutes=2), execution_timeout=timedelta(seconds=720)))  # 157 active boards, then the candidates, up to 600 s
     extracts.append(step("extract_linkedin", execution_timeout=timedelta(seconds=300)))  # one Apify run, up to 280 s
     extracts.append(step("extract_apify", execution_timeout=timedelta(seconds=1800)))  # the website's Apify boards, a run each
     step("schema", retries=2, retry_delay=timedelta(seconds=60)) >> extracts
-    matched = step("match_skills", trigger_rule="all_done")
-    extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=150)) >> matched
+    matched = step("match_skills", trigger_rule="all_done", execution_timeout=timedelta(seconds=1800))  # 12,000 jobs in the window since the market boards: 485 s was not enough (2026-11-10)
+    extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=420)) >> matched
     embedded = step("embed", trigger_rule="all_done", execution_timeout=timedelta(seconds=240))
     graded = step("grade_claude", trigger_rule="all_done", execution_timeout=timedelta(seconds=600))
     # Airflow emits an asset event only when its task succeeds: on a red grade_claude the emails would never start.

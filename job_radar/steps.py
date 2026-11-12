@@ -31,7 +31,7 @@ from psycopg.types.json import Jsonb
 
 from . import fx, runlog, sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
-from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, COMPANY_SECONDS, DESCRIBE_SECONDS, EXTRACT_SECONDS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
+from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, COMPANY_SECONDS, DESCRIBE_SECONDS, MARKET_SECONDS, EXTRACT_SECONDS, REREAD_HOURS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
                      ROLE_LABEL, ROOT, SEEN_DAYS, WORK_DAYS,
                      NOT_REMOTE, SETTINGS, hidden_reason, in_reach, is_target, place_of, reasons, role_of, too_senior)
 from .digest import digest, send, subject
@@ -97,8 +97,9 @@ def load(conn, name: str, rows: list[dict], wide: bool = False, record: bool = T
             "INSERT INTO raw.job_posting AS r (run_date, last_seen, source, searched_for, title, company, location, job_url,"
             " date_posted, description, payload) VALUES (current_date, current_date, %(source)s, %(searched_for)s, %(title)s,"
             " %(company)s, %(location)s, %(job_url)s, %(date_posted)s, %(description)s, %(payload)s)"
-            " ON CONFLICT (source, job_url) DO UPDATE SET last_seen = current_date"
-            " WHERE r.last_seen IS DISTINCT FROM current_date", clean)
+            " ON CONFLICT (source, job_url) DO UPDATE SET last_seen = current_date,"
+            " location = coalesce(nullif(r.location, ''), EXCLUDED.location)"  # a location read later fills an empty one, never replaces
+            " WHERE r.last_seen IS DISTINCT FROM current_date OR (coalesce(r.location, '') = '' AND coalesce(EXCLUDED.location, '') <> '')", clean)
     conn.commit()
     new = conn.execute(count, (names,)).fetchone()[0] - before
     print(f"{name}: {rows_in} postings, {new} new" + (f", {barred} not for Egypt dropped" if barred else ""))
@@ -118,11 +119,10 @@ SILENT_DAYS = 7  # days in a row with no posting at all, since its last, before 
 # Relomote and startup.jobs answered 403 (held 6 hours, sources/base.py) when checked 2026-11-08: Omar chose not to watch them
 # either. Each refusal still prints its own "WARNING <host> answered 403: held" line every run, so a block is not silent.
 # Y Combinator (its pages hold 36 jobs, mostly old, 1 posting in scope on 2026-11-08) and Jobicy (its role matches are
-# tied to the USA or Europe, checked 2026-11-08) are Omar's choice too (2026-11-08), and so is Wuzzuf, Egypt's own board:
-# a dead Wuzzuf stays visible only through its "0 postings today, N in the last 7 days" warning and its own error lines.
-# Tanqeeb, Egypt's job aggregator, likewise (Omar, 2026-11-08), and GulfTalent, a Gulf board like the other two.
+# tied to the USA or Europe, checked 2026-11-08) are Omar's choice too (2026-11-08). Wuzzuf, Tanqeeb and GulfTalent were on this
+# list too; Omar asked on 2026-11-10 that every source be verified, so a dead one now warns (Egypt's own boards never go silent).
 EMPTY_BY_DESIGN = {"remoteco", "dubizzle", "naukrigulf", "remotive", "workingnomads", "arbeitnow", "weworkremotely",
-                   "relomote", "startup_jobs", "ycombinator", "jobicy", "wuzzuf", "tanqeeb", "gulftalent"}
+                   "relomote", "startup_jobs", "ycombinator", "jobicy"}
 
 
 def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = True) -> str | None:
@@ -200,8 +200,14 @@ def extract_remote(conn) -> None:
     def remoteco():
         return sources.remoteco(seen)
 
+    seen_hireeing = {url for (url,) in conn.execute("SELECT job_url FROM raw.job_posting WHERE source = 'hireeing'")}
+
+    def hireeing():
+        return sources.hireeing(seen_hireeing)
+
     extract(conn, sources.himalayas, sources.weworkremotely, sources.relomote, sources.remotive, sources.remoteok,
-            sources.jobicy, sources.workingnomads, sources.arbeitnow, sources.dailyremote, remoteco)
+            sources.jobicy, sources.workingnomads, sources.arbeitnow, sources.dailyremote, sources.inclusivelyremote,
+            remoteco, hireeing)
 
 
 def extract_startups(conn) -> None:
@@ -242,7 +248,7 @@ def extract_companies(conn) -> None:
     sites = conn.execute(
         "SELECT company, careers_url, platform, api, remote FROM core.company WHERE coalesce(careers_url, '') <> ''"
         " AND platform IS DISTINCT FROM 'covered'"
-        " AND (checked_at IS NULL OR checked_at < now() - interval '20 hours')"
+        f" AND (checked_at IS NULL OR checked_at < now() - interval '{REREAD_HOURS} hours')"
         " ORDER BY checked_at NULLS FIRST").fetchall()
     slow = [s for s in sites if sources.companies.needs_browser(s[2], s[1])]
     queue = [(s, sources.companies.FAST_THREADS) for s in sites if s not in slow] + [(s, 4) for s in slow]
@@ -302,7 +308,7 @@ def company_outcome(platform: str | None, note: str | None) -> str:
     return "read"
 
 
-MARKET_BOARDS = 40  # boards read a run, oldest read first: grown step by step (Omar, 2026-10-17: 20, then 40; watch time and RAM)
+MARKET_BOARDS = 500  # boards read a run, active first then oldest read: all 157 active and the candidates fit MARKET_SECONDS (Omar, 2026-11-10: was 40, left 394 candidates never read)
 
 
 def extract_market(conn) -> None:
@@ -335,12 +341,12 @@ def extract_market(conn) -> None:
                 print(f"WARNING extract_market {source.__name__}: {e!r}"[:300])
     boards = conn.execute(
         "SELECT ats, token, coalesce(company, initcap(replace(token, '-', ' '))) FROM core.board WHERE status <> 'dead'"
-        " AND (checked_at IS NULL OR checked_at < now() - interval '20 hours')"
+        f" AND (checked_at IS NULL OR checked_at < now() - interval '{REREAD_HOURS} hours')"
         " ORDER BY status = 'active' DESC, checked_at NULLS FIRST, ats, token LIMIT %s", (MARKET_BOARDS,)).fetchall()
     conn.commit()
     read = failed = 0
     for ats, token, company in boards:
-        if sources.time_left(EXTRACT_SECONDS) < 20:
+        if sources.time_left(MARKET_SECONDS) < 20:
             print(f"extract_market: time budget reached, {len(boards) - read - failed} boards wait for the next run")
             break
         try:
@@ -691,21 +697,30 @@ def transform(conn) -> None:
             cur, "first_seen >= current_date - %s AND emailed_at IS NULL AND job_key <> ALL(%s)"
                  " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)",
             (DAYS, list(jobs)), "out of scope")
-        kept = (" AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)"
-                # a job with a deadline not done yet and not past stays, or the deadline would lose its job
-                # (mart.job_status's fresh_level 6 says the same)
-                " AND NOT EXISTS (SELECT 1 FROM core.deadline d WHERE d.job_id = j.job_id AND NOT d.done AND d.due >= current_date)")
+        # a job with a deadline not done yet and not past stays, or the deadline would lose its job
+        # (mart.job_status's fresh_level 6 says the same)
+        deadline = " AND NOT EXISTS (SELECT 1 FROM core.deadline d WHERE d.job_id = j.job_id AND NOT d.done AND d.due >= current_date)"
+        kept = " AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)" + deadline
+        # a save Claude made by itself (tailor's 'draft ready', the skill's 'tailored') is no action of yours: that job ages
+        # out like any other, or a closed posting stays in your lists for good (Goodwork's, 31 days old, 2026-11-09)
+        auto = "a.status = 'saved' AND (coalesce(a.note, '') LIKE 'draft ready%%' OR coalesce(a.note, '') LIKE 'tailored %%')"
+        acted_on = f" AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id AND NOT ({auto}))" + deadline
         # a board's job it has not listed for CLOSED_AFTER_DAYS although the board was read since (a board not read is no
         # sign; one whose posting is already gone from raw keeps the job until KEEP_DAYS)
         closed_where = ("j.source LIKE '%%-board' AND j.last_seen < current_date - %s AND EXISTS (SELECT 1 FROM raw.job_posting r"
                         " JOIN core.board b ON b.ats || ':' || b.token = r.payload->>'board' WHERE (r.source, r.job_url) ="
                         " (j.source, j.job_url) AND b.last_ok_at::date > j.last_seen)" + kept)
-        aged_where = "j.first_seen < current_date - %s AND j.source <> 'manual'" + kept  # a job you added stays till you remove it
+        # a job of yours is aged by its posting date when it has one (a company board lists every open role with its original
+        # date: Canonical's was 2021), else by when the radar first saw it, like a website-only job; a job you added stays
+        # till you remove it
+        aged_where = ("CASE WHEN j.in_scope THEN coalesce(j.posted_at::date, j.first_seen) ELSE j.first_seen END < current_date - %s"
+                      " AND j.source <> 'manual'" + acted_on)
         for where, days in ((closed_where, CLOSED_AFTER_DAYS), (aged_where, KEEP_DAYS)):
             # your jobs' keys only: a website job deleted may come back (reposted, or remote), for you or the site
             cur.execute(f"INSERT INTO core.job_seen (job_key) SELECT job_key FROM core.job j WHERE j.in_scope AND {where}"
                         " ON CONFLICT (job_key) DO UPDATE SET seen_on = current_date", (days,))
         closed = archive_and_delete(cur, closed_where, (CLOSED_AFTER_DAYS,), "closed")
+        cur.execute(f"DELETE FROM core.application a USING core.job j WHERE a.job_id = j.job_id AND {auto} AND {aged_where}", (KEEP_DAYS,))
         aged = archive_and_delete(cur, aged_where, (KEEP_DAYS,), "aged")
         cur.execute("DELETE FROM raw.job_posting WHERE last_seen < current_date - %s", (WORK_DAYS,))
     conn.commit()
@@ -893,10 +908,10 @@ def export_career_ops(conn) -> None:
     output/career-ops/pipeline.md (one job link per line, best first) and cv.md (your newest CV).
     Copy both into your career-ops folder (data/pipeline.md, cv.md). A job you ignored or rejected is left out, and so
     is one config.hidden_reason hides (as the switches stand): the 25 are the best of the rest."""
-    jobs = [(url, title, company, place, skills) for url, title, company, place, skills, *hide in conn.execute(
-        "SELECT job_url, title, company, place, skill_matches, status, restriction, score FROM mart.job_status"
+    jobs = [(url, title, company, place, skills) for url, title, company, place, skills, *hide, years in conn.execute(
+        "SELECT job_url, title, company, place, skill_matches, status, restriction, score, years_required FROM mart.job_status"
         " WHERE first_seen >= current_date - %s AND skill_matches >= 3 AND status NOT IN ('ignored', 'rejected')"
-        " ORDER BY role_rank, target_company DESC, skill_matches DESC", (DAYS,)) if not hidden_reason(*hide)][:25]
+        " ORDER BY role_rank, target_company DESC, skill_matches DESC", (DAYS,)) if not hidden_reason(*hide, years=years)][:25]
     folder = OUTPUT / "career-ops"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "pipeline.md").write_text(
@@ -1051,7 +1066,7 @@ def email(conn, home: bool) -> None:
     instead and mark nothing."""
     name = HOME if home else f"Outside {HOME}"
     jobs = conn.cursor(row_factory=dict_row).execute(EMAIL_JOBS, (WORK_DAYS, HOME, home, FEATURES["grade"])).fetchall()
-    jobs = [j for j in jobs if not hidden_reason(j["status"], j["restriction"], j["score"])]
+    jobs = [j for j in jobs if not hidden_reason(j["status"], j["restriction"], j["score"], years=j["years_required"])]
     if not FEATURES["grade"]:  # off: no score or reason in the email either
         for j in jobs:
             j["score"] = j["grade_reason"] = None

@@ -31,7 +31,8 @@ STEPS = ["schema", "extract_boards", "extract_bayt", "extract_remote", "extract_
          "transform", "describe", "match_skills", "eligibility", "embed", "grade_claude", "tailor", "outreach_drafts", "export_career_ops", "email_egypt",
          "email_abroad", "track_applications", "outreach_send", "outreach_replies", "publish", "publish_applications", "run_report"]
 
-WATCHDOG_SECONDS = 210  # under the 240 s execution_timeout of the extract tasks in dags/job_radar.py
+WATCHDOG_SECONDS = 450  # under the 480 s execution_timeout of the extract tasks in dags/job_radar.py
+LONG_STEPS = {"extract_companies": 690, "extract_market": 690}  # past their 600 s budgets, under their 720 s timeouts
 
 
 def main() -> None:
@@ -41,7 +42,8 @@ def main() -> None:
         raise SystemExit(__doc__)
     # a lone extract step; not "all" (it runs for minutes), nor linkedin or apify (Apify runs of minutes, under their own timeouts)
     if len(names) == 1 and names[0].startswith("extract_") and names[0] not in ("extract_linkedin", "extract_apify"):
-        timer = threading.Timer(WATCHDOG_SECONDS, watchdog, (names[0], datetime.now(timezone.utc)))
+        seconds = LONG_STEPS.get(names[0], WATCHDOG_SECONDS)
+        timer = threading.Timer(seconds, watchdog, (names[0], datetime.now(timezone.utc), seconds))
         timer.daemon = True
         timer.start()
     if {"eligibility", "grade_claude", "tailor", "outreach_drafts", "track_applications"} & set(names):
@@ -89,11 +91,11 @@ def leave(code: int) -> None:
     os._exit(code)
 
 
-def watchdog(name: str, since: datetime) -> None:
+def watchdog(name: str, since: datetime, seconds: int | None = None) -> None:
     """The extract step's Python is still running WATCHDOG_SECONDS after it started: a hang. What its batches already
     committed is kept (extract_companies saves each batch of 50 sites as it ends); the step ends green with a warning,
     its run-log row warn. The row is written in a thread with 10 seconds, so a warehouse that hangs cannot hold the exit."""
-    message = f"WARNING {name}: stopped by its {WATCHDOG_SECONDS} s watchdog; work already saved is kept"
+    message = f"WARNING {name}: stopped by its {seconds or WATCHDOG_SECONDS} s watchdog; work already saved is kept"
     print(message, flush=True)
 
     def record() -> None:

@@ -45,7 +45,7 @@ from .sources.inbox import MAIL_BYTES
 from .tailor import GAP_WORDS, RULES, slug  # GAP_WORDS: Claude's text with one is thrown away, not written
 
 # an offer only as a job offer's words ("Offer Letter", "Job Offer", "Offer of Employment"): "offer" alone brought food deals
-SEARCH = ("(subject:(applying OR application OR applied OR interview OR candidate OR position OR interest OR steps)"
+SEARCH = ("(subject:(applying OR application OR applied OR interview OR candidate OR position OR interest OR steps OR registration OR status)"
           " OR subject:(offer letter) OR subject:(job offer) OR subject:(employment offer))")
 BACKFILL_DAYS, DAILY_DAYS, GAP_DAYS = 400, 3, 14
 BODY_CHARS = 2000  # of an email sent to Claude

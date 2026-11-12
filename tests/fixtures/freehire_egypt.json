@@ -1,0 +1,553 @@
+{
+ "data": [
+  {
+   "public_slug": "junior-data-engineer-vertex-technologies-sxylbg45",
+   "source": "wuzzuf",
+   "manually_added": false,
+   "external_id": "IT/Software Development:75bd7d7d-736c-47a1-80e9-3baa25837627",
+   "url": "https://wuzzuf.net/jobs/p/novmatrjjd3x-junior-data-engineer-vertex-technologies-cairo-egypt?utm_source=freehire.me",
+   "title": "Junior Data Engineer",
+   "company": "Vertex Technologies",
+   "company_slug": "vertex-technologies",
+   "location": "Cairo, Egypt",
+   "description": "*Role Summary*\n\nYou build and maintain data pipelines for our clients - different industries, different stacks, one engineering standard. Python and SQL will be your daily tools; a mentor and code review will be your safety net. We hire data engineers, not software developers who occasionally work w",
+   "countries": [
+    "eg"
+   ],
+   "regions": [
+    "mena"
+   ],
+   "work_mode": "onsite",
+   "skills": [
+    "airflow",
+    "api",
+    "avro",
+    "aws",
+    "azure",
+    "bash",
+    "ci-cd",
+    "cloud",
+    "dagster",
+    "data-engineering",
+    "data-pipelines",
+    "databricks",
+    "dbt",
+    "docker",
+    "dynamodb",
+    "elt",
+    "etl",
+    "gcp",
+    "git",
+    "iam",
+    "kafka",
+    "kinesis",
+    "mongodb",
+    "mysql",
+    "nosql",
+    "oop",
+    "pandas",
+    "parquet",
+    "polars",
+    "postgresql",
+    "pyspark",
+    "pytest",
+    "python",
+    "rdbms",
+    "scala",
+    "snowflake",
+    "spark",
+    "sql",
+    "sql-server",
+    "ssh",
+    "terraform"
+   ],
+   "cities": [
+    "Cairo"
+   ],
+   "metros": [
+    "Cairo (EG)"
+   ],
+   "collections": [],
+   "perks": [
+    "health_insurance"
+   ],
+   "engagement": [],
+   "is_tech": "tech",
+   "posted_at": "2026-11-06T11:54:40Z",
+   "created_at": "2026-11-08T01:37:24Z",
+   "updated_at": "2026-11-08T02:32:11Z",
+   "last_seen_at": "2026-11-08T23:03:23Z",
+   "closed_at": null,
+   "enrichment": {
+    "summary": "Junior data engineer builds and maintains ETL/ELT data pipelines for clients across different industries, on-site in Cairo. Daily work centers on Python and SQL, with PySpark, Pandas/Polars, and Airflow/Dagster concepts; mentors help you grow into dbt, Docker, CI/CD, Snowflake, and Terraform.",
+    "employment_type": "full_time",
+    "salary_currency": "USD",
+    "seniority": "junior",
+    "experience_years_min": 1,
+    "english_level": "b2",
+    "category": "data_engineering",
+    "domains": [
+     "other"
+    ],
+    "posting_language": "en",
+    "company_type": "outsource",
+    "requirements": [
+     {
+      "text": "1+ year building software in Python",
+      "priority": "required"
+     },
+     {
+      "text": "Python engineering: clean modular code, OOP basics, project setup from scratch, pytest tests",
+      "priority": "required"
+     },
+     {
+      "text": "Git daily fluency: branches, commits, pull requests, review comments",
+      "priority": "required"
+     },
+     {
+      "text": "SQL: joins, aggregations, window functions; any relational database (PostgreSQL, MySQL, SQL Server)",
+      "priority": "required"
+     },
+     {
+      "text": "DE concepts: ETL vs ELT, warehouse vs database vs lake, pipeline idempotency",
+      "priority": "required"
+     },
+     {
+      "text": "Conceptual knowledge of Spark and Airflow (distributed processing, DAGs)",
+      "priority": "required"
+     },
+     {
+      "text": "Basic hands-on experience with Spark or Airflow",
+      "priority": "preferred"
+     },
+     {
+      "text": "Bash basics: navigate, grep logs, ssh",
+      "priority": "required"
+     },
+     {
+      "text": "Conceptual understanding of one major cloud platform (AWS, GCP, or Azure)",
+      "priority": "required"
+     },
+     {
+      "text": "English B2 or higher",
+      "priority": "required"
+     },
+     {
+      "text": "Streaming basics: Kafka, Kinesis",
+      "priority": "preferred"
+     },
+     {
+      "text": "NoSQL exposure: MongoDB or DynamoDB",
+      "priority": "preferred"
+     },
+     {
+      "text": "Data formats: Parquet, Avro",
+      "priority": "preferred"
+     },
+     {
+      "text": "Docker basics",
+      "priority": "preferred"
+     }
+    ]
+   },
+   "enriched_at": "2026-11-08T02:32:11Z",
+   "enrichment_version": 2,
+   "view_count": 19,
+   "applied_count": 0,
+   "upvote_count": 0,
+   "downvote_count": 0,
+   "my_vote": 0,
+   "reality": {
+    "class": "fresh",
+    "age_days": 1,
+    "repost_count": 1,
+    "mass_posting_count": 1,
+    "fake_freshness": false
+   }
+  },
+  {
+   "public_slug": "senior-data-engineer-gs1-egypt-gfor6uri",
+   "source": "teamtailor",
+   "manually_added": false,
+   "external_id": "careers.gs1eg.org:8676089",
+   "url": "https://careers.gs1eg.org/jobs/8676089-senior-data-engineer?utm_source=freehire.me",
+   "title": "Senior Data Engineer",
+   "company": "GS1 Egypt",
+   "company_slug": "gs1-egypt",
+   "location": "Almazah, EG",
+   "description": "GS1 Egypt continuously develops its data capabilities to support its products, services and business decisions. We’re looking for a Senior Data Engineer to work with our data and engineering teams to deliver reliable data pipelines, improve data quality and support analytics and data science.\n\nThis ",
+   "countries": [
+    "eg"
+   ],
+   "regions": [
+    "mena"
+   ],
+   "work_mode": "hybrid",
+   "skills": [
+    "airflow",
+    "analytics",
+    "api",
+    "aws",
+    "azure",
+    "business-intelligence",
+    "ci-cd",
+    "cloud",
+    "cloud-native",
+    "dagster",
+    "data-engineering",
+    "data-governance",
+    "data-mesh",
+    "data-modeling",
+    "data-pipelines",
+    "data-quality",
+    "data-science",
+    "data-warehousing",
+    "databricks",
+    "delta-lake",
+    "dimensional-modeling",
+    "elt",
+    "etl",
+    "event-driven-architecture",
+    "gcp",
+    "git",
+    "iceberg",
+    "lakehouse",
+    "lambda",
+    "metabase",
+    "metadata-management",
+    "microsoft-fabric",
+    "microsoft-purview",
+    "powerbi",
+    "python",
+    "rdbms",
+    "snowflake",
+    "spark",
+    "sql",
+    "superset",
+    "test-automation",
+    "version-control"
+   ],
+   "cities": [],
+   "metros": [],
+   "collections": [],
+   "perks": [],
+   "engagement": [],
+   "is_tech": "tech",
+   "posted_at": "2026-11-05T17:09:09Z",
+   "created_at": "2026-11-07T23:05:48Z",
+   "updated_at": "2026-11-07T23:05:48Z",
+   "last_seen_at": "2026-11-09T14:50:03Z",
+   "closed_at": null,
+   "enrichment": {
+    "seniority": "senior",
+    "experience_years_min": 7,
+    "category": "data_engineering",
+    "posting_language": "en",
+    "requirements": [
+     {
+      "text": "7+ years of relevant experience in data engineering, data warehousing or data platforms, including hands-on technical leadership.",
+      "priority": "required"
+     },
+     {
+      "text": "Demonstrated ownership of complex data platform implementations, from agreed architecture through production delivery and ongoing operation.",
+      "priority": "required"
+     },
+     {
+      "text": "Strong SQL and Python skills, with practical experience in data modelling and ETL/ELT engineering.",
+      "priority": "required"
+     },
+     {
+      "text": "Strong hands-on experience with cloud data platforms, such as Microsoft Fabric, Azure data services, Databricks, Snowflake or equivalent AWS/GCP services, including integration, orchestration, storage",
+      "priority": "required"
+     },
+     {
+      "text": "Strong understanding of relational databases, incremental extraction, change data capture, schema evolution and historical data management.",
+      "priority": "required"
+     },
+     {
+      "text": "Strong experience with data reconciliation, including source-to-target validation, entity resolution, conflict handling and auditable exception management.",
+      "priority": "required"
+     },
+     {
+      "text": "Practical experience implementing data governance, including metadata management, cataloging, lineage, controlled access and auditable data handling.",
+      "priority": "required"
+     },
+     {
+      "text": "Experience enabling self-service BI through platforms such as Metabase, Apache Superset or Power BI, including data connectivity, analytical models, access controls and query performance.",
+      "priority": "required"
+     },
+     {
+      "text": "Experience with pipeline orchestration and dependency management using cloud-native services, Apache Airflow, Dagster or equivalent tools.",
+      "priority": "required"
+     },
+     {
+      "text": "Strong knowledge of dimensional modelling, shared canonical models and slowly changing dimensions.",
+      "priority": "required"
+     },
+     {
+      "text": "Experience with Git, automated testing and CI/CD for data workloads.",
+      "priority": "required"
+     },
+     {
+      "text": "Ability to independently investigate ambiguous problems, make defensible implementation decisions and deliver reliable solutions with limited supervision.",
+      "priority": "required"
+     },
+     {
+      "text": "Exposure to data mesh, data fabric, event-driven architecture, and Lambda or Kappa patterns.",
+      "priority": "preferred"
+     },
+     {
+      "text": "Experience with catalog and metadata tools such as OpenMetadata, DataHub, Apache Atlas or Microsoft Purview.",
+      "priority": "preferred"
+     },
+     {
+      "text": "Experience with regulated product data, sector-specific schemas or GS1 standards.",
+      "priority": "preferred"
+     },
+     {
+      "text": "Experience with distributed processing tools such as Apache Spark and open table formats such as Delta Lake, Apache Iceberg or Hudi.",
+      "priority": "preferred"
+     }
+    ]
+   },
+   "enriched_at": null,
+   "enrichment_version": 0,
+   "view_count": 8,
+   "applied_count": 0,
+   "upvote_count": 0,
+   "downvote_count": 0,
+   "my_vote": 0,
+   "reality": {
+    "class": "fresh",
+    "age_days": 1,
+    "repost_count": 1,
+    "mass_posting_count": 1,
+    "fake_freshness": false
+   }
+  },
+  {
+   "public_slug": "sr-data-engineer-spark-techsa-fzc-g2qeg3iv",
+   "source": "builtin",
+   "manually_added": false,
+   "external_id": ":12134413",
+   "url": "https://builtin.com/job/sr-data-engineer-spark/12134413?utm_source=freehire.me",
+   "title": "Sr. Data Engineer - Spark",
+   "company": "Techsa FZC",
+   "company_slug": "techsa-fzc",
+   "location": "Cairo, Cairo, EGY",
+   "description": "Building high-scale batch and near-real-time data pipelines deployed on infrastructure we run ourselves (on-prem), not managed cloud services. You will design and operate high-volume analytical data systems end to end, with Apache Spark as the core processing engine for both batch and streaming work",
+   "countries": [
+    "eg"
+   ],
+   "regions": [
+    "mena"
+   ],
+   "work_mode": "onsite",
+   "skills": [
+    "ai",
+    "airflow",
+    "big-data",
+    "clickhouse",
+    "cloud",
+    "cloudera",
+    "data-engineering",
+    "data-governance",
+    "data-lake",
+    "data-modeling",
+    "data-pipelines",
+    "data-warehousing",
+    "databricks",
+    "dbt",
+    "delta-lake",
+    "docker",
+    "etl",
+    "hadoop",
+    "iceberg",
+    "java",
+    "kafka",
+    "kubernetes",
+    "lakehouse",
+    "nifi",
+    "olap",
+    "pinot",
+    "python",
+    "scala",
+    "spark",
+    "sql",
+    "trino",
+    "workflow-orchestration"
+   ],
+   "cities": [
+    "Cairo"
+   ],
+   "metros": [
+    "Cairo (EG)"
+   ],
+   "collections": [],
+   "perks": [],
+   "engagement": [],
+   "is_tech": "tech",
+   "posted_at": "2026-11-07T00:00:00Z",
+   "created_at": "2026-11-08T11:18:46Z",
+   "updated_at": "2026-11-08T14:46:07Z",
+   "last_seen_at": "2026-11-08T11:18:46Z",
+   "closed_at": null,
+   "enrichment": {
+    "summary": "Senior data engineer designing and operating high-volume batch and near-real-time analytical pipelines on self-managed on-prem infrastructure, with Apache Spark (batch + Structured Streaming) as the core engine, alongside Kafka, Trino/Presto, OLAP stores, Airflow, and lakehouse table formats. Onsite in Cairo.",
+    "employment_type": "full_time",
+    "seniority": "senior",
+    "experience_years_min": 7,
+    "category": "data_engineering",
+    "posting_language": "en",
+    "requirements": [
+     {
+      "text": "7+ years of experience in data engineering and software development",
+      "priority": "required"
+     },
+     {
+      "text": "Ability to write high-quality code in Java/Scala, Python, or equivalent languages",
+      "priority": "required"
+     },
+     {
+      "text": "Deep hands-on production experience with Apache Spark (batch and Spark Structured Streaming)",
+      "priority": "required"
+     },
+     {
+      "text": "Spark performance tuning: partitioning, caching/persistence, broadcast joins, shuffle reduction, data-skew handling, Adaptive Query Execution",
+      "priority": "required"
+     },
+     {
+      "text": "Operating Spark on self-managed clusters (YARN, Kubernetes, or standalone) — executor sizing, resource allocation, multi-tenant workloads",
+      "priority": "required"
+     },
+     {
+      "text": "Practical experience with Kafka (or equivalent) as a Spark source/sink, including offset and checkpoint management",
+      "priority": "required"
+     },
+     {
+      "text": "Practical experience with distributed query engines (e.g., Trino/Presto)",
+      "priority": "required"
+     },
+     {
+      "text": "Practical experience with ETL/data integration tools (e.g., Datastage, Informatica, Apache NiFi)",
+      "priority": "required"
+     },
+     {
+      "text": "Practical experience with SQL-based transformation frameworks (e.g., dbt)",
+      "priority": "required"
+     },
+     {
+      "text": "Strong SQL skills and understanding of data modeling and data warehousing for analytical workloads",
+      "priority": "required"
+     },
+     {
+      "text": "Hands-on experience with real-time/low-latency analytical stores (e.g., Apache Pinot/ClickHouse)",
+      "priority": "required"
+     },
+     {
+      "text": "Practical experience with big-data platforms and distributions (e.g., Cloudera, Hadoop ecosystem, Databricks)",
+      "priority": "required"
+     },
+     {
+      "text": "Practical experience containerizing and operating data workloads with Docker",
+      "priority": "required"
+     },
+     {
+      "text": "Kubernetes",
+      "priority": "preferred"
+     },
+     {
+      "text": "Experience with workflow orchestration tools (e.g., Airflow)",
+      "priority": "required"
+     },
+     {
+      "text": "Familiarity with data lake table formats (e.g., Apache Iceberg, Delta Lake), including schema evolution and compaction",
+      "priority": "preferred"
+     },
+     {
+      "text": "Familiarity with data governance/cataloging tools (e.g., DataHub)",
+      "priority": "preferred"
+     },
+     {
+      "text": "Familiarity with lakehouse management systems (e.g., Apache Amoro)",
+      "priority": "preferred"
+     },
+     {
+      "text": "Familiarity using AI tools for development and debugging (Claude, Cursor, Codex)",
+      "priority": "preferred"
+     }
+    ]
+   },
+   "enriched_at": "2026-11-08T14:46:07Z",
+   "enrichment_version": 2,
+   "view_count": 11,
+   "applied_count": 0,
+   "upvote_count": 0,
+   "downvote_count": 0,
+   "my_vote": 0,
+   "reality": {
+    "class": "fresh",
+    "age_days": 1,
+    "repost_count": 1,
+    "mass_posting_count": 1,
+    "fake_freshness": false
+   }
+  },
+  {
+   "public_slug": "data-entry-hurghada-q4-2026-replacement-nok-human-capital-hbbagemd",
+   "source": "manatal",
+   "manually_added": false,
+   "external_id": "nokhc:3W73RV3V",
+   "url": "https://www.careers-page.com/nokhc/job/3W73RV3V?utm_source=freehire.me",
+   "title": "Data Entry - Hurghada Q4 2026 Replacement",
+   "company": "Nok Human Capital",
+   "company_slug": "nok-human-capital",
+   "location": "Cairo, Egypt",
+   "description": "----------------------\n*Key Responsibilities*\n----------------------\n\n* Enter and update data accurately into company systems and databases.\n* Verify the accuracy and completeness of data before submission.\n* Maintain and organize digital records and documentation.\n* Perform regular data quality che",
+   "countries": [
+    "eg"
+   ],
+   "regions": [
+    "mena"
+   ],
+   "skills": [
+    "data-quality"
+   ],
+   "cities": [
+    "Cairo"
+   ],
+   "metros": [
+    "Cairo (EG)"
+   ],
+   "collections": [],
+   "perks": [],
+   "engagement": [],
+   "is_tech": "non_tech",
+   "posted_at": "2026-11-09T15:53:00Z",
+   "created_at": "2026-11-09T15:53:00Z",
+   "updated_at": "2026-11-09T15:53:00Z",
+   "last_seen_at": "2026-11-09T15:53:00Z",
+   "closed_at": null,
+   "enrichment": {
+    "employment_type": "full_time",
+    "education_level": "bachelor",
+    "category": "administration",
+    "posting_language": "en"
+   },
+   "enriched_at": null,
+   "enrichment_version": 0,
+   "view_count": 0,
+   "applied_count": 0,
+   "upvote_count": 0,
+   "downvote_count": 0,
+   "my_vote": 0,
+   "reality": {
+    "class": "fresh",
+    "age_days": 0,
+    "repost_count": 1,
+    "mass_posting_count": 1,
+    "fake_freshness": false
+   }
+  }
+ ]
+}

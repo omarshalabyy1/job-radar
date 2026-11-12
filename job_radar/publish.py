@@ -86,6 +86,11 @@ WIDE_SQL = {
     "salary_min_eur": "CASE WHEN salary_plausible THEN salary_min_eur END", "salary_max_eur": "CASE WHEN salary_plausible THEN salary_max_eur END",
     "credit": "CASE source WHEN 'jobicy' THEN 'via Jobicy' WHEN 'arbeitnow' THEN 'via Arbeitnow' WHEN 'jooble' THEN 'via Jooble' END",
     "track": "CASE WHEN track = ANY(%s) THEN track END",
+    # jobs.job's CHECK takes yearly, annual, monthly, weekly, daily, hourly; boards say year, day, hour
+    "salary_period": ("CASE salary_period WHEN 'year' THEN 'yearly' WHEN 'month' THEN 'monthly' WHEN 'week' THEN 'weekly'"
+                      " WHEN 'day' THEN 'daily' WHEN 'hour' THEN 'hourly'"
+                      " WHEN 'yearly' THEN 'yearly' WHEN 'annual' THEN 'annual' WHEN 'monthly' THEN 'monthly'"
+                      " WHEN 'weekly' THEN 'weekly' WHEN 'daily' THEN 'daily' WHEN 'hourly' THEN 'hourly' END"),
 }
 KEPT = ("job_status", "job_document", "inbox_job", "outreach")  # app tables that point at jobs.job without a cascade
 SOURCE_COUNT = ("source", "jobs", "listed", "credit", "counted_at")
