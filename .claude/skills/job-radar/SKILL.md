@@ -262,10 +262,10 @@ holding:
   bold title, " — " company | city in grey, dates right-aligned with the length in brackets
   ("Sep 2025 – Present (1 yr)"), then 3-5 bullets that start with a verb and end with a result or
   number. Each project the same, plus an italic "Technologies:" line under its bullets.
-- `cover-letter.md` - at most one page: why this company, why him for this role (two or three
-  facts from his CV that answer the job's main needs), a short close. Plain, specific English.
-  In his voice (below), so it persuades the reader to call him. Short
-  paragraphs: two or three sentences each, about 200-250 words in all.
+- `cover-letter.md` - one page in his own cover letter voice, the `cover_letter_md` rule in
+  `job_radar/tailor.py` (it wins over the voice below for letters): "Dear <Company> Hiring Team,",
+  formal corporate English that stays diplomatic and appreciative, about 200 words in 4 short
+  paragraphs (interest and background, Bosch Car Service, the real work at Null Labs, thanks).
 - `notes.md` - the grade, the gaps and how to address them, three likely interview questions
   with answers drawn from his experience, three STAR stories (Situation, Task, Action, Result) from his CV
   for this job, and a "Review" part: what the second Claude pass changed and the job's keywords his CV cannot show.
@@ -285,6 +285,18 @@ strips AI tells, wording only, never the facts). Cover letters, CVs, emails and 
 gap or something he hasn't done: they are confident and lead with his strengths, impact and
 achievements (numbers only from his CV). Gaps, and how to address them, go only in `notes.md`.
 These are drafts: each one is sent only after his yes for that message.
+
+Cover letters and form answers follow the technique he approved on 2026-11-09:
+1. Facts first. Take each claim from his CV, the tailor rules' fixed facts or the repo itself; never
+   claim a tool he did not use (Argus has no embeddings or vector database: an embeddings answer
+   cites job-radar's `embed.py`). Flag a real gap to him in chat, never in the letter.
+2. Shape and voice. A cover letter follows `cover_letter_md` in `job_radar/tailor.py` ("Dear <Company>
+   Hiring Team,", formal and diplomatic, about 200 words); skip copywriting's opener and closing ask
+   for letters. Show the real Null Labs work, never a vague line.
+3. Humanize. Run `humanizer` last: no dashes joining clauses, no "not X but Y", no staged opener, no
+   one-line closer, no forced triples; wording only, never a new fact.
+4. Check. Count a form answer with a limit (`wc -m`), and render a letter with `letter_html` and
+   `pdf_of`; `pdf_problems` must be empty and the PDF one page. Send him the file.
 
 He wants files to send: the tailor step already prints the one-page PDFs. For a job he picks here (it needs a
 description in core.job), draft it the same way, with the same checks, in the airflow container:
