@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# A push to main goes through only when `bash check.sh` printed GATE: PASS for exactly the content being pushed:
+# check.sh records that content's tree in .git/gate-pass, and this compares it with the pushed commit's tree. Other
+# branches are not checked (CI runs on their pull request). Turn it on once per clone:
+#   git config core.hooksPath .githooks
+# `git push --no-verify` skips it: Omar's call, never an agent's (AGENTS.md).
+passed=$(cat "$(git rev-parse --git-path gate-pass)" 2>/dev/null)
+while read -r _ local_sha remote_ref _; do
+    [ "$remote_ref" = refs/heads/main ] || continue
+    case "$local_sha" in *[!0]*) ;; *) continue ;; esac  # all zeros: the branch is being deleted, nothing to check
+    if [ "$(git rev-parse "$local_sha^{tree}")" != "$passed" ]; then
+        echo "pre-push: main is not pushed. \`bash check.sh\` has not printed GATE: PASS for this content: run it, then push again." >&2
+        exit 1
+    fi
+done
+exit 0

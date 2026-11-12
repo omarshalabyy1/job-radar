@@ -15,6 +15,8 @@ Read `CLAUDE.md` (map, rules) and `STATE.md` (where things stand) first. Update 
 
 `bash check.sh` must print `GATE: PASS` (tests plus `scripts/idempotency_check.py`). Paste the last lines in the report. A change to loading or publishing also needs the idempotency step, which the gate runs.
 
+The gate is enforced on `main`: a pass records the checked content in `.git/gate-pass`, and `.githooks/pre-push` refuses a push to `main` whose content is not that one. So run the gate last, on the content you will commit (write the `STATE.md` line and stage any new file first, or they are not counted), then commit and push. Once per clone: `git config core.hooksPath .githooks`. `git push --no-verify` skips the hook: only Omar decides that. After a push, read the `ci` run on GitHub and say what it showed.
+
 ## Run it
 
 Containers and the daily DAG: see the `job-radar` skill. Watch runs through the warehouse (`psql` with a statement timeout), never by looping the `airflow` CLI. `python scripts/heartbeat.py` alerts when no step succeeded in 26 hours.
