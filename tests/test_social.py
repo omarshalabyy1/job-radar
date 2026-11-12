@@ -435,6 +435,9 @@ def test_extract_apify_loads_the_posts_drops_a_repost_of_a_stored_one_and_ends_w
     the same posts again plus a repost under a new link, then transform: each kept post is one job of yours, with the post's
     link as its key and the link inside it as its apply link."""
     monkeypatch.setitem(steps.FEATURES, "market", True)
+    # the saved posts are dated 2026-11-07 and transform ages a job by the database's own date: without this, from
+    # 2026-11-12 on a post was "over 5 days" and the test failed on the calendar, not on the code
+    monkeypatch.setattr(steps, "KEEP_DAYS", 100_000)
     holds = settings(monkeypatch, "x", "reddit")
     both = {"x": items("social_x.json"), "reddit": items("social_reddit.json")}
     costs = {"x": 0.0123, "reddit": 0.0456}
