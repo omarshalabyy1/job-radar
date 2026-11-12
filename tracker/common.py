@@ -5,8 +5,9 @@ import re
 import pandas as pd
 import streamlit as st
 
-from job_radar.config import BAYT_PLACES, FEATURES, HOME, hidden_reason
+from job_radar.config import BAYT_PLACES, EXPERIENCE, FEATURES, HOME, hidden_reason
 from job_radar.db import connect
+from job_radar.digest import experience
 
 STATUSES = ["new", "saved", "applied", "interview", "offer", "rejected", "ignored"]
 OPEN = ["new", "saved", "applied", "interview", "offer"]
@@ -14,11 +15,12 @@ OPEN = ["new", "saved", "applied", "interview", "offer"]
 FRESH = {1: "Within 12 hours", 2: "Within 24 hours", 3: "Over 1 day", 4: "Over 2 days", 5: "Over 3 days",
          6: "Deleted tomorrow"}
 # Sort by any of these, in the order picked: ↓ is highest, newest or Z first; ↑ is lowest, oldest or A first
-SORTS = {"Score": "score", "Title": "title", "Company": "company", "Where": "place", "Posted": "posted_at", "CV match": "cv_match",
+SORTS = {"Egypt first": "place_rank", "Data and BI first": "role_group", "Level": "level", "Score": "score", "Title": "title", "Company": "company", "Where": "place", "Posted": "posted_at", "CV match": "cv_match",
          "Skills": "skill_matches", "Status": "status", "Role": "role_rank", "Target": "target_company", "CV covers": "cv_coverage",
          "Company size": "most_employees", "First seen": "first_seen", "Source": "source"}
 SORT_OPTIONS = [f"{name} {arrow}" for name in SORTS for arrow in ("↓", "↑")]
-DEFAULT_SORT = ["Role ↑", "Score ↓", "Posted ↓"]  # your roles in settings.yaml order (data engineering and AI first), best graded, then the newest
+DEFAULT_SORT = ["Egypt first ↑", "Where ↑", "Source ↑", "Data and BI first ↑", "Level ↑", "Role ↑", "Score ↓", "Posted ↓"]
+# Egypt, then remote, then each other country on its own (A to Z); inside each: grouped by source (the job board), data and BI roles before AI, entry level to senior, then your roles in settings.yaml order, best graded, newest
 PRIORITY_ROLES = 3  # roles 1-3 in settings.yaml (AI & Data Engineer, Data Engineer, AI Engineer) lead the lists
 # the sidebar's list filters: widget key -> column
 FILTERS = {"role": "role", "where": "place", "posted": "posted", "status": "status"}
@@ -37,7 +39,8 @@ BLUE, ORANGE, GRAY = "#3987e5", "#d95926", "#6f7d99"
 HIDES = FEATURES["eligibility"] or (FEATURES["auto_hide"] and FEATURES["grade"])
 HIDDEN_JOBS = " or ".join(
     [*(["you cannot take from Egypt"] if FEATURES["eligibility"] else []),
-     *(["that Claude scored 3 or lower"] if FEATURES["auto_hide"] and FEATURES["grade"] else [])])
+     *(["that Claude scored 3 or lower"] if FEATURES["auto_hide"] and FEATURES["grade"] else []),
+     f"that ask {EXPERIENCE['hide_min_years']} or more years"])
 
 
 def plural(n: int, word: str) -> str:
@@ -51,6 +54,19 @@ def most_employees(size: str | None) -> float | None:
     if not numbers:
         return None
     return float("inf") if "+" in size else float(numbers[-1])
+
+
+def table_key(key: str) -> str:
+    """The widget key of an editable table: it changes after each saved edit, so the table starts again with no edits."""
+    return f"{key}-{st.session_state.get(f'{key}-version', 0)}"
+
+
+def save_edits(key: str, save, ids: list[int]) -> None:
+    """on_change of a table with a Decide or Done column: `save(conn, edited_rows, ids)` writes the edit at once."""
+    with connect() as conn:
+        save(conn, st.session_state[table_key(key)]["edited_rows"], ids)
+    st.session_state[f"{key}-version"] = st.session_state.get(f"{key}-version", 0) + 1
+    query.clear()
 
 
 @st.cache_data(ttl=60)  # every click reruns the page: the same query within a minute is not asked again (query.clear() after a write)
@@ -68,6 +84,25 @@ def colors() -> dict:
             "heat": ["#eef4fc", "#1c5cab"] if light else ["#1a2738", "#86b6ef"], "heat_ink": "#ffffff" if light else "#0d1b2a"}
 
 
+def role_group(roles: pd.Series) -> pd.Series:
+    """0 for a data or BI role, 1 for AI and the LinkedIn alerts' others: data and BI lead the lists, AI follows."""
+    return (~roles.fillna("").str.contains(r"\bdata\b|\bBI\b", case=False, regex=True)).astype(int)
+
+
+def levels(titles: pd.Series, years: pd.Series) -> pd.Series:
+    """0 entry or junior, 1 mid level, 2 senior: the radar's rule (digest.experience) on the title and the years the posting asks."""
+    return pd.Series([experience({"title": t, "description": f"{int(y)}+ years of experience" if pd.notna(y) else ""})[0]
+                      for t, y in zip(titles, years)], index=titles.index)
+
+
+def default_order(jobs: pd.DataFrame) -> pd.DataFrame:
+    """The order every list of jobs opens in (DEFAULT_SORT): Egypt, then remote, then each other country on its own; inside each,
+    grouped by source, data and BI before AI, entry level to senior, then your role order, the best score and the newest."""
+    by = [SORTS[choice.rsplit(" ", 1)[0]] for choice in DEFAULT_SORT]
+    ascending = [choice.endswith("↑") for choice in DEFAULT_SORT]
+    return jobs.sort_values(by, ascending=ascending, na_position="last", kind="stable")
+
+
 def load_jobs() -> pd.DataFrame:
     jobs = query("SELECT job_id, role_rank, fresh_level, posted_at, score, skill_matches, cv_coverage, cv_similarity, target_company,"
                  " title, company, company_size, role, place, source, status, note, first_seen, job_url, skills_matched, described,"
@@ -78,10 +113,14 @@ def load_jobs() -> pd.DataFrame:
     jobs["posted_ago"] = [f"{int(d)} days ago" if level == 5 and pd.notna(d) else label
                           for level, d, label in zip(jobs["fresh_level"], age, jobs["posted"])]
     jobs["score"] = pd.to_numeric(jobs["score"])
-    jobs["hidden_reason"] = [hidden_reason(*row) for row in zip(jobs["status"], jobs["restriction"], jobs["score"])]
+    jobs["hidden_reason"] = [hidden_reason(status, restriction, score, years=years) for status, restriction, score, years in
+                             zip(jobs["status"], jobs["restriction"], jobs["score"], pd.to_numeric(jobs["years_required"]))]
     if not FEATURES["grade"]:  # off: no score sorts or shows
         jobs["score"], jobs["grade_reason"] = float("nan"), None
     jobs["cv_coverage"] = pd.to_numeric(jobs["cv_coverage"])
+    jobs["place_rank"] = jobs["place"].map({HOME: 0, "Remote": 1}).fillna(2)  # the work in Egypt first, then remote, then the rest
+    jobs["role_group"] = role_group(jobs["role"])
+    jobs["level"] = levels(jobs["title"], pd.to_numeric(jobs["years_required"]))
     jobs["cv_match"] = pd.to_numeric(jobs["cv_similarity"]) * 100  # how close the job's text is to your nearest CV (embed)
     jobs["why"] = jobs["hidden_reason"].fillna(jobs["grade_reason"])  # why Claude or a rule hid it, else Claude's line
     jobs["most_employees"] = pd.to_numeric(jobs["company_size"].map(most_employees))
@@ -187,8 +226,20 @@ def filtered(jobs: pd.DataFrame) -> pd.DataFrame:
     return shown.iloc[(shown["company"] == "").to_numpy().argsort(kind="stable")]  # no company name goes last, the order kept
 
 
+# your applications of the last 24 hours, each once: a job you marked applied, and one a confirmation email in your
+# mailboxes shows (by its job when the radar has it, else by its company and title)
+APPLIED_24H = """
+    SELECT count(*) AS n FROM (
+        SELECT 'job ' || job_id AS application FROM core.application
+        WHERE status = 'applied' AND updated_at >= now() - interval '24 hours'
+        UNION
+        SELECT coalesce('job ' || job_id, lower(coalesce(company, '') || ' | ' || coalesce(title, '')))
+        FROM core.application_email WHERE kind = 'applied' AND received_at >= now() - interval '24 hours') a"""
+
+
 def numbers(jobs: pd.DataFrame, shown: pd.DataFrame) -> None:
-    """The four numbers at the top of the job pages: the same jobs throughout, so they add up."""
+    """The numbers at the top of the job pages: four of the same jobs throughout, so they add up, then your applications
+    of the last 24 hours (APPLIED_24H: whatever the filters, and jobs the radar does not hold too)."""
     counts = shown["status"].value_counts()
     with st.container(horizontal=True):  # one row on a desktop, two by two on a phone
         st.metric("Showing", len(shown), border=True, width=170, help=f"Jobs your filters keep, of {len(jobs)} the radar holds")
@@ -197,6 +248,8 @@ def numbers(jobs: pd.DataFrame, shown: pd.DataFrame) -> None:
         st.metric("New", int(counts.get("new", 0)), border=True, width=170, help="Of those, the ones you have not set a status for")
         st.metric("Saved", int(counts.get("saved", 0)), border=True, width=170,
                   help="Of those, the ones you saved, including the drafts Claude prepared (Ready)")
+        st.metric("Applied (24h)", int(query(APPLIED_24H)["n"].iloc[0]), border=True, width=170,
+                  help="Applications in the last 24 hours: jobs you marked applied, and ones a confirmation email shows; each once")
 
 
 def nothing_matches() -> None:

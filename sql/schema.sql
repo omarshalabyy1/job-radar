@@ -1133,3 +1133,25 @@ CREATE TABLE IF NOT EXISTS core.outreach_pause (
     until_at  timestamptz NOT NULL
 );
 CREATE INDEX IF NOT EXISTS outreach_pause_mailbox ON core.outreach_pause (mailbox, until_at);
+
+-- every email of every Gmail account in MAILBOXES, whole (job_radar/mail_inbox.py: All Mail and Spam, read-only). `action` is
+-- what the email needs from you, written after reading it (empty: nothing); reviewed_at says it was read; the Inbox page
+-- lists the open ones and `done` is your tick.
+CREATE TABLE IF NOT EXISTS core.mail (
+    mailbox     text        NOT NULL,
+    message_id  text        NOT NULL,
+    folder      text        NOT NULL,
+    received_at timestamptz NOT NULL,
+    sender      text        NOT NULL,
+    subject     text        NOT NULL,
+    body        text        NOT NULL,
+    action      text,
+    urgency     text,
+    due         date,
+    reviewed_at timestamptz,
+    done        boolean     NOT NULL DEFAULT false,
+    PRIMARY KEY (mailbox, message_id)
+);
+CREATE INDEX IF NOT EXISTS mail_received ON core.mail (received_at DESC);
+-- 'job' (a job, interview or assessment) or 'other' (a tool, code, ride or course): the Inbox's To do lists the first only
+ALTER TABLE core.mail ADD COLUMN IF NOT EXISTS topic text NOT NULL DEFAULT 'job';

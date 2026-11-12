@@ -8,7 +8,8 @@ from job_radar.applications import application_stages, funnel_counts
 from job_radar.config import FEATURES
 from job_radar.db import connect
 from tracker.applications_tab import STAGE_EMAILS, STAGE_LABELS, follow_ups
-from tracker.common import BLUE, PRIORITY_ROLES, colors, filtered, load_jobs, nothing_matches, numbers, query
+from tracker.common import BLUE, colors, default_order, filtered, load_jobs, nothing_matches, numbers, query, save_edits, table_key
+from tracker.decide import apply_decisions, mark_deadlines_done
 from tracker.runlog_tab import CAIRO, dollars
 
 st.title("Today", icon=":material/today:")
@@ -19,22 +20,26 @@ ink = colors()["ink"]
 
 # 1. what to do now: data engineering and AI jobs first (roles 1-3 in settings.yaml), the freshest and best graded on top
 st.subheader("Apply next")
-st.caption("Posted in the last 48 hours: data engineering and AI roles first, then the best graded.")
-best = (shown[shown["fresh_level"] <= 3]
-        .assign(priority=lambda d: d["role_rank"] > PRIORITY_ROLES, unnamed=lambda d: d["company"] == "")
-        .sort_values(["priority", "unnamed", "score", "skill_matches"], ascending=[True, True, False, False], na_position="last")
-        .head(8))
+st.caption("Posted in the last 48 hours: Egypt, then remote, then country by country; data and BI before AI; entry level to senior.")
+best = default_order(shown[shown["fresh_level"] <= 3].assign(unnamed=lambda d: d["company"] == "")).sort_values("unnamed", kind="stable").head(8)
 if shown.empty:
     nothing_matches()
 elif best.empty:
     st.info("Nothing posted in the last 48 hours matches these filters. The Jobs page has the older ones.", icon=":material/schedule:")
 else:
-    st.dataframe(best[[c for c in ["score", "title", "company", "place", "posted", "why", "job_url"]
-                       if FEATURES["grade"] or c not in ("score", "why")]], hide_index=True, column_config={
+    st.data_editor(best.assign(applied=False, noise=False)[["job_id", *[c for c in ["applied", "noise", "score", "title", "company", "place", "source", "posted", "why", "job_url"]
+                                                         if FEATURES["grade"] or c not in ("score", "why")]]],
+                   key=table_key("apply-next"), hide_index=True, on_change=save_edits,
+                   args=("apply-next", apply_decisions, [int(j) for j in best["job_id"]]),
+                   column_order=[c for c in ["applied", "noise", "score", "title", "company", "place", "source", "posted", "why", "job_url"]
+                                 if FEATURES["grade"] or c not in ("score", "why")],
+                   disabled=["job_id", "score", "title", "company", "place", "source", "posted", "why", "job_url"], column_config={
+        "applied": st.column_config.CheckboxColumn("Applied", width="small", help="Tick it when you applied: saved at once, the job leaves this list"),
+        "noise": st.column_config.CheckboxColumn("Noise", width="small", help="Tick it when the job is noise (applications closed): saved at once, the job is hidden"),
         "score": st.column_config.ProgressColumn("Score", min_value=0, max_value=10, format="%d", width="small",
                                                  help="Claude's grade against your CV, 0-10; empty when not graded"),
         "title": st.column_config.TextColumn("Title", width=300), "company": st.column_config.TextColumn("Company", width=170),
-        "place": st.column_config.TextColumn("Where", width="small"), "posted": st.column_config.TextColumn("Posted", width=110),
+        "place": st.column_config.TextColumn("Where", width="small"), "source": st.column_config.TextColumn("Source", width="small"), "posted": st.column_config.TextColumn("Posted", width=110),
         "why": st.column_config.TextColumn("Why", width="large", help="Claude's reason for the score"),
         "job_url": st.column_config.LinkColumn("Link", display_text="Open", width="small")})
 
@@ -44,19 +49,24 @@ deadlines = query("SELECT d.deadline_id, d.due, d.what, d.note, d.done, d.job_id
                   " nullif(concat_ws(' at ', j.title, nullif(j.company, '')), '') AS job, d.due - (now() AT TIME ZONE 'Africa/Cairo')::date AS days_left"
                   " FROM core.deadline d LEFT JOIN core.job j USING (job_id) ORDER BY d.done, d.due")
 deadlines["done"] = deadlines["done"].astype(bool)  # an empty table gives an object column, and ~ of it is no mask
-# every overdue one (they are the most urgent), then the next three
+# every overdue one of the last 2 weeks (they are the most urgent; an older one is dead, the editor below keeps it), then the next three
+STALE_DAYS = 14
 open_ = deadlines[~deadlines["done"]]
-upcoming = pd.concat([open_[open_["days_left"] < 0], open_[open_["days_left"] >= 0].head(3)])
+upcoming = pd.concat([open_[(open_["days_left"] < 0) & (open_["days_left"] >= -STALE_DAYS)], open_[open_["days_left"] >= 0].head(3)])
 if upcoming.empty:
     st.caption("No deadline set: add one below.")
 else:
     upcoming = upcoming.assign(when=upcoming["days_left"].map(
         lambda n: f"Overdue {-n} day{'s' if n != -1 else ''}" if n < 0 else "Today" if n == 0 else f"In {n} day{'s' if n != 1 else ''}"))
-    st.dataframe(upcoming[["due", "when", "what", "job", "note"]], hide_index=True, column_config={
+    st.data_editor(upcoming[["deadline_id", "due", "when", "what", "job", "note", "done"]], key=table_key("deadline-list"), hide_index=True,
+                   on_change=save_edits, args=("deadline-list", mark_deadlines_done, [int(i) for i in upcoming["deadline_id"]]),
+                   column_order=["due", "when", "what", "job", "note", "done"],
+                   disabled=["deadline_id", "due", "when", "what", "job", "note"], column_config={
         "due": st.column_config.DateColumn("Due", format="ddd D MMM", width="small"),
         "when": st.column_config.TextColumn("When", width=130),
         "what": st.column_config.TextColumn("What", width=200), "job": st.column_config.TextColumn("Job", width=260),
-        "note": st.column_config.TextColumn("Note", width="large")})
+        "note": st.column_config.TextColumn("Note", width="large"),
+        "done": st.column_config.CheckboxColumn("Done", help="Tick it: saved at once, the deadline leaves this list")})
 with st.expander("Edit deadlines"):
     edited = st.data_editor(deadlines, key="deadlines", hide_index=True, num_rows="dynamic",
                             column_order=["due", "what", "note", "job_id", "done"], column_config={

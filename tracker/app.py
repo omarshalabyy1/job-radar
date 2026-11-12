@@ -25,7 +25,7 @@ def page(name: str, title: str, icon: str, **kwargs) -> st.Page:
 
 
 st.navigation({
-    "Your search": [page("today", "Today", "today", default=True), page("jobs", "Jobs", "work"),
+    "Your search": [page("today", "Today", "today", default=True), page("mail", "Inbox", "inbox"), page("jobs", "Jobs", "work"),
                     page("ready", "Ready to apply", "task_alt"), page("applications", "Applications", "mail")],
     "Insights": [page("market", "Market", "monitoring"), page("skills", "Skills", "school"),
                  page("startups", "Startups", "rocket_launch"), page("insights", "Interview rate", "query_stats")],
