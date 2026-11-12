@@ -1,6 +1,6 @@
 # Your companies
 
-The 238 companies whose own career sites job-radar reads: only companies that hire in
+The 245 companies whose own career sites job-radar reads: only companies that hire in
 Egypt, or remote-first ones that hire worldwide, each through its jobs page filtered to Egypt where the site has a filter.
 Only their jobs in Egypt are kept; a company marked (+ remote) also keeps its remote jobs open to someone in Egypt
 (worldwide, anywhere, EMEA, MENA). Jobs at these companies are starred in your email, from any source. A site
@@ -250,3 +250,10 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Tamweely | [tamweely.com](https://tamweely.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Tatweer Misr | [tatweermisr.com](https://tatweermisr.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Tazkarti | [tazkarti.com](https://tazkarti.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
+| CyShield | [careers.cyshield.com](https://careers.cyshield.com/) | careers page (platform found on the first read) | Omar, 2026-11-11; the site shows an image-code check: pass it in scripts/open_blocked.py |
+| Integrant | [integrant.workable.com](https://integrant.workable.com) | Workable, public API | Cairo software and data firm; Workable |
+| Infomineo | [apply.workable.com](https://apply.workable.com/infomineo/) | Workable, public API | Cairo research and data analytics firm; Workable (its careers page builds the list in JavaScript) |
+| Avidbeam | [avidbeam.com](https://avidbeam.com/careers) | careers page (platform found on the first read) | Cairo AI video analytics firm |
+| Brightskies | [brightskiesinc.com](https://brightskiesinc.com/careers) | careers page (platform found on the first read) | Cairo AI and high-performance computing firm |
+| e-finance | [www.efinance.com.eg](https://www.efinance.com.eg/careers) | careers page (platform found on the first read) | Egypt's government fintech and payments firm |
+| Help AG | [www.helpag.com](https://www.helpag.com/careers/) | careers page (platform found on the first read) | e& cybersecurity firm with a Cairo office |

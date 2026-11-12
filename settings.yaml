@@ -128,100 +128,100 @@ linkedin:
 # Each run prints its cost (Apify's own figure) and the collect ends with one spend line. Off: facebook (the
 # Egypt job pages found on 2026-10-29 last posted in 2021-2025; add active public groups or pages, then enable).
 apify:
-  margin_usd: 0.5
-  every_hours: 20  # a board that ran waits this long: one run a day, however many collects
+  margin_usd: 0.1
+  every_hours: 1  # a board that ran waits this long: a run reads every board (Omar, 2026-11-10; was 20)
   boards:
     linkedin:    # valig/linkedin-jobs-scraper: $0.40 / 1k, 4.7 stars, 36k users (tested 2026-10-29)
       enabled: true
       actor: valig/linkedin-jobs-scraper
-      max_items: 200
-      max_charge_usd: 0.10
-      input: {keywords: software OR data OR developer OR engineer, location: Egypt, datePosted: r604800, limit: 200}  # 7 days: its 24-hour search gives 0 for Egypt (tested 2026-10-29); a link already stored is skipped
+      max_items: 1000
+      max_charge_usd: 0.3   # was 1 (2026-11-12): a run costs $0.10-0.17, and an account needs the cap plus the margin free to take it
+      input: {keywords: software OR data OR developer OR engineer, location: Egypt, datePosted: r604800, limit: 1000}  # 7 days: its 24-hour search gives 0 for Egypt (tested 2026-10-29); a link already stored is skipped
     linkedin_gulf:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/linkedin-jobs-scraper
-      max_items: 200
-      max_charge_usd: 0.10
-      input: {keywords: data OR analytics OR AI OR BI, location: United Arab Emirates, datePosted: r86400, limit: 200}
+      max_items: 1000
+      max_charge_usd: 1
+      input: {keywords: data OR analytics OR AI OR BI, location: United Arab Emirates, datePosted: r604800, limit: 1000}
     indeed:      # valig/indeed-jobs-scraper: $0.10 / 1k, 4.7 stars, 35k users
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/indeed-jobs-scraper
-      max_items: 100
-      max_charge_usd: 0.05
-      input: {country: de, title: software engineer, location: "", limit: 100, datePosted: "1"}
+      max_items: 500
+      max_charge_usd: 0.5
+      input: {country: de, title: software engineer, location: "", limit: 500, datePosted: "7"}
     # Indeed by country (Omar, 2026-10-29: the US, English-speaking Europe and the Gulf); same actor and price
     indeed_us:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/indeed-jobs-scraper
-      max_items: 100
-      max_charge_usd: 0.05
-      input: {country: us, title: data engineer, location: "", limit: 100, datePosted: "1"}
+      max_items: 500
+      max_charge_usd: 0.5
+      input: {country: us, title: data engineer, location: "", limit: 500, datePosted: "7"}
     indeed_uk:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/indeed-jobs-scraper
-      max_items: 100
-      max_charge_usd: 0.05
-      input: {country: uk, title: data engineer, location: "", limit: 100, datePosted: "1"}
+      max_items: 500
+      max_charge_usd: 0.5
+      input: {country: uk, title: data engineer, location: "", limit: 500, datePosted: "7"}
     indeed_ie:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/indeed-jobs-scraper
-      max_items: 50
-      max_charge_usd: 0.05
-      input: {country: ie, title: data engineer, location: "", limit: 50, datePosted: "1"}
+      max_items: 250
+      max_charge_usd: 0.5
+      input: {country: ie, title: data engineer, location: "", limit: 250, datePosted: "7"}
     indeed_nl:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/indeed-jobs-scraper
-      max_items: 50
-      max_charge_usd: 0.05
-      input: {country: nl, title: data engineer, location: "", limit: 50, datePosted: "1"}
+      max_items: 250
+      max_charge_usd: 0.5
+      input: {country: nl, title: data engineer, location: "", limit: 250, datePosted: "7"}
     indeed_sa:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/indeed-jobs-scraper
-      max_items: 50
-      max_charge_usd: 0.05
-      input: {country: sa, title: data, location: "", limit: 50, datePosted: "1"}
+      max_items: 250
+      max_charge_usd: 0.5
+      input: {country: sa, title: data, location: "", limit: 250, datePosted: "7"}
     indeed_qa:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/indeed-jobs-scraper
-      max_items: 50
-      max_charge_usd: 0.05
-      input: {country: qa, title: data, location: "", limit: 50, datePosted: "1"}
+      max_items: 250
+      max_charge_usd: 0.5
+      input: {country: qa, title: data, location: "", limit: 250, datePosted: "7"}
     indeed_kw:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/indeed-jobs-scraper
-      max_items: 50
-      max_charge_usd: 0.05
-      input: {country: kw, title: data, location: "", limit: 50, datePosted: "1"}
+      max_items: 250
+      max_charge_usd: 0.5
+      input: {country: kw, title: data, location: "", limit: 250, datePosted: "7"}
     glassdoor:   # bebity/glassdoor-jobs-scraper: $0.40 / 1k, 4.4 stars
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: bebity/glassdoor-jobs-scraper
-      max_items: 100
-      max_charge_usd: 0.10
-      input: {keyword: software engineer, location: United Kingdom, maxItems: 100, postedWithinDays: "1", scrapeDetails: true}
+      max_items: 500
+      max_charge_usd: 1
+      input: {keyword: software engineer, location: United Kingdom, maxItems: 500, postedWithinDays: "7", scrapeDetails: true}
     glassdoor_us:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: bebity/glassdoor-jobs-scraper
-      max_items: 100
-      max_charge_usd: 0.10
-      input: {keyword: data engineer, location: United States, maxItems: 100, postedWithinDays: "1", scrapeDetails: true}
+      max_items: 500
+      max_charge_usd: 1
+      input: {keyword: data engineer, location: United States, maxItems: 500, postedWithinDays: "7", scrapeDetails: true}
     linkedin_saudi:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/linkedin-jobs-scraper
-      max_items: 200
-      max_charge_usd: 0.10
-      input: {keywords: data OR analytics OR AI OR BI, location: Saudi Arabia, datePosted: r86400, limit: 200}
+      max_items: 1000
+      max_charge_usd: 1
+      input: {keywords: data OR analytics OR AI OR BI, location: Saudi Arabia, datePosted: r604800, limit: 1000}
     linkedin_qatar:
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: valig/linkedin-jobs-scraper
-      max_items: 100
-      max_charge_usd: 0.05
-      input: {keywords: data OR analytics OR AI OR BI, location: Qatar, datePosted: r86400, limit: 100}
+      max_items: 500
+      max_charge_usd: 0.5
+      input: {keywords: data OR analytics OR AI OR BI, location: Qatar, datePosted: r604800, limit: 500}
     wellfound:   # blackfalcondata/wellfound-scraper: $3.00 / 1k (+$0.005 a run), 5 stars (tested 2026-10-29)
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: blackfalcondata/wellfound-scraper
-      max_items: 50
-      max_charge_usd: 0.20
-      input: {query: data engineer, remote: true, maxAgeMinutes: 1440}
+      max_items: 250
+      max_charge_usd: 2
+      input: {query: data engineer, remote: true, maxAgeMinutes: 10080}
     stepstone:   # memo23/stepstone-search-cheerio-ppr: $1.00 / 1k (+$0.005 a run), 5 stars
       enabled: false
       actor: memo23/stepstone-search-cheerio-ppr
@@ -242,14 +242,14 @@ apify:
       max_charge_usd: 0.15
       input: {searchTerm: data engineer, maxResults: 50, dateRange: 1, country: australia}
     career_sites:  # fantastic-jobs/career-site-job-listing-api: $12 / 1k + $0.01 a run, direct from 275k company career
-      enabled: true  # sites (Workday, Greenhouse, Lever, Ashby...); its smallest run is 10 jobs
+      enabled: false  # sites (Workday, Greenhouse, Lever, Ashby...); its smallest run is 10 jobs
       actor: fantastic-jobs/career-site-job-listing-api
-      max_items: 10
-      max_charge_usd: 0.15
-      input: {timeRange: 24h, limit: 10, removeAgency: true, aiTaxonomiesFilter: [Data & Analytics],
+      max_items: 50
+      max_charge_usd: 1
+      input: {timeRange: 7d, limit: 50, removeAgency: true, aiTaxonomiesFilter: [Data & Analytics],
               locationSearch: [Egypt, United Arab Emirates, Saudi Arabia, Qatar], aiWorkArrangementFilter: [Remote Solely]}
     x:           # kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest: $0.25 / 1k tweets, no start fee (Apify Store, 2026-11-08)
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest
       max_items: 150            # the run's total (6 terms x 25); the Actor's own minimum per term is 20
       max_charge_usd: 0.05      # 150 tweets are $0.0375: the cap is never the limit
@@ -265,7 +265,7 @@ apify:
           - '(مطلوب OR "نبحث عن" OR "فرصة عمل" OR "وظيفة شاغرة") ("مهندس بيانات" OR "محلل بيانات" OR "عالم بيانات" OR "ذكاء اصطناعي") -filter:retweets -filter:replies'
           - '(مطلوب OR "فرصة عمل" OR "للتقديم") ("data engineer" OR "data analyst" OR "Power BI" OR "BI developer") (مصر OR القاهرة OR الجيزة OR "عن بعد") -filter:retweets -filter:replies'
     reddit:      # harshmaur/reddit-scraper: $2.00 / 1k posts + $0.02 a run start (Apify Store, 2026-11-08)
-      enabled: true
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
       actor: harshmaur/reddit-scraper
       max_items: 50             # 6 keywords x 8 posts = 48 posts = $0.096 + $0.02 start = $0.116
       max_charge_usd: 0.15      # the old input (4 whole subreddits x 50 posts) wanted 200 posts = $0.40 and was cut at ~65, all from one subreddit
@@ -284,6 +284,36 @@ apify:
           - hiring data analyst remote
           - hiring AI engineer remote
           - مطلوب مهندس بيانات
+    indeed_eg:   # Egypt itself, 7 days (Omar, 2026-11-10: no spending cap; the boards before it had no Egypt leg)
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
+      actor: valig/indeed-jobs-scraper
+      max_items: 250
+      max_charge_usd: 1
+      input: {country: eg, title: data, location: "", limit: 250, datePosted: "7"}
+    linkedin_remote:   # LinkedIn's own Remote filter (f_WT=2) for Egypt: remote jobs open to someone in Egypt; a plain "Worldwide" search gave local jobs (2 of 360 yours, 2026-11-10)
+      enabled: true
+      actor: valig/linkedin-jobs-scraper
+      max_items: 500
+      max_charge_usd: 0.3   # was 1 (2026-11-12): a run costs $0.10-0.17, and an account needs the cap plus the margin free to take it
+      input: {keywords: data engineer OR data analyst OR BI developer OR AI engineer OR machine learning OR data scientist, location: Egypt, datePosted: r604800, limit: 500, urlParam: ["f_WT=2"]}
+    linkedin_remote_world:
+      enabled: false  # off 2026-11-12 (Omar): Apify money goes to the 4 Egypt LinkedIn searches only
+      actor: valig/linkedin-jobs-scraper
+      max_items: 500
+      max_charge_usd: 1
+      input: {keywords: data engineer OR data analyst OR BI developer OR AI engineer OR machine learning OR data scientist, location: Worldwide, datePosted: r604800, limit: 500, urlParam: ["f_WT=2"]}
+    linkedin_egypt_bi:   # Egypt's analyst and BI jobs: the general Egypt search (software OR data ...) is cut by LinkedIn's own result limit
+      enabled: true
+      actor: valig/linkedin-jobs-scraper
+      max_items: 500
+      max_charge_usd: 0.3   # was 1 (2026-11-12): a run costs $0.10-0.17, and an account needs the cap plus the margin free to take it
+      input: {keywords: data analyst OR business intelligence OR power bi OR BI developer OR reporting analyst OR analytics, location: Egypt, datePosted: r604800, limit: 500}
+    linkedin_egypt_ai:
+      enabled: true
+      actor: valig/linkedin-jobs-scraper
+      max_items: 500
+      max_charge_usd: 0.3   # was 1 (2026-11-12): a run costs $0.10-0.17, and an account needs the cap plus the margin free to take it
+      input: {keywords: AI engineer OR machine learning OR data scientist OR NLP OR LLM OR generative AI OR data engineer, location: Egypt, datePosted: r604800, limit: 500}
     facebook:    # apify/facebook-posts-scraper: $5 / 1k posts; public pages' or groups' links in startUrls, then enable
       enabled: false
       actor: apify/facebook-posts-scraper
@@ -474,6 +504,17 @@ remote_words: [remote*, work from home, wfh, عن بعد*]
 your_companies: [vodafone*, vois, _vois, orange, pwc*, pricewaterhouse*, deloitte*, dhl, nestle*, nestlé*, adib,
                  abu dhabi islamic*, eg bank, egbank, egyptian gulf bank*, etisalat*, e&*, advansys*, nawy,
                  alignerr*, labelbox*, crossover*, sumerge*, finaira*, cyshield*, integrant*, infomineo*, avidbeam*, brightskies*, e-finance*, help ag*,
+                 # New Cairo employers (Omar, 2026-11-12): from the radar's own postings located in New Cairo and a Google
+                 # Maps search of its head offices (Fifth Settlement, 90th Street, Cairo Business Park, Mivida)
+                 "pepsico*", "coca-cola*", "holcim*", "zaintech*", "zain tech*", "mercedes-benz*", "schneider electric*",
+                 "elsewedy*", "riseup*", "rise up*", "americana*", "mobily infotech*", "ossus*", "rasan*", "mylo",
+                 "american university in cairo*", "inova pharma*", "sandoz*", "eaton", "boubyan*", "standard chartered*",
+                 "konecta*", "johnson & johnson*", "money fellows*", "intelogix*", "itgoals*", "quadratech*", "onehealth*",
+                 "pulse by solutions*", "egyptian steel*", "edecs*", "fabmisr*", "fab misr*", "nbk", "national bank of kuwait*",
+                 "asset technology*", "adcb*", "slb", "schlumberger*", "gsk", "glaxosmithkline*", "naseej*", "servicefirst*",
+                 "astrazeneca*", "foodics*", "bank abc*", "azentio*", "abb", "corporatestack*", "suez canal bank*", "cemex*",
+                 "al futtaim*", "al-futtaim*", "arab bank*", "al baraka*", "citi", "citibank*", "united energy*", "haier*",
+                 "housing and development bank*", "ahli united bank*", "egyptian banks company*", "cretik*", "tqnia*",
                  # AI memory and context startups of 50 people or fewer (2026-10-13), like Admyrix
                  admyrix, sentra*, cognee, letta, mem0, zep, uvi, gutt, corunner, memora,
                  # Egypt startups without a careers page found (2026-10-13): 30

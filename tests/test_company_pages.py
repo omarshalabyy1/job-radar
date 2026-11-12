@@ -123,6 +123,10 @@ def test_a_teamtailor_site_on_its_own_domain_is_detected_from_its_feed_and_read_
     ("https://aqarmap.zohorecruit.com/jobs/Careers", ("zoho", "https://aqarmap.zohorecruit.com/jobs/Careers")),
     ("https://cibeg.taleo.net/careersection/cib_ex/jobsearch.ftl?lang=en", ("taleo", "https://cibeg.taleo.net/careersection/cib_ex")),
     ("https://wd3.myworkdaysite.com/recruiting/mdlz/External?locationCountry=x", ("workday", "https://wd3.myworkdaysite.com/recruiting/mdlz/External")),
+    ("https://pwc.wd3.myworkdayjobs.com/Global_Experienced_Careers?locations=x",
+     ("workday", "https://pwc.wd3.myworkdayjobs.com/Global_Experienced_Careers")),
+    ("https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers?locationCountry=x",
+     ("workday", "https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers")),
     ("https://www.ibm.com/careers/search?field_keyword_05[0]=Egypt", ("ibm", "https://www.ibm.com/careers/search?field_keyword_05[0]=Egypt")),
     ("https://jobs.vodafone.com/careers?location=Egypt&domain=vodafone.com",
      ("eightfold", "https://jobs.vodafone.com/careers?location=Egypt&domain=vodafone.com")),
@@ -230,6 +234,31 @@ def test_a_workday_site_on_myworkdaysite_is_read_through_its_cxs_search(monkeypa
                                                                 ("Sr Analyst, SC Finance & External Manufacturing, MENAP", "Cairo, Egypt")]
     assert rows[2]["date_posted"] == str(date.today())  # "Posted Today"
     assert rows[0]["job_url"].startswith("https://wd3.myworkdaysite.com/recruiting/mdlz/External/job/Cairo-Egypt/")
+
+
+@pytest.mark.parametrize("base, search", [
+    ("https://pwc.wd3.myworkdayjobs.com/Global_Experienced_Careers", "https://pwc.wd3.myworkdayjobs.com/wday/cxs/pwc/Global_Experienced_Careers/jobs"),
+    ("https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers", "https://accenture.wd103.myworkdayjobs.com/wday/cxs/accenture/AccentureCareers/jobs"),
+])
+def test_a_workday_site_on_myworkdayjobs_is_read_through_its_cxs_search_too(monkeypatch, base, search):
+    """2026-11-12: PwC's Workday site was left to the 28,000-company feed, which gave none of its Egypt jobs."""
+    asked = asked_for(monkeypatch, "workday_mondelez.json")
+    rows = companies.READERS["workday"]("PwC", base)
+    assert asked[0][:2] == ("POST", search)
+    assert rows[0]["job_url"].startswith(base + "/job/Cairo-Egypt/")
+
+
+def test_a_feed_with_a_search_is_also_asked_for_each_role_word(monkeypatch):
+    """2026-11-12: Deloitte's feed gives the 20 newest jobs of a search: 'Egypt' alone left out its Senior Data & Analytics
+    Engineer, which 'engineer Egypt' and 'analyst Egypt' both give. A job in several answers is one row."""
+    feed = (b"<rss><channel><item><title>Senior Data &amp; Analytics Engineer, Cairo, Egypt</title>"
+            b"<description>Cairo</description><link>https://jobs.example.com/JobDetail/1</link></item></channel></rss>")
+    asked = []
+    monkeypatch.setattr(companies, "get", lambda url, **params: asked.append(url) or SimpleNamespace(content=feed))
+    rows = companies.READERS["rss"]("Deloitte", "https://jobs.example.com/SearchJobs/feed/?search=Egypt")
+    assert asked == ["https://jobs.example.com/SearchJobs/feed/?search=Egypt"] + [
+        f"https://jobs.example.com/SearchJobs/feed/?search={word}+Egypt" for word in companies.FEED_WORDS]
+    assert [r["job_url"] for r in rows] == ["https://jobs.example.com/JobDetail/1"]  # in all five answers: one row
 
 
 def test_ibm_is_read_through_its_careers_search_api_for_the_country_its_address_names(monkeypatch):

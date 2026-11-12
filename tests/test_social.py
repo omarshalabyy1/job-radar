@@ -246,7 +246,7 @@ def board(name: str) -> dict:
                                          ("reddit", "harshmaur/reddit-scraper")])
 def test_x_and_reddit_run_every_collect_the_daily_hold_allows(name, actor):
     b = board(name)
-    assert b["enabled"] is True and b["actor"] == actor
+    assert b["actor"] == actor  # on or off is Omar's switch in settings.yaml
     assert b["posts"]["fresh_days"] == 3
     assert config.SETTINGS["apify"]["every_hours"] <= 24  # a board that ran waits this long: once a day
 
@@ -325,7 +325,8 @@ def fake_run(items_, cost, calls=None):
 
 
 def settings(monkeypatch, *names, **extra):
-    boards = {n: {**config.SETTINGS["apify"]["boards"][n], **extra} for n in names}
+    # enabled here whatever settings.yaml says: the switch is Omar's (2026-11-12: only the Egypt LinkedIn boards are on)
+    boards = {n: {**config.SETTINGS["apify"]["boards"][n], "enabled": True, **extra} for n in names}
     monkeypatch.setitem(apify.SETTINGS, "apify", {"margin_usd": 0.5, "every_hours": 20, "boards": boards})
     monkeypatch.setenv("APIFY_TOKENS", "a,b")
     monkeypatch.setattr(apify, "spent", lambda token: (1.0, 10.0))

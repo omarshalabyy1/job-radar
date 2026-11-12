@@ -151,7 +151,7 @@ def company_sites(sites: list[tuple], threads: int = 4) -> tuple[list[dict], lis
 
 
 # boards another source already reads in bulk, so no browser is spent on them every run
-COVERED = [(r"myworkdayjobs\.com|bamboohr\.com", "the 28,000-company feed (extract_portals)"),
+COVERED = [(r"bamboohr\.com", "the 28,000-company feed (extract_portals)"),
            (r"jobs\.workable\.com/company/", "the Workable job search (extract_workable)")]
 
 
@@ -170,6 +170,7 @@ ATS_PATTERNS = [
     ("zoho", r"(https://[\w-]+\.zohorecruit\.com/jobs/\w+)"),
     ("taleo", r"(https://[\w-]+\.taleo\.net/careersection/[\w-]+)/(?:jobsearch|joblist)\.ftl"),
     ("workday", r"(https://[\w.-]+\.myworkdaysite\.com/recruiting/[\w-]+/[\w-]+)"),
+    ("workday", r"(https://[\w-]+\.wd\d+\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?[\w-]+)"),
     ("oracle_hcm", r"(https://[\w.-]+/hcmUI/CandidateExperience/\w+/sites/[\w-]+/jobs[^\s\"'<>#]*)"),
     ("eightfold", r"(https://[\w.-]+/careers\?[^\s\"'<>#]*\bdomain=[\w.-]+[^\s\"'<>#]*)"),
     ("ibm", r"(https://www\.ibm\.com/careers/search[^\s\"'<>#]*)"),
@@ -431,15 +432,23 @@ def successfactors_classic(company: str, url: str) -> list[dict]:
     return rows
 
 
+FEED_WORDS = ("engineer", "developer", "analyst", "analytics")  # a word of each of your roles' titles
+
+
 def rss(company: str, feed: str) -> list[dict]:
-    """A career site's RSS feed of its newest jobs (Deloitte Middle East on Avature)."""
-    rows = []
-    for item in ET.fromstring(get(feed).content).iter("item"):
-        title, where, link = item.findtext("title", ""), item.findtext("description", ""), item.findtext("link", "")
-        posted = str(parsedate_to_datetime(item.findtext("pubDate"))).split(" ")[0] if item.findtext("pubDate") else ""
-        if (not posted or posted >= since()) and role_of(title) and place_of(f"{where} {title}"):
-            rows.append(row(company.lower(), None, title, company, where, link, posted or None, None,
-                            {"title": title, "location": where, "link": link}))
+    """A career site's RSS feed of its newest jobs (Deloitte Middle East on Avature). A feed of a search (search=Egypt)
+    gives only the search's 20 newest, so it is asked again for each of FEED_WORDS ('engineer Egypt'); a job is one row."""
+    rows, links = [], set()
+    asked = re.search(r"search=([^&]*)", feed)
+    feeds = [feed] + [feed.replace(asked.group(0), f"search={word}+{asked.group(1)}") for word in FEED_WORDS if asked]
+    for one in feeds:
+        for item in ET.fromstring(get(one).content).iter("item"):
+            title, where, link = item.findtext("title", ""), item.findtext("description", ""), item.findtext("link", "")
+            posted = str(parsedate_to_datetime(item.findtext("pubDate"))).split(" ")[0] if item.findtext("pubDate") else ""
+            if link not in links and (not posted or posted >= since()) and role_of(title) and place_of(f"{where} {title}"):
+                links.add(link)
+                rows.append(row(company.lower(), None, title, company, where, link, posted or None, None,
+                                {"title": title, "location": where, "link": link}))
     return rows
 
 
@@ -582,9 +591,11 @@ def taleo_classic(company: str, base: str, fields: list[str]) -> list[dict]:
 
 
 def workday(company: str, base: str) -> list[dict]:
-    """A company's jobs in Egypt on a Workday site whose address is on myworkdaysite.com (the myworkdayjobs.com ones come
-    through the 28,000-company feed), through its cxs search, 20 a page, at most 10 pages."""
-    host, tenant, site = re.match(r"https://([\w.-]+)/recruiting/([\w-]+)/([\w-]+)", base).groups()
+    """A company's jobs in Egypt on a Workday site, through its cxs search, 20 a page, at most 10 pages. Its address is
+    on myworkdaysite.com (/recruiting/<tenant>/<site>) or on myworkdayjobs.com (<tenant>.wdN..., then the site, after a
+    language such as en-US when it has one): the 28,000-company feed gave none of PwC's Egypt jobs (2026-11-12)."""
+    host, tenant, site = (re.match(r"https://([\w.-]+)/recruiting/([\w-]+)/([\w-]+)", base)
+                          or re.match(r"https://(([\w-]+)\.wd\d+\.myworkdayjobs\.com)/(?:[a-z]{2}-[A-Z]{2}/)?([\w-]+)", base)).groups()
     rows = []
     for offset in range(0, 200, 20):
         data = fetch("POST", f"https://{host}/wday/cxs/{tenant}/{site}/jobs", headers={"Accept": "application/json"},
