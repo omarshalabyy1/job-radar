@@ -8,6 +8,7 @@ collect does (the `/job-radar` skill sends Claude here when you call it). Start 
 |---|---|---|
 | job-radar | written for job-radar's owner: `/job-radar` runs a collect, reviews matches, tailors applications | - |
 | scraping-orchestrator | written for job-radar's owner | - |
+| apply-autopilot | written for job-radar's owner: the application patterns (Workday, Greenhouse, Lever ...), what Claude fills and what stays Omar's, the answer bank | - |
 | web-scraping | [yfe404/web-scraper](https://github.com/yfe404/web-scraper) | MIT |
 | scrapling | [Thanane15M/scrapling-skill](https://github.com/Thanane15M/scrapling-skill) | MIT |
 | scrapling-fetcher | [Cedriccmh/claude-code-skill-scrapling](https://github.com/Cedriccmh/claude-code-skill-scrapling) | MIT |

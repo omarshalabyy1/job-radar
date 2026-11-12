@@ -3,6 +3,8 @@ name: scraping-orchestrator
 description: Entry point for ANY scraping job (scrape, crawl, extract listings, prices, hidden API, 403/429, blocked, Cloudflare, CAPTCHA, login wall, cookies, "سكرب", "اسحب البيانات") and any project that scrapes. Builds with requests, curl_cffi and Playwright, and routes each step to the skill or file it needs (scraping, web-scraping, playwright-skill); scrapling, crawl4ai and Firecrawl are measured fallbacks only. Use it first, before any of them.
 ---
 
+> **System skills (MUST):** your next action after reading this skill is a Skill tool call to `superpowers:using-superpowers`, then the matching superpowers skill (brainstorming before new work, systematic-debugging for a bug or failure, test-driven-development for code, verification-before-completion before saying done). If the task reaches outside this skill's domain, invoke `skill-finder` to pick the skill that owns it. CLAUDE.md rules win on conflict.
+
 # Scraping orchestrator
 
 Route each step to the one skill or file it needs (skills in `~/.claude/skills/<name>/`; where a row names a file, `Read` only that file). Stop at the first step that gets the data.
@@ -44,7 +46,7 @@ Prefer API, then sitemap or list, then pages; move to a heavier tool only when t
 
 ### MCP tools by step
 
-Use them for discovery and one-off pulls; production scrapers stay plain Python.
+Use them for discovery and one-off pulls; production scrapers stay plain Python. A server the session lists as needing authorization (Firecrawl, Nimble, Vercel) works after Omar runs `/mcp` once: say so, use another row meanwhile.
 
 | Step | MCP | Use it for |
 |---|---|---|
@@ -59,6 +61,11 @@ Use them for discovery and one-off pulls; production scrapers stay plain Python.
 | Structured data | `firecrawl_scrape` with `alexandria`, `firecrawl_find_tools` | A ready data provider (companies, jobs, prices, filings) instead of scraping pages. |
 | Prebuilt scrapers | Apify (`search-actors`, `call-actor`, `get-dataset-items`) | An Actor that already scrapes the site; uses Apify budget. |
 | Recurring watch | `firecrawl_monitor_*` | Alert on page changes without a DAG. |
+| Search, read, drive pages | TinyFish MCP (`search`, `fetch_content`, `run_web_automation`; 2 concurrent) | Hosted browser for a JS or protected page when `requests` and Playwright fail; also `create_dataset` for a table of many entities. |
+| Prebuilt job and company data | Bright Data MCP / skills `brightdata-plugin:data-feeds`, `scraper-builder`, `scrape`, `search`, `discover-api` | Structured records (1 credit each) or a scraper built for one site; Bright Data CLI `bdata`. |
+| Web data in one call | Skill `nimble:nimble-web-expert` (needs the Nimble CLI) | Extraction templates and search agents for a site. |
+| A custom Actor | Skill `apify:apify-actor-development` | Only when no Actor exists and the scrape recurs. |
+| Contacts at a company | Apollo MCP (`mcp__ca53a264-*`) | Hiring contacts for a company you scraped; published data only. |
 
 ## 3. Plan, then build
 
@@ -81,6 +88,25 @@ Read the saved refusal body first (`probe_out/`), then climb one rung at a time:
 5. CAPTCHA, login or cookie wall: Omar runs `python ~/.claude/skills/scraping-orchestrator/unlock.py <url> <site>` in his terminal (Claude can start it with `mcp__terminal__run_in_terminal`; the Bash tool has no stdin). He passes the check in the visible window and presses Enter. The profile stays in `~/.scraping-profiles/<site>/` with `session.json` (cookies + user agent): Playwright reuses the profile headless (`launch_persistent_context`), `requests` / `curl_cffi` send those cookies and that user agent. For Airflow, copy `session.json` to `data/cookies/<site>.json` (gitignored, mounted read-only) and fail the task loudly when it expires. Re-run to refresh.
 
 Re-test when it breaks: a refusal, a falling count or empty fields mean the verdict is stale.
+
+## Jobs on request
+
+Omar says "scrape jobs from X", "get jobs now", "find jobs at <company>": do it by hand, in this session, on his Claude plan. Rules of the job-radar repo hold (skill `job-radar`): Egypt and remote jobs only, never open a LinkedIn or Indeed page (Apify actors only; `settings.yaml` apify.boards), never apply, never log in or solve a CAPTCHA.
+
+| The source is | Route |
+|---|---|
+| A company on an ATS (Greenhouse, Lever, Ashby, Recruitee, SmartRecruiters, Workable) | The ATS's public JSON (`boards-api.greenhouse.io/v1/boards/<token>/jobs?content=true`, `api.lever.co/v0/postings/<token>?mode=json`, `api.ashbyhq.com/posting-api/job-board/<token>`); readers in `job_radar/sources/companies.py` |
+| A company's own careers page | Probe, then embedded JSON or the XHR call; else Playwright; `firecrawl_scrape` or TinyFish if blocked |
+| A job board (Wuzzuf, Tanqeeb, Bayt, Jooble, Himalayas, Remotive) | The board's reader in `job_radar/sources/`; a new board: hidden API first, then HTML |
+| LinkedIn, Indeed, Glassdoor, Wellfound | Apify (`apify.boards`, caps in settings), or `brightdata-plugin:data-feeds` |
+| X or Reddit hiring posts | Apify (`x`, `reddit` boards: filtered by `sources/social.py`) |
+| Many companies at once | `firecrawl-company-directories`, Exa `web_search_exa`, Apollo for contacts |
+
+Then:
+
+1. Scrape into a list of `{title, job_url, company, location, date_posted, description, searched_for}` (`searched_for`: Egypt or Remote), saved as `E:\job-radar\output\scraped\<site>.json` (the container sees it as `output/scraped/`). Keep only jobs posted in the last 5 days (`KEEP_DAYS`); the age comes from the posting's own date.
+2. Store and rank them: `docker exec -w /opt/job-radar job-radar-airflow-1 /opt/job-radar-venv/bin/python -m job_radar.manual_jobs <site> output/scraped/<site>.json`. It stores each posting once as source `manual:<site>`, then runs transform and match_skills.
+3. Report: found, kept, new, the paid MCP or Apify cost, and what blocked; write the site notes (step 1). A source that works becomes a reader in `job_radar/sources/` with a saved sample and a test, so the daily run takes it over.
 
 ## 5. What to skip in each skill
 
