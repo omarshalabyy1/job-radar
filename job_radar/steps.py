@@ -394,8 +394,8 @@ def extract_portals(conn) -> None:
 
 
 def extract_email(conn) -> None:
-    """The jobs in your mailboxes. An email read is not downloaded again: one with jobs is known by its raw
-    postings, one with none (a newsletter) by core.email_seen, kept 7 days."""
+    """The jobs in your mailboxes. An email read is not downloaded again: every one read is in core.email_seen, kept
+    7 days (one with jobs is known by its raw postings too)."""
     conn.execute("DELETE FROM core.email_seen WHERE seen_at < now() - interval '7 days'")
     seen = {r[0] for r in conn.execute(
         "SELECT payload->>'message_id' FROM raw.job_posting WHERE source = 'email'"
@@ -410,7 +410,7 @@ def extract_email(conn) -> None:
         cur.executemany("INSERT INTO core.email_seen (message_id) VALUES (%s) ON CONFLICT DO NOTHING",
                         [(message_id,) for message_id in empty])
     conn.commit()
-    print(f"extract_email: {len(empty)} emails without a job remembered")
+    print(f"extract_email: {len(empty)} emails read and remembered")
 
 
 # where a posting's own time is, by source: an ISO time, or Unix seconds or milliseconds

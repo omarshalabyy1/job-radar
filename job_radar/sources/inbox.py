@@ -28,7 +28,7 @@ IMAP_HOSTS = {"gmail.com": "imap.gmail.com", "googlemail.com": "imap.gmail.com",
 # a job page, so an article such as "10 KPIs Every Data Analyst..." is no job, whatever the subject.
 JOB_SENDERS = (r"linkedin|jobalerts|jobs-listings|jobs-noreply|indeed|wuzzuf|bayt|glassdoor|naukrigulf|gulftalent"
                r"|akhtaboot|tanqeeb|forasna|jooble|himalayas|remotive|weworkremotely|wellfound|recruit"
-               r"|talent|careers?@|hiring")
+               r"|talent|careers?@|hiring|noreply@workablemail")
 
 
 JOB_PAGE = (r"/jobs?/|/careers?/|/vacanc|/positions?/|viewjob|job-?listing|[?&]jk=|greenhouse\.io|lever\.co"
@@ -57,7 +57,7 @@ def mailboxes(seen: set[str], empty: set[str]) -> list[dict]:
     """Jobs in every email of your inboxes and spam folders (LinkedIn, Indeed, Wuzzuf, Wellfound,
     Bayt alerts, an employer's email ...), over IMAP and read-only: nothing is marked read, moved or
     deleted, and nothing leaves the laptop. An email already read (its Message-ID in `seen`) is not read again;
-    the Message-ID of each email read that had no job in it is added to `empty`, for the caller to remember.
+    the Message-ID of each email read is added to `empty`, for the caller to remember.
 
     MAILBOXES in .env: address:app-password[:imap-host], comma-separated; the host is known for
     Gmail, Yahoo, iCloud and Outlook addresses."""
@@ -102,8 +102,10 @@ def read_mailbox(address: str, password: str, host: str, seen: set[str], empty: 
                 jobs = jobs_in_email(body.get_content(), alert) if body else []
                 if not re.search(JOB_SENDERS, str(h["From"]), re.I):
                     jobs = [job for job in jobs if re.search(JOB_PAGE, job[3], re.I)]
-                if not jobs:  # not a job email, or one with no job: remembered, so the next run does not download it again
-                    empty.add(message_id)
+                # remembered, so the next run does not download it again: an email with no job, and one with jobs too
+                # (its jobs may all be stored already from an earlier email, which leaves no posting that names it)
+                empty.add(message_id)
+                if not jobs:
                     continue
                 if employer := company_of_subject(str(h["Subject"])):
                     jobs = [(title, employer, location, url) for title, _, location, url in jobs]
@@ -138,6 +140,7 @@ def jobs_in_email(page: str, alert: bool = False) -> list[tuple[str, str, str, s
         above, after_link = lines[after_link:i], i + 1  # the text since the previous link
         text, url = links[int(link.group(1))]
         title, _, card = text.partition("\n")
+        named = None  # the company, when the card says which line it is
         if re.fullmatch(GENERIC_LINK, title, re.I):  # the card is the text above: its first role line, then the rest
             first = next((k for k, text_line in enumerate(above) if role_of(text_line)), None)
             if first is None:
@@ -147,6 +150,14 @@ def jobs_in_email(page: str, alert: bool = False) -> list[tuple[str, str, str, s
         # from LinkedIn only its job pages (not profiles, posts or searches); in its alert, each kept
         # whatever its title: LinkedIn chose it for your alert
         linkedin_job = "linkedin.com/jobs/view/" in url
+        if hiring := re.fullmatch(r".+ is hiring for the (.+) job at (.+?)\.?", title):  # LinkedIn's "message the hiring manager"
+            title, named, card = hiring.group(1), hiring.group(2), ""
+        elif card.split("\n")[0].lower() == "at":  # Workable: title, "at", company, then work mode and place
+            named, card = card.split("\n")[1] if "\n" in card else "", "\n".join(card.split("\n")[2:])
+        elif not linkedin_job and not role_of(title) and re.search(JOB_PAGE, url, re.I):  # Glassdoor's job link: company, its rating, then the title and the place
+            rest = card.split("\n")
+            if (k := next((k for k, text_line in enumerate(rest[:2]) if role_of(text_line)), None)) is not None:
+                named, title, card = title, rest[k], "\n".join(rest[k + 1:])
         if not role_of(title, alert=alert and linkedin_job) or url in urls or ("linkedin.com" in url and not linkedin_job):
             continue
         urls.add(url)
@@ -155,8 +166,18 @@ def jobs_in_email(page: str, alert: bool = False) -> list[tuple[str, str, str, s
             text_of_next, href_of_next = links[int(next_link.group(1))]
             after = "" if re.search(JOB_PAGE, href_of_next, re.I) else text_of_next.split("\n")[0]
         company, location = (part.strip(" -") for part in (re.split(r"\s+[·•|–-]\s+", after, maxsplit=1) + [""])[:2])
-        if not location and not card and i + 2 < len(lines) and not lines[i + 2].startswith("@@") and place_of(lines[i + 2]):
-            location = lines[i + 2]  # the location on a line of its own (a place, never a line of the body text)
+        if named is not None:  # the card named its company: the place is its first line that is one, else (Glassdoor) the line under the title
+            below = card.split("\n") if card else []
+            company = named
+            location = next((b for b in below if place_of(b)), below[0] if below and re.search(r"\w{3}", below[0]) else "")
+        if not location and named is None:  # the location on a line of its own (a place, never a line of the body text): in NaukriGulf's card it is under
+            # the company and the "1 - 6 Years" line; with no card it is below the link, and the next card's link ends the search
+            for below in (card.split("\n")[1:] if card else lines[i + 2:i + 5]):
+                if below.startswith("@@"):
+                    break
+                if place_of(below):
+                    location = below
+                    break
         jobs.append((title, company if not role_of(company) else "", location, url))
     return jobs
 
