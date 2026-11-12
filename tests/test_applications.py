@@ -71,6 +71,20 @@ def test_find_job_by_key_then_by_only_company():
     assert find_job(jobs, "Junior AI Engineer", "SourceQS", on) == 6  # a note after the company
 
 
+def test_find_job_keeps_a_companys_roles_with_different_notes_apart():
+    """2026-11-12: Henkel's rejection of 'Data Analytics Engineer - Supply Chain' marked 'Data Analytics Engineer
+    (Evening Shift)' rejected, and the plain 'Data Analytics Engineer' was filed under it too: three requisitions."""
+    seen = date(2026, 10, 1)
+    jobs = [(1, "Data Analytics Engineer (Evening Shift)", "Henkel", seen), (2, "Data Analytics Engineer", "Henkel", seen),
+            (3, "Data Engineer (Hybrid)", "Acme", seen)]
+    on = date(2026, 11, 8)
+    assert find_job(jobs, "Data Analytics Engineer - Supply Chain", "Henkel", on) is None  # a third role: neither job
+    assert find_job(jobs, "Data Analytics Engineer (Evening Shift)", "Henkel", on) == 1
+    assert find_job(jobs, "Data Analytics Engineer", "Henkel", on) == 2
+    assert find_job(jobs, "Data Engineer - Cairo, Egypt", "Acme", on) == 3  # a place or a work mode is no other role
+    assert find_job(jobs, "Data Engineer (Global)", "Acme", on) == 3
+
+
 def test_switched_off_the_mailbox_is_not_touched(monkeypatch, capsys):
     import imaplib
 

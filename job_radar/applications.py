@@ -148,20 +148,31 @@ def same_company(a: str, b: str) -> bool:
     return any(x.startswith(y) or y.startswith(x) for x in company_names(a) for y in company_names(b) if x and y)
 
 
+def title_notes(title: str) -> set[str]:
+    """What job_key drops from a title, a place or a work mode aside: the words in brackets and after ' - ' ('Supply
+    Chain', 'Evening Shift'). One company's roles that differ only there are different jobs (Henkel, 2026-11-12)."""
+    from .config import place_of
+
+    lower = title.lower()
+    parts = re.findall(r"[(\[](.*?)[)\]]", lower) + re.split(r"\s+[-–—|/@]\s+", re.sub(r"\(.*?\)|\[.*?\]", " ", lower))[1:]
+    return {" ".join(re.sub(r"[^\w]+", " ", p).split()) for p in parts
+            if p.strip() and not place_of(p) and not re.search(r"remote|hybrid|on-?site|global|worldwide|anywhere", p)}
+
+
 def find_job(jobs: list[tuple[int, str, str, date]], title: str | None, company: str | None, received: date) -> int | None:
     """The job_id of (job_id, title, company, first_seen) in `jobs` that an email of `received` is
-    about: the same title (as job_key reads it) at a company that goes by the same name when the email names a
-    title, else the only job of that company. A job first seen after the email is a later posting, not the one the
-    email is about."""
+    about: the same title (as job_key reads it, with the same notes: title_notes) at a company that goes by the same
+    name when the email names a title, else the only job of that company. A job first seen after the email is a later
+    posting, not the one the email is about."""
     from .steps import job_key  # steps imports this module
 
     if not company:
         return None
     jobs = [j for j in jobs if j[3] <= received]
     if title:
-        key = job_key(title, "", "-").split(" | ", 1)[0]
-        return next((job_id for job_id, t, c, _ in jobs if job_key(t, "", "-").split(" | ", 1)[0] == key and same_company(c, company)),
-                    None)
+        key, notes = job_key(title, "", "-").split(" | ", 1)[0], title_notes(title)
+        return next((job_id for job_id, t, c, _ in jobs if job_key(t, "", "-").split(" | ", 1)[0] == key
+                     and title_notes(t) == notes and same_company(c, company)), None)
     ids = [job_id for job_id, _, c, _ in jobs if same_company(c, company)]
     return ids[0] if len(ids) == 1 else None
 
