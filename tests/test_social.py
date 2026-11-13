@@ -438,6 +438,8 @@ def test_extract_apify_loads_the_posts_drops_a_repost_of_a_stored_one_and_ends_w
     # the saved posts are dated 2026-11-07 and transform ages a job by the database's own date: without this, from
     # 2026-11-12 on a post was "over 5 days" and the test failed on the calendar, not on the code
     monkeypatch.setattr(steps, "KEEP_DAYS", 100_000)
+    # the fixture's AI Engineer post is about the social path, not about seniority: the AI role's entry_only rule is off here
+    monkeypatch.setattr(config, "ENTRY_ONLY", set())
     holds = settings(monkeypatch, "x", "reddit")
     both = {"x": items("social_x.json"), "reddit": items("social_reddit.json")}
     costs = {"x": 0.0123, "reddit": 0.0456}

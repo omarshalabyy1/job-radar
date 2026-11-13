@@ -26,7 +26,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from . import claude
-from .config import FEATURES, NO_FETCH, OUTPUT, SETTINGS, reasons
+from .config import FEATURES, GENERIC_CV, NO_FETCH, OUTPUT, SETTINGS, reasons
 from .sources import ERRORS, Held, fetch, time_left
 
 TAILOR_SECONDS = 300  # the DAG gives the task 300 s; a new draft (two calls) starts only with 120 s left
@@ -333,8 +333,9 @@ def jobs_to_tailor(conn) -> list[tuple]:
         " FROM core.claude_grade g JOIN core.job j USING (job_id)"
         " WHERE g.score >= %s AND NOT EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id)"
         " AND j.place = ANY(%s) AND (coalesce(j.restriction, '') = '' AND coalesce(g.restriction, '') = '' OR NOT %s)"
+        " AND NOT coalesce(j.role_rank = ANY(%s), false)"  # roles sent with a generic CV are never tailored
         " ORDER BY g.score DESC, j.role_rank, j.job_id",
-        (floor, places, FEATURES["eligibility"])).fetchall()
+        (floor, places, FEATURES["eligibility"], list(GENERIC_CV))).fetchall()
 
 
 def form_facts() -> str:

@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from ..config import OUTPUT, SETTINGS
+from ..config import GENERIC_CV, OUTPUT, SETTINGS
 from ..tailor import closed_now, draft_folder, pdf_problems
 from . import answers, queue
 from .queue import Job, record_attempt
@@ -74,15 +74,19 @@ class PlaywrightPages:
 
 
 def draft_for(conn, job: Job) -> tuple[Prepared | None, str]:
-    """The job with its tailored PDFs (the newest day's draft folder), or (None, why it cannot be used)."""
-    row = conn.execute("SELECT title FROM core.job WHERE job_id = %s", (job.job_id,)).fetchone()
-    title = row[0] if row else ""
-    probe = draft_folder("day", job.company, title, job.job_id)
-    folders = sorted((d / probe.name for d in probe.parent.parent.iterdir() if d.is_dir()) if probe.parent.parent.is_dir() else [])
-    folders = [f for f in folders if f.is_dir()]
-    if not folders:
-        return None, "no draft"
-    folder = folders[-1]  # day folders sort by date
+    """The job with its tailored PDFs (the newest day's draft folder), or for a role sent with a generic CV (settings roles:
+    generic_cv) that folder's CV; or (None, why it cannot be used)."""
+    row = conn.execute("SELECT title, role_rank FROM core.job WHERE job_id = %s", (job.job_id,)).fetchone()
+    title, rank = row if row else ("", None)
+    if rank in GENERIC_CV:
+        folder = OUTPUT / "applications" / GENERIC_CV[rank]
+    else:
+        probe = draft_folder("day", job.company, title, job.job_id)
+        folders = sorted((d / probe.name for d in probe.parent.parent.iterdir() if d.is_dir()) if probe.parent.parent.is_dir() else [])
+        folders = [f for f in folders if f.is_dir()]
+        if not folders:
+            return None, "no draft"
+        folder = folders[-1]  # day folders sort by date
     pdfs = sorted(folder.glob("*.pdf"))
     cv = next((p for p in pdfs if not p.name.endswith("Cover Letter.pdf")), None)
     cover = next((p for p in pdfs if p.name.endswith("Cover Letter.pdf")), None)

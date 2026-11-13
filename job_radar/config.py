@@ -52,6 +52,10 @@ HOME = "Egypt"  # onsite and hybrid jobs only here, and its own email
 ROLES = [(rank, role["name"], " OR ".join(f'"{term}"' for term in role["search"]),
           [words(need) for need in role["title_needs"]]) for rank, role in enumerate(SETTINGS["roles"], 1)]
 ROLE_LABEL = {rank: label for rank, label, _, _ in ROLES}
+# roles open to intern and junior titles only, and roles sent with one generic CV instead of a tailored one
+ENTRY_ONLY = {rank for rank, role in enumerate(SETTINGS["roles"], 1) if role.get("entry_only")}
+GENERIC_CV = {rank: role["generic_cv"] for rank, role in enumerate(SETTINGS["roles"], 1) if role.get("generic_cv")}
+ENTRY_WORDS = words(SETTINGS["experience"]["entry"])
 # a job in a LinkedIn alert whose title is none of your roles: LinkedIn chose it for your alert, so it
 # is kept, listed after your roles
 ALERT_RANK = len(ROLES) + 1
@@ -135,6 +139,11 @@ def kept(title: str) -> bool:
 
 def too_senior(title: str) -> bool:
     return re.search(TOO_SENIOR, title, re.I) is not None
+
+
+def above_entry(rank: int | None, title: str) -> bool:
+    """An entry-only role (settings roles: entry_only) whose title has no intern, trainee or junior word."""
+    return rank in ENTRY_ONLY and re.search(ENTRY_WORDS, title, re.I) is None
 
 
 @functools.cache  # locations repeat ("Remote", "Cairo, Egypt"): each is worked out once per step
