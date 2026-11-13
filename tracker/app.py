@@ -24,12 +24,11 @@ def page(name: str, title: str, icon: str, **kwargs) -> st.Page:
     return st.Page(Path(__file__).parent / "app_pages" / f"{name}.py", title=title, icon=f":material/{icon}:", **kwargs)
 
 
+# the five pages for every day, the rest folded under More in the top bar
 st.navigation({
-    "Your search": [page("overview", "Overview", "dashboard", default=True), page("today", "Today", "today"),
-                    page("mail", "Inbox", "inbox"), page("jobs", "Jobs", "work"),
-                    page("ready", "Ready to apply", "task_alt"), page("applications", "Follow-ups", "schedule_send")],
-    "Insights": [page("market", "Market", "monitoring"), page("skills", "Skills", "school"),
-                 page("startups", "Startups", "rocket_launch"), page("insights", "Interview rate", "query_stats")],
-    "Setup": [page("companies", "Companies", "apartment"), page("cv", "CV", "description"),
-              page("contacts", "Contacts", "contacts"), page("runlog", "Last run", "history")],
-}).run()
+    "": [page("overview", "Overview", "dashboard", default=True), page("today", "Today", "today"), page("jobs", "Jobs", "work"),
+         page("ready", "Ready to apply", "task_alt"), page("mail", "Inbox", "inbox")],
+    "More": [page("market", "Market", "monitoring"), page("skills", "Skills", "school"), page("startups", "Startups", "rocket_launch"),
+             page("insights", "Interview rate", "query_stats"), page("companies", "Companies", "apartment"),
+             page("cv", "CV", "description"), page("contacts", "Contacts", "contacts"), page("runlog", "Last run", "history")],
+}, position="top").run()

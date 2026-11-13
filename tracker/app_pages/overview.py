@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import pandas as pd
 import streamlit as st
 
+from tracker.applications_tab import render as follow_ups
 from tracker.common import load_jobs, query
 from tracker.overview import MAIL, STAGES, STATUSES, applications, counts, in_range
 
@@ -57,3 +58,6 @@ else:
                                                      help="The newest email or status change"),
         "latest_email": st.column_config.TextColumn("Latest email", width="large"),
         "job_url": st.column_config.LinkColumn("Job", display_text="Open", width="small")})
+
+st.divider()
+follow_ups(query)  # follow up today, the replies to follow-ups, the drafts

@@ -133,6 +133,7 @@ def test_the_overview_queries_and_page_run_on_the_warehouse_schema():
         assert not app.exception
         shown = {m.label: m.value for m in app.metric}
         assert (shown["Applied"], shown["Interview"], shown["Waiting"]) == ("1", "1", "0")
+        assert {"Follow up", "Follow-up replies", "Drafts"} <= {h.value for h in app.subheader}  # the follow-ups sit under it
     finally:
         with db.connect() as conn:
             conn.execute("DELETE FROM core.application_email WHERE message_id = '<zz-overview-1>'")
