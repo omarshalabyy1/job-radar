@@ -69,7 +69,8 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
     """One dict per job you applied to: its company and title (letters and digits alone). An email goes, oldest first, to
     the application with its company and title; else, when it names no company, to the one company with that title; else
     to an application at its company whose title says the same in fewer words (a reply: in more words too); else a reply
-    or an email naming no title goes to your latest application there sent on or before it, else your first there.
+    or an email naming no title goes to your latest application there sent on or before it. A reply or an email naming no
+    title only joins an application you had sent by then; with none, it starts its own.
     `mail`: (company, title, kind, received_at, subject, action, sender, message_id, job_id); `statuses`: (company, title,
     status, updated_at, source, attempt_board, job_url, job_id)."""
     groups: dict[tuple[str, str], dict] = {}
@@ -103,11 +104,13 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
             g = groups[(named.pop(), tk)] if len(named) == 1 else group(("", tk), title)
         else:
             there = [g for key, g in groups.items() if key[0] == ck and g["events"]]
-            similar = [g for g in there if w and g["words"] and (w <= g["words"] or (kind != "applied" and g["words"] <= w))]
+            # a reply, or an email naming no job, is about an application you had sent by then
+            pool = there if kind == "applied" and tk else [g for g in there if min(t for _, t in g["events"]) <= at]
+            similar = [g for g in pool if w and g["words"] and (w <= g["words"] or (kind != "applied" and g["words"] <= w))]
             if similar:
                 g = latest_before(similar, at)
-            elif there and (kind != "applied" or not tk):
-                g, by_title = latest_before(there, at), False
+            elif pool and (kind != "applied" or not tk):
+                g, by_title = latest_before(pool, at), False
             else:
                 g = group((ck, tk), title)
         g["names"][company or ""] += 1

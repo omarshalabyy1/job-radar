@@ -222,3 +222,11 @@ def test_a_reply_from_before_you_applied_is_not_linked():
     [app] = applications([mail("Cartona", "rejected", day(200), title="Data Analyst", message_id="<old>")],
                          [status("Cartona", "applied", day(1), title="Risk Data Analyst", job_id=5)])
     assert (app["stage"], app["to_link"]) == ("waiting", [])
+
+
+def test_an_old_confirmation_naming_no_job_is_its_own_application():
+    """Cartona: applied in April (no title), rejected in April; the November jobs are new applications."""
+    apps = applications([mail("Cartona", "applied", day(210), title=None, message_id="<apr>"),
+                         mail("Cartona", "rejected", day(206), title="Data Analyst", message_id="<rej>")],
+                        [status("Cartona", "applied", day(1), title="Risk Data Analyst", job_id=5)])
+    assert sorted((a["job"], a["stage"], len(a["to_link"])) for a in apps) == [("Data Analyst", "rejected", 0), ("Risk Data Analyst", "waiting", 0)]
