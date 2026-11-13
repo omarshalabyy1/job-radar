@@ -138,3 +138,13 @@ def test_the_overview_queries_and_page_run_on_the_warehouse_schema():
             conn.execute("DELETE FROM core.application_email WHERE message_id = '<zz-overview-1>'")
             conn.execute("DELETE FROM core.application WHERE job_id = %s", (job,))
             conn.execute("DELETE FROM core.job WHERE job_id = %s", (job,))
+
+
+def test_applying_again_after_a_rejection_is_waiting():
+    [app] = applications([mail("Acme", "applied", day(90)), mail("Acme", "rejected", day(60)), mail("Acme", "applied", day(2))], [])
+    assert app["stage"] == "waiting"
+
+
+def test_an_interview_still_counts_after_applying_to_another_job_there():
+    [app] = applications([mail("Henkel", "interview", day(1))], [status("Henkel", "applied", day(0), title="BI Analyst")])
+    assert app["stage"] == "interview"

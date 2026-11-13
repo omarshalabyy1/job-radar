@@ -46,7 +46,10 @@ def board(attempt_board: str | None, source: str | None, sender: str | None) -> 
 
 
 def stage(events: list[tuple[str, datetime]]) -> str:
-    """Offer (or hired) first; else a rejection newer than any interview or assessment; else the furthest news."""
+    """Offer (or hired) first; else a rejection newer than any interview or assessment; else the furthest news. A rejection
+    or a view from before your latest application there (you applied again) no longer counts; an interview still does."""
+    again = max((at for k, at in events if k == "applied"), default=None)
+    events = [(k, at) for k, at in events if again is None or at >= again or k not in ("rejected", "viewed")]
     kinds = {k for k, _ in events}
     if kinds & {"offer", "hired"}:
         return "offer"

@@ -62,7 +62,7 @@ def rates(apps: pd.DataFrame, by: str, order: list[str] | None = None) -> pd.Dat
 def render() -> None:
     st.caption("Each application matched to a job, with the furthest stage it reached: applied, viewed, interview, offer, "
                f"hired, rejected or ghosted (applied {GHOSTED_DAYS}+ days ago, no answer). An application is a company, as on "
-               "the Applications page. Interview rate: reached an interview, whatever came after. Times are Cairo's.")
+               "the Overview. Interview rate: reached an interview, whatever came after. Times are Cairo's.")
     st.caption(f"Groups of under {SMALL} applications are not reliable: one more interview moves their rate a lot.")
     with connect() as conn:
         mail, statuses, jobs = [conn.execute(sql).fetchall() for sql in (MAIL, STATUSES, JOBS)]

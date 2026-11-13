@@ -20,6 +20,8 @@ and replies.
 - **Stage (current, so the counts add up: Applied = Waiting + Viewed + Assessment + Interview + Rejected + Offer):**
   offer or hired → **Offer**; otherwise a rejection newer than any interview or assessment → **Rejected**; otherwise
   **Interview**, then **Assessment**, then **Viewed**; otherwise **Waiting**. Your own status counts the same as an email.
+  A rejection or a view from before your latest application at that company (you applied again) no longer counts; an
+  interview still does (it may be for another job there).
 - **Assessment (by keyword):** an "interview" email whose subject or Inbox action says assessment, test, exam,
   HackerRank, Codility, video application, task or challenge. The mail reader files these as interviews today; the
   keywords split them out. No table change, no re-reading the mail.
@@ -34,19 +36,19 @@ and replies.
 ## Live numbers (warehouse, 2026-11-13, under these definitions)
 | Range | Applied | Waiting | Viewed | Assessment | Interview | Rejected | Offer | Responses |
 |---|---|---|---|---|---|---|---|---|
-| 30 days | 88 | 77 | 1 | 1 | 3 | 6 | 0 | 11 |
-| 90 days | 121 | 102 | 3 | 1 | 4 | 10 | 1 | 19 |
-| All | 214 | 187 | 3 | 2 | 6 | 15 | 1 | 27 |
+| 30 days | 89 | 78 | 1 | 1 | 3 | 6 | 0 | 11 |
+| 90 days | 122 | 105 | 2 | 1 | 4 | 9 | 1 | 17 |
+| All | 215 | 191 | 2 | 2 | 6 | 13 | 1 | 24 |
 
-Can apply: 192 jobs, 20 of them posted in the last 48 hours.
+Can apply: 190 jobs (the page, 2026-11-13 evening).
 
 ## The page
 ```
 Overview                                         [Last 30 days | 90 days | All]
-[Can apply 192 · 20 new] [Applied 88] [Responses 11]
-[Waiting 77] [Viewed 1] [Assessment 1] [Interview 3] [Rejected 6] [Offer 0]
+[Can apply 190] [Applied 89] [Responses 11]
+[Waiting 78] [Viewed 1] [Assessment 1] [Interview 3] [Rejected 6] [Offer 0]
 Show: (All | Waiting | Viewed | Assessment | Interview | Rejected | Offer)
-Company | Job | Board | Stage | Applied on | Latest news | Latest email (subject) | Link
+Company | Job | Board | Stage | Applied on | Latest news (date) | Latest email (subject) | Link
 ```
 Interviews and assessments sort to the top of the table, then the newest activity.
 
