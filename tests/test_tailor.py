@@ -117,6 +117,12 @@ def test_tailor_drafts_the_best_graded_jobs_nothing_restricts_and_you_have_not_t
     assert tailor.MIN_SCORE == 8  # the bar
 
 
+def test_tailor_never_drafts_a_role_sent_with_a_generic_cv(conn, monkeypatch):
+    monkeypatch.setattr(tailor, "GENERIC_CV", {3: "generic-ai-intern"})
+    mine = {"ai": add_graded_job(conn, "ai", 10, role_rank=3), "data": add_graded_job(conn, "data", 10, role_rank=2)}
+    assert picked(conn, mine) == ["data"]  # the AI role goes out with its one generic CV, never a tailored draft
+
+
 def test_tailor_ties_on_score_go_to_the_role_you_ranked_first_then_the_older_job(conn):
     mine = {"worse_role": add_graded_job(conn, "worse_role", 9, role_rank=2), "better_role": add_graded_job(conn, "better_role", 9, role_rank=1),
             "better_role_later": add_graded_job(conn, "better_role_later", 9, role_rank=1)}

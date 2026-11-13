@@ -75,6 +75,8 @@ roles:
   - name: AI Engineer (NLP, LLM, agents, RAG)
     search: [AI Engineer, LLM Engineer, NLP Engineer, Machine Learning Engineer, GenAI Engineer, AI Developer,
              Data Scientist, Generative AI, RAG]
+    entry_only: true              # interns and junior titles only (experience.entry words); others are too senior
+    generic_cv: generic-ai-intern # never tailored: the apply runner sends output/applications/<this>/ CV
     title_needs:
       - [ai, ml, mlops, llmops, nlp, llm, llms, genai, gen ai, generative ai, machine learning, deep learning,
          computer vision, rag, agentic, conversational ai, chatbot, prompt, langchain, langgraph,

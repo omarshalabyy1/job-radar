@@ -33,7 +33,7 @@ from . import fx, runlog, sources
 from .applications import cairo_today, due_now, track_applications  # noqa: F401  (track_applications: its own DAG, python -m job_radar track_applications)
 from .config import (BOARD_HOSTS, CLOSED_AFTER_DAYS, COMPANY_SECONDS, DESCRIBE_SECONDS, MARKET_SECONDS, EXTRACT_SECONDS, REREAD_HOURS, FEATURES, HOME, HOURS_OLD, KEEP_DAYS, NO_FETCH, OUTPUT,
                      ROLE_LABEL, ROOT, SEEN_DAYS, WORK_DAYS,
-                     NOT_REMOTE, SETTINGS, hidden_reason, in_reach, is_target, place_of, reasons, role_of, too_senior)
+                     NOT_REMOTE, SETTINGS, above_entry, hidden_reason, in_reach, is_target, place_of, reasons, role_of, too_senior)
 from .digest import digest, send, subject
 from .eligibility import eligibility, not_for_egypt  # noqa: F401  (python -m job_radar eligibility)
 from .embed import embed  # noqa: F401  (python -m job_radar embed)
@@ -600,7 +600,7 @@ def transform(conn) -> None:
         """Why this posting is not a job in your scope (the first rule it fails), or None."""
         if not (rank and place and p["job_url"]):
             return "no role"
-        if too_senior(p["title"]):
+        if too_senior(p["title"]) or above_entry(rank, p["title"]):
             return "too senior"
         if not in_reach(place, p["location"] or "", p["title"], bool(p["is_remote"]), p["description"] or ""):
             return "not in reach"
