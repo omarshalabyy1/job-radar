@@ -12,12 +12,13 @@ def day(n: int) -> datetime:
     return NOW - timedelta(days=n)
 
 
-def mail(company, kind, at, title="Data Engineer", subject="", action=None, sender="jobs@acme.com", message_id=None, job_id=None):
-    return (company, title, kind, at, subject, action, sender, message_id or f"<{company}-{kind}-{at:%j}>", job_id)
+def mail(company, kind, at, title="Data Engineer", subject="", action=None, sender="jobs@acme.com", message_id=None, job_id=None,
+         body=None):
+    return (company, title, kind, at, subject, action, sender, message_id or f"<{company}-{kind}-{at:%j}>", job_id, body)
 
 
-def status(company, value, at, title="Data Engineer", source="wuzzuf", attempt=None, url="https://x/1", job_id=1):
-    return (company, title, value, at, source, attempt, url, job_id)
+def status(company, value, at, title="Data Engineer", source="wuzzuf", attempt=None, url="https://x/1", job_id=1, note=None):
+    return (company, title, value, at, source, attempt, url, job_id, note)
 
 
 def test_email_kind_splits_assessments():
@@ -230,3 +231,28 @@ def test_an_old_confirmation_naming_no_job_is_its_own_application():
                          mail("Cartona", "rejected", day(206), title="Data Analyst", message_id="<rej>")],
                         [status("Cartona", "applied", day(1), title="Risk Data Analyst", job_id=5)])
     assert sorted((a["job"], a["stage"], len(a["to_link"])) for a in apps) == [("Data Analyst", "rejected", 0), ("Risk Data Analyst", "waiting", 0)]
+
+
+def test_the_email_body_tells_an_assessment():
+    """IBM's "Your IBM Application: Next Steps" says so only in its body."""
+    assert email_kind("interview", "Your IBM Application: Next Steps", None,
+                      "Please complete the online assessment within 7 days.") == "assessment"
+    assert email_kind("interview", "Interview invite", None, "We will test the call link before we start.") == "interview"
+
+
+def test_the_newest_of_interview_and_assessment_is_the_stage():
+    [ibm] = applications([mail("IBM", "applied", day(40)), mail("IBM", "interview", day(30)),
+                          mail("IBM", "interview", day(0), subject="Next Steps", body="complete the assessment")], [])
+    assert ibm["stage"] == "assessment"
+    [hh] = applications([mail("HH", "applied", day(40)), mail("HH", "interview", day(30), subject="Complete the coding assessment"),
+                         mail("HH", "interview", day(1), subject="Interview invite")], [])
+    assert hh["stage"] == "interview"
+
+
+def test_your_note_is_the_latest_news_when_it_is_newer_than_the_email():
+    [app] = applications([mail("Henkel", "applied", day(4), subject="Your application for the position Data Engineer")],
+                         [status("Henkel", "interview", day(1), note="applied 2026-11-09 (Henkel req 26097659); HR screening interview, told by Omar 2026-11-12")])
+    assert app["latest_email"] == "HR screening interview, told by Omar 2026-11-12"
+    [machine] = applications([mail("Kake", "applied", day(4), subject="Thanks for applying")],
+                             [status("Kake", "rejected", day(1), note="applied by you 2026-11-09; from your mailbox 2026-11-12")])
+    assert machine["latest_email"] == "Thanks for applying"  # a rejected status: the email, not the machine note
