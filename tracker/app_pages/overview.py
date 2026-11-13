@@ -59,5 +59,19 @@ else:
         "latest_email": st.column_config.TextColumn("Latest email", width="large"),
         "job_url": st.column_config.LinkColumn("Job", display_text="Open", width="small")})
 
+# what does not match between your statuses and your mailbox, in this range (check_applications links what it can, hourly)
+no_receipt = [a for a in apps if a["in_tracker"] and not a["receipt"]]
+mail_only = [a for a in apps if not a["in_tracker"]]
+with st.expander(f"Checks: {len(no_receipt)} with no confirmation email, {len(mail_only)} confirmed by email but not in the tracker",
+                 icon=":material/rule:"):
+    columns = {"company": "Company", "job": "Job", "board": "Board", "applied_on": st.column_config.DatetimeColumn(
+        "Applied on", format="D MMM YYYY", timezone="Africa/Cairo")}
+    st.markdown("**In the tracker, no confirmation email yet**: applied by you or Claude; a board that sends no email, "
+                "or one that has not come.")
+    st.dataframe(pd.DataFrame(no_receipt, columns=list(columns)), hide_index=True, column_config=columns)
+    st.markdown("**Confirmed by email, not in the tracker**: applied outside the radar, or the email names no company or job "
+                "the radar knows.")
+    st.dataframe(pd.DataFrame(mail_only, columns=list(columns)), hide_index=True, column_config=columns)
+
 st.divider()
 follow_ups(query)  # follow up today, the replies to follow-ups, the drafts

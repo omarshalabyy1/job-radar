@@ -12,12 +12,12 @@ def day(n: int) -> datetime:
     return NOW - timedelta(days=n)
 
 
-def mail(company, kind, at, title="Data Engineer", subject="", action=None, sender="jobs@acme.com"):
-    return (company, title, kind, at, subject, action, sender)
+def mail(company, kind, at, title="Data Engineer", subject="", action=None, sender="jobs@acme.com", message_id=None, job_id=None):
+    return (company, title, kind, at, subject, action, sender, message_id or f"<{company}-{kind}-{at:%j}>", job_id)
 
 
-def status(company, value, at, title="Data Engineer", source="wuzzuf", attempt=None, url="https://x/1"):
-    return (company, title, value, at, source, attempt, url)
+def status(company, value, at, title="Data Engineer", source="wuzzuf", attempt=None, url="https://x/1", job_id=1):
+    return (company, title, value, at, source, attempt, url, job_id)
 
 
 def test_email_kind_splits_assessments():
@@ -134,6 +134,7 @@ def test_the_overview_queries_and_page_run_on_the_warehouse_schema():
         shown = {m.label: m.value for m in app.metric}
         assert (shown["Applied"], shown["Interview"], shown["Waiting"]) == ("1", "1", "0")
         assert {"Follow up", "Follow-up replies", "Drafts"} <= {h.value for h in app.subheader}  # the follow-ups sit under it
+        assert any("no confirmation email yet" in m.value for m in app.markdown)  # the Checks
     finally:
         with db.connect() as conn:
             conn.execute("DELETE FROM core.application_email WHERE message_id = '<zz-overview-1>'")
@@ -199,3 +200,18 @@ def test_a_confirmation_naming_no_company_joins_the_one_job_with_that_title():
     [app] = applications([mail(None, "applied", day(1), title="Big Data Engineer")],
                          [status("Muller's Solutions", "applied", day(1), title="Big Data Engineer")])
     assert (app["company"], app["receipt"]) == ("Muller's Solutions", True)
+
+
+def test_emails_matched_by_title_and_not_yet_linked_are_to_link():
+    """check_applications links these to the job: matched by title (exact, reworded or shorter), not by "latest before"."""
+    [app] = applications([mail("Acme", "applied", day(9), title="data engineer", message_id="<a>"),
+                          mail("Acme", "interview", day(5), title="Data Engineer", message_id="<b>", job_id=7),
+                          mail("Acme", "rejected", day(2), title=None, message_id="<c>")],
+                         [status("Acme", "applied", day(9), job_id=7)])
+    assert app["job_id"] == 7
+    assert app["to_link"] == [("<a>", "applied", day(9))]  # <b> is linked already, <c> names no job
+
+
+def test_a_job_you_have_no_status_for_has_nothing_to_link():
+    [app] = applications([mail("Acme", "applied", day(9), message_id="<a>")], [])
+    assert (app["job_id"], app["to_link"]) == (None, [])

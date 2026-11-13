@@ -18,13 +18,14 @@ BOARDS = {"linkedin": "LinkedIn", "indeed": "Indeed", "wuzzuf": "Wuzzuf", "ashby
 APPLIED = {"applied", "interview", "assessment", "offer", "hired", "rejected-status"}
 
 # the application news, an email matched to a job going by that job's company and title; the Inbox's action helps spot assessments
-MAIL = ("SELECT coalesce(j.company, e.company), coalesce(j.title, e.title), e.kind, e.received_at, e.subject, m.action, e.sender"
+MAIL = ("SELECT coalesce(j.company, e.company), coalesce(j.title, e.title), e.kind, e.received_at, e.subject, m.action, e.sender,"
+        " e.message_id, e.job_id"
         " FROM core.application_email e LEFT JOIN core.job j USING (job_id)"
         " LEFT JOIN core.mail m ON m.message_id = e.message_id AND m.mailbox = e.mailbox WHERE e.kind <> 'other'")
 # your statuses, with the board of the job's latest apply attempt
 STATUSES = ("SELECT j.company, j.title, a.status, a.updated_at, j.source,"
             " (SELECT t.board FROM core.apply_attempt t WHERE t.job_id = a.job_id ORDER BY t.started_at DESC LIMIT 1),"
-            " j.job_url FROM core.application a JOIN core.job j USING (job_id)"
+            " j.job_url, a.job_id FROM core.application a JOIN core.job j USING (job_id)"
             " WHERE a.status IN ('applied', 'interview', 'offer', 'rejected')")
 
 
@@ -69,20 +70,20 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
     the application with its company and title; else, when it names no company, to the one company with that title; else
     to an application at its company whose title says the same in fewer words (a reply: in more words too); else a reply
     or an email naming no title goes to your latest application there sent on or before it, else your first there.
-    `mail`: (company, title, kind, received_at, subject, action, sender); `statuses`: (company, title, status, updated_at,
-    source, attempt_board, job_url)."""
+    `mail`: (company, title, kind, received_at, subject, action, sender, message_id, job_id); `statuses`: (company, title,
+    status, updated_at, source, attempt_board, job_url, job_id)."""
     groups: dict[tuple[str, str], dict] = {}
 
     def group(key, title):
         return groups.setdefault(key, {"names": Counter(), "titles": Counter(), "events": [], "mail": [], "status": [],
                                        "words": words(title)})
 
-    for company, title, value, at, source, attempt_board, url in statuses:
+    for company, title, value, at, source, attempt_board, url, job_id in statuses:
         g = group((name_key(company), name_key(title)), title)
         g["names"][company or ""] += 100  # the job's spelling wins
         g["titles"][title or ""] += 100
         g["events"].append(("rejected-status" if value == "rejected" else value, at))
-        g["status"].append((at, source, attempt_board, url))
+        g["status"].append((at, source, attempt_board, url, job_id))
 
     def latest_before(found, at):
         found = sorted(found, key=lambda g: min(t for _, t in g["events"]))
@@ -94,6 +95,7 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
         ck, tk, w = name_key(company), name_key(title), words(title)
         if not ck and not tk:
             continue
+        by_title = True  # matched by its title, so check_applications may link it to the job
         if tk and (ck, tk) in groups:
             g = groups[(ck, tk)]
         elif not ck:
@@ -105,13 +107,13 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
             if similar:
                 g = latest_before(similar, at)
             elif there and (kind != "applied" or not tk):
-                g = latest_before(there, at)
+                g, by_title = latest_before(there, at), False
             else:
                 g = group((ck, tk), title)
         g["names"][company or ""] += 1
         g["titles"][title or ""] += 1
         g["events"].append((email_kind(kind, row[4], row[5]), at))
-        g["mail"].append((at, row[4], row[6], kind))
+        g["mail"].append((at, row[4], row[6], kind, row[7], row[8], by_title))
     out = []
     for g in groups.values():
         kinds = {k for k, _ in g["events"]}
@@ -120,7 +122,7 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
         events = [("rejected" if k == "rejected-status" else k, at) for k, at in g["events"]]
         mails, status = sorted(g["mail"], key=lambda m: m[0]), sorted(g["status"], key=lambda s: s[0])
         first_sender = next((m[2] for m in mails if m[3] == "applied"), mails[0][2] if mails else None)
-        last_status = status[-1] if status else (None, None, None, None)
+        last_status = status[-1] if status else (None, None, None, None, None)
         out.append({
             "company": next((n for n, _ in g["names"].most_common() if n), ""),
             "job": next((t for t, _ in g["titles"].most_common() if t), ""),
@@ -132,6 +134,9 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
             "latest_email": mails[-1][1] if mails else None,
             "job_url": last_status[3],
             "receipt": any(m[3] == "applied" for m in mails),  # a confirmation email came
+            "job_id": last_status[4],  # the job you set a status for (the latest), None for an email alone
+            # the emails matched to it by title and linked to no job yet: (message_id, kind, received_at)
+            "to_link": [(m[4], m[3], m[0]) for m in mails if m[6] and m[5] is None] if last_status[4] else [],
             "in_tracker": bool(status)})  # you or Claude set a status for it
     return out
 

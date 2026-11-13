@@ -41,6 +41,7 @@ from .grade import grade_claude  # noqa: F401  (python -m job_radar grade_claude
 from . import outreach_send as outreach_sender
 from .outreach import outreach_drafts  # noqa: F401  (python -m job_radar outreach_drafts)
 from .publish import publish  # noqa: F401  (python -m job_radar publish)
+from .check_applications import check_applications  # noqa: F401  (python -m job_radar check_applications)
 from .publish_applications import publish_applications  # noqa: F401  (python -m job_radar publish_applications)
 from .tech import is_tech_role
 from .tailor import tailor  # noqa: F401  (python -m job_radar tailor)

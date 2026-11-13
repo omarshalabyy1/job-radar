@@ -4,7 +4,7 @@ Steps, in order: schema extract_boards extract_bayt extract_remote extract_start
 extract_workable extract_freehire extract_linkedin extract_companies extract_portals extract_market extract_apify extract_email transform describe
 match_skills eligibility embed grade_claude tailor outreach_drafts export_career_ops
 email_egypt email_abroad publish run_report
-track_applications (its own hourly DAG: your mailbox, read-only)
+track_applications, check_applications (their own hourly DAG: your mailbox, read-only; each email linked to its job)
 outreach_send (its own DAG, every 5 minutes: one cold email in dry run unless settings.yaml says live), outreach_replies (hourly: replies and bounces, read-only)
 eligibility, embed, grade_claude, tailor, outreach_drafts and track_applications each have a switch in settings.yaml (features).
 Each step is recorded in core.step_run (runlog.py): running when it starts, then ok, warn, failed or off.
@@ -29,7 +29,7 @@ STEPS = ["schema", "extract_boards", "extract_bayt", "extract_remote", "extract_
          "extract_gulf", "extract_workable", "extract_freehire", "extract_linkedin", "extract_companies", "extract_portals", "extract_market", "extract_apify",
          "extract_email",
          "transform", "describe", "match_skills", "eligibility", "embed", "grade_claude", "tailor", "outreach_drafts", "export_career_ops", "email_egypt",
-         "email_abroad", "track_applications", "outreach_send", "outreach_replies", "publish", "publish_applications", "run_report"]
+         "email_abroad", "track_applications", "check_applications", "outreach_send", "outreach_replies", "publish", "publish_applications", "run_report"]
 
 WATCHDOG_SECONDS = 450  # under the 480 s execution_timeout of the extract tasks in dags/job_radar.py
 LONG_STEPS = {"extract_companies": 690, "extract_market": 690}  # past their 600 s budgets, under their 720 s timeouts
