@@ -102,7 +102,8 @@ def picked(conn, mine: dict[str, int]) -> list[str]:
     return [names[row[0]] for row in tailor.jobs_to_tailor(conn) if row[0] in names]
 
 
-def test_tailor_drafts_the_best_graded_jobs_nothing_restricts_and_you_have_not_touched(conn):
+def test_tailor_drafts_the_best_graded_jobs_nothing_restricts_and_you_have_not_touched(conn, monkeypatch):
+    monkeypatch.setitem(tailor.SETTINGS, "apply", {"enabled": False})  # pin the old rule; settings.yaml may have the apply runner on
     mine = {name: add_graded_job(conn, name, **kw) for name, kw in {
         "nine": {"score": 9}, "eight": {"score": 8}, "ten": {"score": 10}, "seven": {"score": 7},
         "elsewhere": {"score": 10, "place": "Atlantis"}, "has_a_row": {"score": 10}, "ignored": {"score": 10},
@@ -280,6 +281,7 @@ def test_the_ready_page_lists_apply_today_first_then_the_rest_by_score(conn):
 
 
 def test_with_the_apply_runner_on_remote_jobs_at_the_apply_floor_are_drafted_too(conn, monkeypatch):
+    monkeypatch.setitem(tailor.SETTINGS, "apply", {"enabled": False})  # pin the old rule; settings.yaml may have the apply runner on
     egypt = add_graded_job(conn, "ap-egypt", 6, place="Egypt")
     remote = add_graded_job(conn, "ap-remote", 6, place="Remote")
     gulf = add_graded_job(conn, "ap-gulf", 9, place="UAE")
