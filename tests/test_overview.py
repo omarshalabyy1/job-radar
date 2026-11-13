@@ -179,3 +179,23 @@ def test_receipt_and_tracker_flags_for_the_checks():
     flags = {a["company"]: (a["receipt"], a["in_tracker"]) for a in apps}
     assert flags["Mailonly"] == (True, False)
     assert flags["Statusonly"] == (False, True)
+
+
+def test_a_reply_with_a_reworded_title_goes_to_the_application():
+    """Valeo: applied to "Graduate In Training Program (GIT), Business Intelligence", invited for
+    "Graduate In Training (GIT) - Business Intelligence"."""
+    [app] = applications([mail("Valeo", "applied", day(200), title="Graduate In Training Program (GIT), Business Intelligence"),
+                          mail("Valeo", "interview", day(8), title="Graduate In Training (GIT) - Business Intelligence")], [])
+    assert app["stage"] == "interview"
+
+
+def test_a_confirmation_with_a_shorter_title_joins_your_status():
+    [app] = applications([mail("IBM", "applied", day(1), title="Data Engineer")],
+                         [status("IBM", "applied", day(1), title="Data & Analytics Data Engineer - Data Platform")])
+    assert (app["receipt"], app["in_tracker"]) == (True, True)
+
+
+def test_a_confirmation_naming_no_company_joins_the_one_job_with_that_title():
+    [app] = applications([mail(None, "applied", day(1), title="Big Data Engineer")],
+                         [status("Muller's Solutions", "applied", day(1), title="Big Data Engineer")])
+    assert (app["company"], app["receipt"]) == ("Muller's Solutions", True)
