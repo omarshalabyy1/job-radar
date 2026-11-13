@@ -94,3 +94,18 @@ The same reset can hit Argus's argus-pg. The retry and diagnostics pattern appli
   last 7 days had some, a board gone, Ollama down, Apify over its limit. Those warnings alone are reason to send the
   email.
 - client-radar does the same: `client-radar FAILED: <task>` alerts, and "Problems since the last email" in its email.
+
+## Again on 2026-11-12 and 2026-11-13: health check timeout raised to 30 s
+
+Four more resets with the same signature: 17:20, 17:21 and 17:57 UTC on 2026-11-12 (the radar nearly idle, only
+outreach_send every 5 minutes), and 12:37 UTC on 2026-11-13 (13 minutes after the laptop started, during the collect).
+Each victim PID never logged `connection received`, and each reset came within a second of the health check's
+`pg_isready` taking over a second to log in and ending in `could not send data to client: Broken pipe`: Docker had
+given up on it after its 5 s timeout. Before the 12:37 reset the log was silent for 40 seconds. Three more broken
+health checks on 2026-11-12 (18:00, 18:19, 18:32) came without a reset. The Docker VM itself had memory to spare once
+it restarted (8 GB, no swap, no pressure); the laptop has 15.8 GB with 8 GB given to WSL, so a stall now points at
+Windows running short.
+
+The warehouse's health check timeout is now 30 s (docker-compose.yml), so a stall no longer cuts `pg_isready` off
+mid-login. It is not proven to be the trigger; if resets go on, the fix is more free memory on the laptop during the
+12pm collect.
