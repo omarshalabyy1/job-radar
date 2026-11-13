@@ -80,7 +80,9 @@ NEXT_TURN: dict[str, float] = {}
 
 TURNS = threading.Lock()
 
-CHROME_ONLY: set[str] = set()  # hosts that answered only curl_cffi in this step (NaukriGulf hangs plain requests 15 s)
+# hosts that answered only curl_cffi in this step (NaukriGulf hangs plain requests 15 s); Lever's API from the start: it
+# stalls plain requests 19 to 63 s a board and answers curl_cffi in 2 to 4 (measured 2026-11-14)
+CHROME_ONLY: set[str] = {"api.lever.co", "api.eu.lever.co"}
 
 
 class Held(Exception):

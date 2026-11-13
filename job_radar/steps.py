@@ -14,6 +14,7 @@ itself (the warehouse down, the email not sent) or no network at all fails its t
 
 from __future__ import annotations
 
+import threading
 import html
 import json
 import re
@@ -310,7 +311,37 @@ def company_outcome(platform: str | None, note: str | None) -> str:
     return "read"
 
 
-MARKET_BOARDS = 500  # boards read a run, active first then oldest read: all 157 active and the candidates fit MARKET_SECONDS (Omar, 2026-11-10: was 40, left 394 candidates never read)
+MARKET_BOARDS = 5000  # every due board is selected (was 500: with 618 active boards due, no candidate was ever among them); MARKET_SECONDS is the limit
+
+
+def read_boards(boards: list[tuple[str, str, str]]):
+    """Read (ats, token, company) boards, each platform in its own thread: a platform is one host, paced one request a
+    second, so in one queue 368 Ashby boards kept every other platform waiting. Yields (ats, token, rows or the exception)
+    as each board ends, a platform's boards in the order given; no board is started once the step's budget is nearly spent."""
+    import queue
+    by_ats: dict[str, list] = {}
+    for ats, token, company in boards:
+        by_ats.setdefault(ats, []).append((token, company))
+    done = queue.Queue()
+
+    def platform(ats: str, todo: list) -> None:
+        for token, company in todo:
+            if sources.time_left(MARKET_SECONDS) < 20:
+                break
+            try:
+                done.put((ats, token, sources.market.READERS[ats](token, company)))
+            except Exception as e:
+                done.put((ats, token, e))
+        done.put(None)  # this platform is finished
+
+    for ats, todo in by_ats.items():
+        threading.Thread(target=platform, args=(ats, todo), daemon=True).start()
+    left = len(by_ats)
+    while left:
+        if (result := done.get()) is None:
+            left -= 1
+        else:
+            yield result
 
 
 def extract_market(conn) -> None:
@@ -347,13 +378,9 @@ def extract_market(conn) -> None:
         " ORDER BY status = 'active' DESC, checked_at NULLS FIRST, ats, token LIMIT %s", (MARKET_BOARDS,)).fetchall()
     conn.commit()
     read = failed = 0
-    for ats, token, company in boards:
-        if sources.time_left(MARKET_SECONDS) < 20:
-            print(f"extract_market: time budget reached, {len(boards) - read - failed} boards wait for the next run")
-            break
-        try:
-            rows = sources.market.READERS[ats](token, company)
-        except Exception as e:  # one board down is a short day; gone (404) is dead at once, else after 3 runs in a row
+    for ats, token, rows in read_boards(boards):
+        if isinstance(rows, Exception):  # one board down is a short day; gone (404) is dead at once, else after 3 runs in a row
+            e = rows
             failed += 1
             gone = getattr(getattr(e, "response", None), "status_code", None) == 404
             conn.execute("UPDATE core.board SET failures = failures + 1, checked_at = now(), note = %s,"
@@ -367,6 +394,8 @@ def extract_market(conn) -> None:
         conn.execute("UPDATE core.board SET status = 'active', failures = 0, jobs = %s, checked_at = now(), last_ok_at = now(),"
                      " note = NULL WHERE (ats, token) = (%s, %s)", (len(rows), ats, token))
         conn.commit()
+    if read + failed < len(boards):
+        print(f"extract_market: time budget reached, {len(boards) - read - failed} boards wait for the next run")
     print(f"extract_market: {read} of {len(boards)} boards read, {failed} failed")
 
 
