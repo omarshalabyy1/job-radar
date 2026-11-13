@@ -1,14 +1,11 @@
-"""Today: what to apply to next, your deadlines, where your applications stand, and whether the last run worked."""
+"""Today: what to apply to next, your deadlines, and whether the last run worked. The Overview counts your applications."""
 
-import altair as alt
 import pandas as pd
 import streamlit as st
 
-from job_radar.applications import application_stages, funnel_counts
 from job_radar.config import FEATURES
 from job_radar.db import connect
-from tracker.applications_tab import STAGE_EMAILS, STAGE_LABELS, follow_ups
-from tracker.common import BLUE, colors, default_order, filtered, load_jobs, nothing_matches, numbers, query, save_edits, table_key
+from tracker.common import default_order, filtered, load_jobs, nothing_matches, numbers, query, save_edits, table_key
 from tracker.decide import apply_decisions, mark_deadlines_done
 from tracker.runlog_tab import CAIRO, dollars
 
@@ -16,7 +13,6 @@ st.title("Today", icon=":material/today:")
 jobs = load_jobs()
 shown = filtered(jobs)
 numbers(jobs, shown)
-ink = colors()["ink"]
 
 # 1. what to do now: data engineering and AI jobs first (roles 1-3 in settings.yaml), the freshest and best graded on top
 st.subheader("Apply next")
@@ -92,30 +88,7 @@ with st.expander("Edit deadlines"):
         query.clear()
         st.rerun()
 
-# 3. your applications: the stages from your mailbox, and what is due today
-st.subheader("Your applications")
-# the Applications page's funnel (application_stages), so both pages give the same numbers
-counts = funnel_counts(application_stages(list(query(STAGE_EMAILS).itertuples(index=False))))
-funnel = pd.DataFrame({"Stage": [STAGE_LABELS[k] for k in counts], "Companies": list(counts.values())})
-with connect() as conn:
-    due = len(follow_ups(conn))
-left, right = st.columns([2, 1], gap="large")
-stages = alt.Chart(funnel).encode(
-    y=alt.Y("Stage:N", sort=list(funnel["Stage"]), title=None, axis=alt.Axis(ticks=False, domain=False)),
-    x=alt.X("Companies:Q", title=None, axis=None, scale=alt.Scale(domain=[0, max(funnel["Companies"].max(), 1) * 1.15])),
-    tooltip=[alt.Tooltip("Stage:N"), alt.Tooltip("Companies:Q")])
-left.altair_chart((stages.mark_bar(color=BLUE, cornerRadiusEnd=4, height=22)
-                   + stages.mark_text(align="left", dx=4, color=ink).encode(text="Companies:Q"))
-                  .properties(title="Companies by stage, from your mailbox", height=36 * len(funnel)), width="stretch")
-applied = int(funnel.loc[funnel["Stage"] == "Applied", "Companies"].iloc[0])
-if applied:
-    left.caption(" · ".join(f"{r.Stage} {r.Companies / applied:.0%}" for r in funnel.itertuples() if r.Stage != "Applied")
-                 + " of the companies you applied to")
-right.metric("Applied in the tracker", int((jobs["status"] == "applied").sum()), border=True,
-             help="Jobs you set to applied, with or without a confirmation email")
-right.metric("Follow-ups due today", due, border=True, help="Applied 7 or 14 days ago with no answer yet (Applications)")
-
-# 4. the pipeline: did the last run work, and what it cost
+# 3. the pipeline: did the last run work, and what it cost
 st.subheader("The pipeline")
 runs = query("SELECT DISTINCT ON (step) step, status, started_at FROM core.step_run ORDER BY step, started_at DESC")
 if runs.empty:

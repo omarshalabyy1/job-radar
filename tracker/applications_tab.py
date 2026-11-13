@@ -1,4 +1,5 @@
-"""The tracker's Applications tab: your applications as your mailbox tells them (core.application_email)."""
+"""The tracker's Follow-ups page, and the funnel and company sections of the Interview rate page, from your mailbox
+(core.application_email)."""
 
 import os
 from pathlib import Path
@@ -29,11 +30,6 @@ SELECT coalesce(mode() WITHIN GROUP (ORDER BY company), '') AS company, coalesce
 FROM core.application_email e WHERE kind <> 'other'
 GROUP BY coalesce(lower(company), lower(title))
 ORDER BY latest_date DESC"""
-
-# the jobs you set to applied, interview or offer in the tracker or with Claude (core.application), whatever the mailbox says
-SENT = """
-SELECT company, title, status, note, updated_at AS updated, job_url FROM mart.job_status
-WHERE status IN ('applied', 'interview', 'offer') ORDER BY updated_at DESC"""
 
 # how many companies (an email naming none: its title) sent each kind of news, matched by letters and digits alone
 # ("ACME LABS" is "Acme Labs"), and how many ghosted you; an email naming neither is not counted
@@ -96,30 +92,16 @@ def drafts() -> list[tuple[str, str, Path]]:
 
 
 def render(query) -> None:
-    st.caption("Your applications, read from your mailbox (Gmail, read-only) by the track_applications step: "
-               "confirmations, views, interviews, rejections and offers. Counts are companies: an offer thread of 12 "
-               f"emails is one offer. Hired: an offer signed or a welcome aboard. Ghosted: applied {GHOSTED_DAYS}+ days ago and "
-               "no interview, rejection or offer since.")
-    st.subheader("Applied by you", icon=":material/outbox:")
-    st.caption("Every job you applied for (status applied, interview or offer), last updated first, even before a confirmation email arrives.")
-    st.dataframe(query(SENT), hide_index=True, column_config={
-        "company": "Company", "title": "Title", "status": "Status", "note": "How",
-        "updated": st.column_config.DatetimeColumn("Updated", format="D MMM YYYY", timezone="Africa/Cairo", help="When you last changed the status or note"),
-        "job_url": st.column_config.LinkColumn("Job", display_text="Open")})
+    st.caption("Follow-ups for your applications, read from your mailbox (Gmail, read-only) by the track_applications step. "
+               "The Overview counts and lists every application.")
     mails = query(COMPANIES_BY_KIND).set_index("kind")["n"]
     if (mails.drop("other", errors="ignore") == 0).all():  # the ghosted row is always there
         st.info("No application emails yet: the next track_applications run reads them from your mailbox.")
         return
-    with st.container(horizontal=True):  # side by side on a desktop, wrapping on a phone
-        for label, kind, icon in (("Applied", "applied", "send"), ("Viewed", "viewed", "visibility"),
-                                  ("Interviews", "interview", "forum"), ("Rejections", "rejected", "block"),
-                                  ("Offers", "offer", "workspace_premium"), ("Hired", "hired", "celebration"),
-                                  ("Ghosted", "ghosted", "visibility_off")):
-            st.metric(label, int(mails.get(kind, 0)), icon=f":material/{icon}:", border=True)
 
     st.subheader("Follow up", icon=":material/schedule_send:")
     st.caption("Due today: applied exactly 7 or 14 Cairo days ago and no answer yet, the same list as the email and the drafts. "
-               "The Applications table below shows each company's latest news.")
+               "The Overview shows each company's latest news.")
     with connect() as conn:
         due = follow_ups(conn)
         replies = pd.DataFrame(follow_up_answers(conn), columns=["company", "title", "followed_up", "answer", "answered_on"])
@@ -144,17 +126,21 @@ def render(query) -> None:
             "company": "Company", "title": "Title", "followed_up": st.column_config.DateColumn("Followed up", format="D MMM YYYY"),
             "answer": "Answer", "answered_on": st.column_config.DateColumn("Answered on", format="D MMM YYYY")})
 
-    st.subheader("Applications", icon=":material/list_alt:")
-    latest = query(APPLICATIONS)
-    latest["latest_news"] = latest["latest_news"].str.capitalize()
-    st.dataframe(latest, hide_index=True, column_order=["company", "latest_news", "latest_date", "started_on", "titles", "first_applied",
-                                                        "applications", "emails"],
-                 column_config={
-        "started_on": st.column_config.DateColumn("Started", format="D MMM YYYY", help="Your start date there, once hired"),
-        "company": "Company", "titles": "Titles", "applications": "Applications", "first_applied": st.column_config.DatetimeColumn("First applied", format="D MMM YYYY", timezone="Africa/Cairo"),
-        "latest_news": "Latest news", "latest_date": st.column_config.DatetimeColumn("Latest news on", format="D MMM YYYY", timezone="Africa/Cairo"),
-        "emails": "Emails"})
+    st.subheader("Drafts", icon=":material/edit_note:")
+    st.caption("Follow-up emails (7 or 14 days after applying, no answer yet) and interview notes, written by Claude from your CV. "
+               "Nothing is sent.")
+    files = drafts()
+    if not files:
+        st.write("No drafts yet: turn on features.follow_up_drafts or features.interview_prep in settings.yaml.")
+    for kind, name, file in files[:30]:
+        label, button = st.columns([4, 1])
+        label.write(f"{kind}: {name}")
+        button.download_button("Download", file.read_bytes(), file_name=f"{file.parent.name}-{file.name}", mime="text/markdown",
+                               key=str(file))
 
+
+def render_funnel(query) -> None:
+    """The funnel by month and channel (on the Interview rate page)."""
     st.subheader("Funnel", icon=":material/filter_alt:")
     st.caption("Applications (one per company) that reached each stage, by the first confirmation email's month and where it "
                "came from. A stage counts when its own email or a later stage's came, so the numbers only fall; the % is of "
@@ -167,6 +153,9 @@ def render(query) -> None:
             st.dataframe(funnel_table(applications, by), hide_index=True,
                          column_config={"month": "Month", "channel": "Channel"})
 
+
+def render_companies(query) -> None:
+    """Every company with a job in the tracker now, and what you sent it (on the Interview rate page)."""
     st.subheader("Company intelligence", icon=":material/apartment:")
     st.caption("Every company with a job in the tracker now, with what you have sent it: applications are the "
                "confirmation emails, last outcome is the newest email from it.")
@@ -176,15 +165,3 @@ def render(query) -> None:
                  column_config={
         "company": "Company", "open_jobs": "Open jobs", "roles": "Roles", "starred": st.column_config.CheckboxColumn("Starred"),
         "applications": "Applications", "last_outcome": "Last outcome"})
-
-    st.subheader("Drafts", icon=":material/edit_note:")
-    st.caption("Follow-up emails (7 or 14 days after applying, no answer yet) and interview notes, written by Claude from your CV. "
-               "Nothing is sent.")
-    files = drafts()
-    if not files:
-        st.write("No drafts yet: turn on features.follow_up_drafts or features.interview_prep in settings.yaml.")
-    for kind, name, file in files[:30]:
-        label, button = st.columns([4, 1])
-        label.write(f"{kind}: {name}")
-        button.download_button("Download", file.read_bytes(), file_name=f"{file.parent.name}-{file.name}", mime="text/markdown",
-                               key=str(file))
