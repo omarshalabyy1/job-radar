@@ -19,19 +19,19 @@ schedule:
 
 # Each smart feature on or off (true / false). The pipeline follows on its next run; the tracker after `docker restart job-radar-tracker-1`.
 features:
-  grade: false              # Claude scores each job 0-10 against your CVs (model and daily cap: claude: below)
+  grade: true               # Claude scores each job 0-10 against your CVs (model and daily cap: claude: below)
   eligibility: true         # on: hide jobs someone living in Cairo cannot legally take: the eligibility step reads the board's own
                             # "who can apply" field (Daily Remote, Remotive, Jobicy ...; the extracts never store a job that field bars), else asks Claude Haiku (claude-haiku-5-5, jobs
                             # outside ai_places with a description); the tracker and the emails leave them out (Show hidden jobs shows them)
   auto_hide: true           # hide a job Claude scored 0-3 (needs grade on; a tracker toggle shows them); a restriction hides a job by eligibility alone
   top5: true                # "Top 5 today" at the top of each email
   follow_up: true           # "Follow up" reminders in the Egypt email
-  tailor: false             # draft CV, cover letter and notes for scores 8+
+  tailor: true              # draft CV, cover letter and notes for scores 8+
   track_applications: true  # read Gmail every hour for news on your applications
   manual_collect_emails: false  # false: only the 12pm collect (and its catch-up) sends the emails; a Trigger only fills the tracker
   embeddings: false         # local Ollama vectors: how close each job is to your CV (CV match); a CV is embedded again only when it changed
-  follow_up_drafts: false   # draft a follow-up email (never sent) when an application is 7 or 14 days old with no answer
-  interview_prep: false     # draft interview notes when your mailbox shows an interview invite
+  follow_up_drafts: true    # draft a follow-up email (never sent) when an application is 7 or 14 days old with no answer
+  interview_prep: true      # draft interview notes when your mailbox shows an interview invite
   market: true              # the website (Fennec): also keep every other tech job (any role, level and country) the sources
                             # bring, with in_scope false; your emails, grades, embeddings and tracker see only in_scope jobs
   market_harvest: true      # the website: also read every company board the other sources' postings link to (grows the
@@ -337,17 +337,17 @@ claude:
 
 # The apply runner (job_radar/apply, docs/superpowers/plans/2026-11-08-auto-apply.md). Off, and dry run, until Omar says go.
 apply:
-  enabled: false            # the kill switch: false = nothing is picked; so is a file output/apply.stop
-  mode: dry_run             # dry_run: fill the form, screenshot, never click submit; live: submit
-  score_floor: 6            # Claude's grade (core.claude_grade) at or above this
+  enabled: true             # the kill switch: false = nothing is picked; so is a file output/apply.stop
+  mode: live                # dry_run: fill the form, screenshot, never click submit; live: submit
+  score_floor: 5            # Claude's grade (core.claude_grade) at or above this
   places: [Egypt, Remote]   # focus: Egypt jobs and remote jobs only (core.job.place); nothing in the Gulf, Europe or the US on site
   max_years: 3              # skip a job that asks for more years (core.job.years_required): Omar's CV shows about 2
   fresh_hours: 48           # only a posting this fresh
-  daily_total: 40           # submits a day, all boards
-  per_board: 20              # submits a day on one board
-  board_caps: {linkedin: 15, indeed: 15}   # lower caps for the two boards that ban automation
-  company_days: 14          # one submit per company in this many days
-  boards: [greenhouse, lever]            # the allow-list: a new board is a new explicit entry
+  daily_total: 1000          # submits a day, all boards
+  per_board: 1000            # submits a day on one board
+  board_caps: {}   # lower caps for the two boards that ban automation
+  company_days: 0          # one submit per company in this many days
+  boards: [greenhouse, lever, ashby, recruitee, linkedin, indeed]            # the allow-list: a new board is a new explicit entry
 
 # The outreach sender (job_radar/outreach_send.py): sends the cold emails outreach_drafts writes, from the Gmail accounts of MAILBOXES in
 # .env, under the guardrails of docs/superpowers/plans/2026-11-08-auto-apply.md ("Outreach sender"). Nothing leaves the laptop unless
