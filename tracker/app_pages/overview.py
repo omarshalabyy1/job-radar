@@ -2,6 +2,7 @@
 statuses and your mailbox together (job_radar/overview.py)."""
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -17,14 +18,41 @@ HELP = {"waiting": "Applied, no reply yet", "viewed": "The employer opened or is
         "interview": "Invited to or had an interview, and no rejection since",
         "rejected": "Rejected, after any interview or assessment", "offer": "An offer, or hired"}
 RANGES = {"Last 30 days": 30, "Last 90 days": 90, "All": None}
+CAIRO = ZoneInfo("Africa/Cairo")
 
 st.title("Overview", icon=":material/dashboard:")
 jobs = load_jobs()
 open_jobs = jobs[jobs["status"].isin(["new", "saved"]) & jobs["hidden_reason"].isna()]
+everything = applications(list(query(MAIL).itertuples(index=False)), list(query(STATUSES).itertuples(index=False)))
+now = datetime.now(timezone.utc)
+
+# what needs you: every assessment or interview with news in the last 30 days, and your open deadlines (Today page)
+st.subheader("Needs you", icon=":material/priority_high:")
+steps = [{"what": LABELS[a["stage"]], "company": a["company"], "job": a["job"], "due": a["due"], "news": a["latest_email"],
+          "on": a["latest_at"], "link": a["job_url"]} for a in in_range(everything, 30, now) if a["stage"] in ("assessment", "interview")]
+deadlines = query("SELECT d.due, d.what, d.note, coalesce(j.company, '') AS company, coalesce(j.title, '') AS title, j.job_url"
+                  " FROM core.deadline d LEFT JOIN core.job j USING (job_id)"
+                  " WHERE NOT d.done AND d.due >= (now() AT TIME ZONE 'Africa/Cairo')::date - 14")
+steps += [{"what": f"Deadline: {d.what}", "company": d.company, "job": d.title, "due": d.due, "news": d.note, "on": None,
+           "link": d.job_url} for d in deadlines.itertuples()]
+if not steps:
+    st.caption("Nothing waits on you: no assessment, interview or open deadline.")
+else:
+    today = now.astimezone(CAIRO).date()
+    todo = pd.DataFrame(steps).assign(
+        when=lambda t: [("" if pd.isna(d) else "Overdue" if d < today else "Today" if d == today else f"In {(d - today).days} days")
+                        for d in t["due"]]).sort_values(["due", "on"], ascending=[True, False], na_position="last")
+    st.dataframe(todo, hide_index=True, column_order=["what", "company", "job", "due", "when", "news", "link"], column_config={
+        "what": st.column_config.TextColumn("To do", width=170), "company": st.column_config.TextColumn("Company", width=150),
+        "job": st.column_config.TextColumn("Job", width=220),
+        "due": st.column_config.DateColumn("Due", format="ddd D MMM", help="Only when the email or your deadline gives a date"),
+        "when": st.column_config.TextColumn("When", width="small"),
+        "news": st.column_config.TextColumn("Latest news", width="large"),
+        "link": st.column_config.LinkColumn("Job", display_text="Open", width="small")})
+
 picked = st.segmented_control("Range", list(RANGES), default="Last 30 days", label_visibility="collapsed",
                               help="Applications with any news in this time: a confirmation, a reply or your status")
-apps = in_range(applications(list(query(MAIL).itertuples(index=False)), list(query(STATUSES).itertuples(index=False))),
-                RANGES[picked or "Last 30 days"], datetime.now(timezone.utc))
+apps = in_range(everything, RANGES[picked or "Last 30 days"], now)
 n = counts(apps)
 
 with st.container(horizontal=True):  # side by side on a desktop, wrapping on a phone

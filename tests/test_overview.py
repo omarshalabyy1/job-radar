@@ -136,6 +136,7 @@ def test_the_overview_queries_and_page_run_on_the_warehouse_schema():
         assert (shown["Applied"], shown["Interview"], shown["Waiting"]) == ("1", "1", "0")
         assert {"Follow up", "Follow-up replies", "Drafts"} <= {h.value for h in app.subheader}  # the follow-ups sit under it
         assert any("no confirmation email yet" in m.value for m in app.markdown)  # the Checks
+        assert "Needs you" in [h.value for h in app.subheader]
     finally:
         with db.connect() as conn:
             conn.execute("DELETE FROM core.application_email WHERE message_id = '<zz-overview-1>'")
@@ -256,3 +257,17 @@ def test_your_note_is_the_latest_news_when_it_is_newer_than_the_email():
     [machine] = applications([mail("Kake", "applied", day(4), subject="Thanks for applying")],
                              [status("Kake", "rejected", day(1), note="applied by you 2026-11-09; from your mailbox 2026-11-12")])
     assert machine["latest_email"] == "Thanks for applying"  # a rejected status: the email, not the machine note
+
+
+def test_a_due_date_only_when_the_email_states_one():
+    from job_radar.overview import due_date
+    assert due_date("Your invite to Valeo English Exam - Speaking expires in 1 days", day(7)) == (day(7) + timedelta(days=1)).date()
+    assert due_date("Complete Hallo language assessment from TP (5 days left)", day(3)) == (day(3) + timedelta(days=5)).date()
+    assert due_date("Please complete it within 48 hours.", day(1)) == (day(1) + timedelta(hours=48)).date()
+    assert due_date("Your IBM Application: Next Steps", day(0)) is None
+
+
+def test_an_assessment_carries_the_due_date_of_its_newest_email():
+    [app] = applications([mail("Valeo", "applied", day(9)),
+                          mail("Valeo", "interview", day(7), subject="Your invite to Valeo English Exam - Speaking expires in 1 days")], [])
+    assert (app["stage"], app["due"]) == ("assessment", (day(7) + timedelta(days=1)).date())

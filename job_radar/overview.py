@@ -3,7 +3,7 @@ your mailbox (core.application_email) together, and the counts of each stage, fo
 
 import re
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from job_radar.applications import channel, name_key
 
@@ -13,6 +13,8 @@ STAGES = ["waiting", "viewed", "assessment", "interview", "rejected", "offer"]
 ASSESSMENT = re.compile(r"assessment|\btest\b|exam|hackerrank|codility|video application|\btask\b|challenge", re.I)
 # in the body (the Inbox stores it) only the plain words: a body says "test" or "task" about anything
 BODY_ASSESSMENT = re.compile(r"assessment|hackerrank|codility|online test|coding test|coding challenge|video application", re.I)
+# a deadline the email itself states: "expires in 1 days", "(5 days left)", "within 48 hours"
+DUE = re.compile(r"(?:expires? in|within)\s+(\d+)\s+(day|hour)s?|(\d+)\s+(day|hour)s?\s+left", re.I)
 # a job board named in a job's source ("apify:linkedin_remote", "manual:wuzzuf-keywords") or an apply attempt
 BOARDS = {"linkedin": "LinkedIn", "indeed": "Indeed", "wuzzuf": "Wuzzuf", "ashby": "Ashby", "workable": "Workable",
           "naukrigulf": "Naukrigulf", "bayt": "Bayt", "glassdoor": "Glassdoor"}
@@ -49,6 +51,14 @@ def board(attempt_board: str | None, source: str | None, sender: str | None) -> 
     if source and source != "email" and not source.startswith("manual"):
         return source
     return channel(sender) if sender else ""
+
+
+def due_date(text: str, received_at: datetime) -> date | None:
+    """The day a step is due, when the email says it ("expires in 1 days", "5 days left", "within 48 hours"); else None."""
+    if not (m := DUE.search(text or "")):
+        return None
+    n, unit = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+    return (received_at + timedelta(**{f"{unit.lower()}s": int(n)})).date()
 
 
 def stage(events: list[tuple[str, datetime]]) -> str:
@@ -123,7 +133,7 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
         g["names"][company or ""] += 1
         g["titles"][title or ""] += 1
         g["events"].append((email_kind(kind, row[4], row[5], row[9]), at))
-        g["mail"].append((at, row[4], row[6], kind, row[7], row[8], by_title))
+        g["mail"].append((at, row[4], row[6], kind, row[7], row[8], by_title, row[9]))
     out = []
     for g in groups.values():
         kinds = {k for k, _ in g["events"]}
@@ -147,6 +157,8 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
                             and (not mails or last_status[0] >= mails[-1][0]) else mails[-1][1] if mails else None,
             "job_url": last_status[3],
             "receipt": any(m[3] == "applied" for m in mails),  # a confirmation email came
+            # the due day the newest interview or assessment email states, if it states one
+            "due": next((due_date(f"{m[1]} {m[7] or ''}", m[0]) for m in reversed(mails) if m[3] == "interview"), None),
             "job_id": last_status[4],  # the job you set a status for (the latest), None for an email alone
             # the emails matched to it by title and linked to no job yet: (message_id, kind, received_at); a reply from
             # before the application started (its first confirmation or your status) is about an older one
