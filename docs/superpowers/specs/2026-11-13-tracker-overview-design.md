@@ -68,3 +68,18 @@ re-classifying mail.
 New tests in `tests/test_overview.py` for the stage rules, the assessment keywords, the range switch and the board
 precedence. `bash check.sh` prints `GATE: PASS`. The live tracker mounts the main checkout, so the branch is checked on
 a second tracker started from this worktree on port 8502; `docker restart job-radar-tracker-1` shows it after the merge.
+
+## Change 2 (2026-11-13, approved by Omar): one row per job, and a check step
+**Why:** one row per company folded Henkel's five applications (one interview, one rejection, three waiting) into one
+"Interview" row. Omar counts applications, so the unit is the job.
+
+- **Unit:** an application is a job: company + title (letters and digits alone). An email matched to a job reads as
+  that job; an email naming a title reads as that title at its company. An email naming no title (e.g. "Interview with
+  Henkel") goes to your latest application at that company sent on or before it, else your first there.
+- **Checks on the Overview:** applications in the tracker with no confirmation email yet, and confirmation emails for
+  jobs not in the tracker, each a short table.
+- **Step `check_applications`** (hourly, between `track_applications` and `publish_applications`): links each
+  unlinked application email to the one job you applied to with the same company and title, then moves that job's
+  status up from it (`applications.move_status`: up only, never down; `ignored` never moves). Emails linked before are
+  left alone, so a link or status you corrected by hand is never redone. A rerun changes nothing. It prints how many it
+  linked and moved, and the two check counts.
