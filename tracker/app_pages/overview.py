@@ -1,5 +1,5 @@
 """Overview: how many jobs you can apply to, how many you applied to, and where each application stands, from your
-statuses and your mailbox together (tracker/overview.py)."""
+statuses and your mailbox together (job_radar/overview.py)."""
 
 from datetime import datetime, timezone
 
@@ -8,7 +8,7 @@ import streamlit as st
 
 from tracker.applications_tab import render as follow_ups
 from tracker.common import load_jobs, query
-from tracker.overview import MAIL, STAGES, STATUSES, applications, counts, in_range
+from job_radar.overview import MAIL, STAGES, STATUSES, applications, counts, in_range
 
 LABELS = {"waiting": "Waiting", "viewed": "Viewed", "assessment": "Assessment", "interview": "Interview",
           "rejected": "Rejected", "offer": "Offer"}

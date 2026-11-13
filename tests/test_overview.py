@@ -1,8 +1,8 @@
-"""The tracker's Overview: one row per company you applied to, its stage, and the counts (tracker/overview.py)."""
+"""The Overview: one row per job you applied to, its stage, and the counts (job_radar/overview.py)."""
 
 from datetime import datetime, timedelta, timezone
 
-from tracker.overview import STAGES, applications, board, counts, email_kind, in_range
+from job_radar.overview import STAGES, applications, board, counts, email_kind, in_range
 
 NOW = datetime(2026, 11, 13, 12, tzinfo=timezone.utc)
 
@@ -110,7 +110,7 @@ def test_the_overview_queries_and_page_run_on_the_warehouse_schema():
     from streamlit.testing.v1 import AppTest
 
     from job_radar import db
-    from tracker.overview import MAIL, STATUSES
+    from job_radar.overview import MAIL, STATUSES
     try:
         conn = db.connect()
     except (KeyError, psycopg.OperationalError) as e:

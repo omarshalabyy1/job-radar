@@ -1,5 +1,5 @@
-"""The tracker's Overview: one row per company you applied to, with its stage, from your statuses (core.application) and
-your mailbox (core.application_email) together, and the counts of each stage. Pure: the page does the queries."""
+"""The applications view: one row per job you applied to, with its stage, from your statuses (core.application) and
+your mailbox (core.application_email) together, and the counts of each stage, for the tracker's Overview and the check_applications step."""
 
 import re
 from collections import Counter
