@@ -146,6 +146,36 @@ def test_applying_again_after_a_rejection_is_waiting():
     assert app["stage"] == "waiting"
 
 
-def test_an_interview_still_counts_after_applying_to_another_job_there():
-    [app] = applications([mail("Henkel", "interview", day(1))], [status("Henkel", "applied", day(0), title="BI Analyst")])
-    assert app["stage"] == "interview"
+def test_each_job_at_one_company_is_its_own_application():
+    """Henkel, as the warehouse had it on 2026-11-13: one interview, one rejection, the rest waiting."""
+    apps = applications(
+        [mail("Henkel", "applied", day(100), title="Data Analytics Engineer - Supply Chain"),
+         mail("Henkel", "interview", day(99), title=None, subject="Interview with Henkel"),
+         mail("Henkel", "rejected", day(5), title="Data Analytics Engineer - Supply Chain"),
+         mail("Henkel", "applied", day(4), title="Jr Data Engineer")],
+        [status("Henkel", "interview", day(1), title="Data Analytics Engineer"),
+         status("Henkel", "applied", day(0), title="Jr Data Engineer")])
+    assert sorted((a["job"], a["stage"]) for a in apps) == [
+        ("Data Analytics Engineer", "interview"), ("Data Analytics Engineer - Supply Chain", "rejected"),
+        ("Jr Data Engineer", "waiting")]
+    assert counts(apps)["applied"] == 3
+
+
+def test_an_email_naming_no_job_goes_to_the_latest_application_sent_before_it():
+    apps = applications([mail("Acme", "applied", day(30), title="BI Developer"), mail("Acme", "applied", day(10), title="Data Engineer"),
+                         mail("Acme", "interview", day(5), title=None), mail("Acme", "applied", day(2), title="AI Engineer")], [])
+    assert {a["job"]: a["stage"] for a in apps} == {"BI Developer": "waiting", "Data Engineer": "interview", "AI Engineer": "waiting"}
+
+
+def test_an_email_naming_no_job_before_any_application_goes_to_the_first():
+    [app] = applications([mail("Acme", "viewed", day(9), title=None), mail("Acme", "applied", day(5), title="Data Engineer")], [])
+    assert app["stage"] == "waiting"  # the view came before you applied (the rule for applying again)
+
+
+def test_receipt_and_tracker_flags_for_the_checks():
+    apps = applications([mail("Mailonly", "applied", day(3))], [status("Statusonly", "applied", day(2)),
+                                                                status("Both", "applied", day(2))])
+    apps += applications([mail("Both", "applied", day(3))], [])
+    flags = {a["company"]: (a["receipt"], a["in_tracker"]) for a in apps}
+    assert flags["Mailonly"] == (True, False)
+    assert flags["Statusonly"] == (False, True)
