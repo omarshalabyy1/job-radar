@@ -51,7 +51,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U jobradar -d jobradar"]
       interval: 30s  # each check forks a backend; fewer forks while the VM is short of memory (docs/warehouse-resets.md)
-      timeout: 5s
+      timeout: 30s  # a 5 s timeout cut pg_isready off mid-login while the VM stalled; every reset came right after one (docs/warehouse-resets.md)
       retries: 20
 
   # Airflow's run history only; no port outside Docker's network (the official Airflow compose file's pattern)
