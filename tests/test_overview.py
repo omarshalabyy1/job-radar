@@ -99,3 +99,42 @@ def test_in_range_by_latest_activity():
     apps = applications([mail("Old", "applied", day(60)), mail("Old", "rejected", day(2)), mail("Older", "applied", day(45))], [])
     assert [a["company"] for a in in_range(apps, 30, NOW)] == ["Old"]
     assert len(in_range(apps, None, NOW)) == 2
+
+
+def test_the_overview_queries_and_page_run_on_the_warehouse_schema():
+    """The two queries run, and the page shows one interview at a company with only an interview email and your status."""
+    from pathlib import Path
+
+    import psycopg
+    import pytest
+    from streamlit.testing.v1 import AppTest
+
+    from job_radar import db
+    from tracker.overview import MAIL, STATUSES
+    try:
+        conn = db.connect()
+    except (KeyError, psycopg.OperationalError) as e:
+        pytest.skip(f"no warehouse: {e!r}"[:120])
+    with conn:
+        job = conn.execute("INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role,"
+                           " target_company, first_seen) VALUES ('zz overview', 'Data Engineer', 'Zz Overview', 'Cairo', 'Egypt',"
+                           " 'apify:linkedin', 'https://test.example/zz-overview', 1, 'Data Engineer', false, current_date)"
+                           " RETURNING job_id").fetchone()[0]
+        conn.execute("INSERT INTO core.application (job_id, status, note) VALUES (%s, 'applied', 'by you')", (job,))
+        conn.execute("INSERT INTO core.application_email (message_id, received_at, sender, subject, company, title, kind)"
+                     " VALUES ('<zz-overview-1>', now() - interval '1 day', 'hr@zz.example', 'Interview with Zz Overview',"
+                     " 'Zz Overview', 'Data Engineer', 'interview')")
+        for sql in (MAIL, STATUSES):
+            conn.execute(sql).fetchall()
+    try:
+        app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "tracker" / "app_pages" / "overview.py"),
+                                default_timeout=60)
+        app.run()
+        assert not app.exception
+        shown = {m.label: m.value for m in app.metric}
+        assert (shown["Applied"], shown["Interview"], shown["Waiting"]) == ("1", "1", "0")
+    finally:
+        with db.connect() as conn:
+            conn.execute("DELETE FROM core.application_email WHERE message_id = '<zz-overview-1>'")
+            conn.execute("DELETE FROM core.application WHERE job_id = %s", (job,))
+            conn.execute("DELETE FROM core.job WHERE job_id = %s", (job,))
