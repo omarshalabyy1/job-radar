@@ -50,7 +50,10 @@ FIELDS = {"title": ("title", "jobTitle", "job_title", "positionName", "position"
                           "descriptionHtml", "description_text", "body", "textSnippet", "text")}
 PARALLEL = 8  # boards run at once
 STORE_LOCK = threading.Lock()
-WAIT_SECONDS = 240  # a run still going after this is left to finish on Apify; its jobs are read by the next run
+# Apify cuts a run at its Actor's default (300 s for the LinkedIn one: 599 of 749 items, 2026-11-14) unless the run asks for
+# more; the charge cap, not the time, limits what a run costs. We wait as long as the run may take.
+RUN_SECONDS = 600
+WAIT_SECONDS = 630  # a run still going after this is left to finish on Apify; its jobs are read by the next run
 SPEND: dict[str, float | None] = {}  # board -> what its run cost this collect (None: Apify gave no figure); see spend_line()
 
 
@@ -118,14 +121,18 @@ def run(token: str, actor: str, payload: dict, max_items: int, max_charge: float
     """One Actor run, waited for, and its dataset's items (with the run's cost)."""
     auth = {"Authorization": f"Bearer {token}"}
     started = requests.post(f"{API}/acts/{actor.replace('/', '~')}/runs", headers=auth, json=payload, timeout=90,
-                            params={"maxItems": max_items, "maxTotalChargeUsd": max_charge, "waitForFinish": 60})
+                            params={"maxItems": max_items, "maxTotalChargeUsd": max_charge, "waitForFinish": 60,
+                                    "timeout": RUN_SECONDS})
     started.raise_for_status()
     info, deadline = started.json()["data"], time.monotonic() + WAIT_SECONDS
     while info["status"] in ("READY", "RUNNING") and time.monotonic() < deadline:
         info = requests.get(f"{API}/actor-runs/{info['id']}", headers=auth, params={"waitForFinish": 60}, timeout=90).json()["data"]
     items = requests.get(f"{API}/datasets/{info['defaultDatasetId']}/items", headers=auth, params={"clean": "true"}, timeout=120)
     items.raise_for_status()
-    print(f"apify {actor}: run {info['status'].lower()}, {len(items.json())} items")
+    if info["status"] == "SUCCEEDED":
+        print(f"apify {actor}: run {info['status'].lower()}, {len(items.json())} items")
+    else:  # timed out, aborted, failed or still running: what it stored so far is kept, and the step says so
+        print(f"WARNING apify {actor}: run {info['status'].lower()} with {len(items.json())} of up to {max_items} items")
     out = Items(items.json())
     cost = info.get("usageTotalUsd")
     out.cost = float(cost) if isinstance(cost, (int, float)) else None
