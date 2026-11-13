@@ -87,7 +87,6 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
         mails, status = sorted(g["mail"], key=lambda m: m[0]), sorted(g["status"], key=lambda s: s[0])
         first_sender = next((m[2] for m in mails if m[3] == "applied"), mails[0][2] if mails else None)
         last_status = status[-1] if status else (None, None, None, None)
-        latest = max(events, key=lambda e: e[1])
         out.append({
             "company": g["names"].most_common(1)[0][0],
             "job": ", ".join(dict.fromkeys(t for t in g["titles"] if t)),
@@ -95,8 +94,7 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
             "stage": stage(events),
             # the first confirmation email, else when you set your status (no other date says when you applied)
             "applied_on": next((m[0] for m in mails if m[3] == "applied"), status[0][0] if status else None),
-            "latest_at": latest[1],
-            "latest_news": latest[0],
+            "latest_at": max(at for _, at in events),
             "latest_email": mails[-1][1] if mails else None,
             "job_url": last_status[3]})
     return out

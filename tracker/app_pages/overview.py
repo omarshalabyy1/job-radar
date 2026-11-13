@@ -34,11 +34,11 @@ with st.container(horizontal=True):  # side by side on a desktop, wrapping on a 
     st.metric("Responses", n["responses"], border=True, width=170, help="Applied minus Waiting: any reply, a view included")
 with st.container(horizontal=True):
     for stage in STAGES:
-        st.metric(LABELS[stage], n[stage], border=True, width=150, help=HELP[stage])
+        st.metric(LABELS[stage], n[stage], border=True, width=140, help=HELP[stage])
 
 show = st.segmented_control("Show", ["All", *LABELS.values()], default="All", label_visibility="collapsed")
-table = pd.DataFrame(apps, columns=["company", "job", "board", "stage", "applied_on", "latest_news", "latest_at",
-                                    "latest_email", "job_url"])
+table = pd.DataFrame(apps, columns=["company", "job", "board", "stage", "applied_on", "latest_at", "latest_email",
+                                    "job_url"])
 if show and show != "All":
     table = table[table["stage"] == next(k for k, v in LABELS.items() if v == show)]
 if table.empty:
@@ -46,14 +46,14 @@ if table.empty:
 else:
     first = {"interview": 0, "assessment": 1}  # what needs you soonest on top, then the newest news
     table = (table.assign(order=table["stage"].map(first).fillna(2)).sort_values(["order", "latest_at"], ascending=[True, False])
-             .assign(stage=lambda t: t["stage"].map(LABELS), latest_news=lambda t: t["latest_news"].str.capitalize()))
-    st.dataframe(table, hide_index=True, column_order=["company", "job", "board", "stage", "applied_on", "latest_news",
-                                                       "latest_at", "latest_email", "job_url"], column_config={
+             .assign(stage=lambda t: t["stage"].map(LABELS)))
+    st.dataframe(table, hide_index=True, column_order=["company", "job", "board", "stage", "applied_on", "latest_at",
+                                                       "latest_email", "job_url"], column_config={
         "company": st.column_config.TextColumn("Company", width=160), "job": st.column_config.TextColumn("Job", width=240),
         "board": st.column_config.TextColumn("Board", width="small"), "stage": st.column_config.TextColumn("Stage", width="small"),
         "applied_on": st.column_config.DatetimeColumn("Applied on", format="D MMM YYYY", timezone="Africa/Cairo",
                                                       help="The first confirmation email, else when you set your status"),
-        "latest_news": "Latest news",
-        "latest_at": st.column_config.DatetimeColumn("News on", format="D MMM YYYY", timezone="Africa/Cairo"),
+        "latest_at": st.column_config.DatetimeColumn("Latest news", format="D MMM YYYY", timezone="Africa/Cairo",
+                                                     help="The newest email or status change"),
         "latest_email": st.column_config.TextColumn("Latest email", width="large"),
         "job_url": st.column_config.LinkColumn("Job", display_text="Open", width="small")})
