@@ -301,3 +301,14 @@ def test_a_placeholder_job_link_falls_back_to_the_email():
     [app] = applications([mail("Henkel", "applied", day(3), message_id="<h@henkel>")],
                          [status("Henkel", "interview", day(1), url="mailto:application-sent-to-henkel-26097659")])
     assert app["link"] == app["email_link"]
+
+
+def test_no_news_14_days_after_an_interview_is_a_rejection():
+    """Teleperformance: interview on 29 Oct (the invitation's day), nothing since: ghosted, which Omar counts as rejected."""
+    tp = [mail("Teleperformance", "interview", day(17), title="BI Developer",
+               subject="Invitation: Omar Sabry - BI Developer @ Thu Oct 29, 2026 2pm - 2:30pm (GMT+2)")]
+    [ghosted] = applications(tp, [], now=NOW)
+    assert ghosted["stage"] == "rejected" and "ghosted" in ghosted["latest_email"]
+    [recent] = applications([mail("IBM", "interview", day(13), subject="Interview invite")], [], now=NOW)
+    assert recent["stage"] == "interview"  # 13 days: not yet
+    assert applications(tp, [])[0]["stage"] == "interview"  # without a clock, nothing is ghosted

@@ -16,15 +16,15 @@ LABELS = {"waiting": "Waiting", "viewed": "Viewed", "assessment": "Assessment", 
 HELP = {"waiting": "Applied, no reply yet", "viewed": "The employer opened or is reviewing it, no decision yet",
         "assessment": "An assessment, a test or a video step, spotted by its words in the email",
         "interview": "Invited to or had an interview, and no rejection since",
-        "rejected": "Rejected, after any interview or assessment", "offer": "An offer, or hired"}
+        "rejected": "Rejected after any interview or assessment, or no news 14 days after an interview or assessment (ghosted)", "offer": "An offer, or hired"}
 RANGES = {"Last 30 days": 30, "Last 90 days": 90, "All": None}
 CAIRO = ZoneInfo("Africa/Cairo")
 
 st.title("Overview", icon=":material/dashboard:")
 jobs = load_jobs()
 open_jobs = jobs[jobs["status"].isin(["new", "saved"]) & jobs["hidden_reason"].isna()]
-everything = applications(list(query(MAIL).itertuples(index=False)), list(query(STATUSES).itertuples(index=False)))
 now = datetime.now(timezone.utc)
+everything = applications(list(query(MAIL).itertuples(index=False)), list(query(STATUSES).itertuples(index=False)), now)
 
 # what needs you: the assessments and interviews not past their day (news in the last 30 days), and your deadlines from today on
 st.subheader("Needs you", icon=":material/priority_high:")
