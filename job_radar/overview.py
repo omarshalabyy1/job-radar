@@ -135,8 +135,11 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
             "job_url": last_status[3],
             "receipt": any(m[3] == "applied" for m in mails),  # a confirmation email came
             "job_id": last_status[4],  # the job you set a status for (the latest), None for an email alone
-            # the emails matched to it by title and linked to no job yet: (message_id, kind, received_at)
-            "to_link": [(m[4], m[3], m[0]) for m in mails if m[6] and m[5] is None] if last_status[4] else [],
+            # the emails matched to it by title and linked to no job yet: (message_id, kind, received_at); a reply from
+            # before the application started (its first confirmation or your status) is about an older one
+            "to_link": [(m[4], m[3], m[0]) for m in mails if m[6] and m[5] is None
+                        and (m[3] == "applied" or m[0] >= min([x[0] for x in mails if x[3] == "applied"] + [s[0] for s in status]))]
+                       if last_status[4] else [],
             "in_tracker": bool(status)})  # you or Claude set a status for it
     return out
 

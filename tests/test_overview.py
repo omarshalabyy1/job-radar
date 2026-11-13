@@ -215,3 +215,10 @@ def test_emails_matched_by_title_and_not_yet_linked_are_to_link():
 def test_a_job_you_have_no_status_for_has_nothing_to_link():
     [app] = applications([mail("Acme", "applied", day(9), message_id="<a>")], [])
     assert (app["job_id"], app["to_link"]) == (None, [])
+
+
+def test_a_reply_from_before_you_applied_is_not_linked():
+    """Cartona: an April rejection ("Data Analyst") is not about the Risk Data Analyst job applied to in November."""
+    [app] = applications([mail("Cartona", "rejected", day(200), title="Data Analyst", message_id="<old>")],
+                         [status("Cartona", "applied", day(1), title="Risk Data Analyst", job_id=5)])
+    assert (app["stage"], app["to_link"]) == ("waiting", [])
