@@ -1,7 +1,7 @@
 """job_radar: find the new jobs, rank them, have Claude grade them; two email DAGs send them right after.
 The collect's time is in settings.yaml (schedule), Cairo time; as shipped:
 
-    job_radar               12pm: schema -> extract_boards, extract_bayt, extract_remote, extract_startups, extract_egypt,
+    job_radar               12pm: schema -> collect_inbox (the Inbox's emails), extract_boards, extract_bayt, extract_remote, extract_startups, extract_egypt,
                             extract_gulf, extract_workable, extract_freehire, extract_companies, extract_portals,
                             extract_email (one by one) -> transform -> describe -> match_skills -> eligibility
                             -> embed -> grade_claude -> ranked -> tailor; match_skills -> export_career_ops
@@ -122,6 +122,7 @@ with DAG(
     extracts.append(step("extract_market", retries=2, retry_delay=timedelta(minutes=2), execution_timeout=timedelta(seconds=720)))  # 157 active boards, then the candidates, up to 600 s
     extracts.append(step("extract_linkedin", execution_timeout=timedelta(seconds=300)))  # one Apify run, up to 280 s
     extracts.append(step("extract_apify", execution_timeout=timedelta(seconds=1800)))  # the website's Apify boards, a run each
+    extracts.append(step("collect_inbox", execution_timeout=timedelta(seconds=900)))  # every email of the last 14 days, for the Inbox
     step("schema", retries=2, retry_delay=timedelta(seconds=60)) >> extracts
     matched = step("match_skills", trigger_rule="all_done", execution_timeout=timedelta(seconds=1800))  # 12,000 jobs in the window since the market boards: 485 s was not enough (2026-11-10)
     extracts >> step("transform", trigger_rule="all_done") >> step("describe", execution_timeout=timedelta(seconds=420)) >> matched

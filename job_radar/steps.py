@@ -42,6 +42,7 @@ from . import outreach_send as outreach_sender
 from .outreach import outreach_drafts  # noqa: F401  (python -m job_radar outreach_drafts)
 from .publish import publish  # noqa: F401  (python -m job_radar publish)
 from .check_applications import check_applications  # noqa: F401  (python -m job_radar check_applications)
+from . import mail_inbox
 from .publish_applications import publish_applications  # noqa: F401  (python -m job_radar publish_applications)
 from .tech import is_tech_role
 from .tailor import tailor  # noqa: F401  (python -m job_radar tailor)
@@ -1098,3 +1099,9 @@ def outreach_replies(conn) -> None:
     """Read the mailboxes (read-only) for replies and bounces to the outreach emails and suppress those addresses
     (outreach_send.collect_replies). Its own DAG, hourly: job_radar_outreach_replies."""
     outreach_sender.collect_replies(conn, datetime.now(timezone.utc))
+
+
+def collect_inbox(conn) -> None:
+    """The daily run's read of every mailbox (All Mail and Spam, the last 14 days, read-only) into core.mail, for the
+    tracker's Inbox. What each email needs from you is still written by Claude in a session (mail_inbox export/import)."""
+    mail_inbox.collect(conn)
