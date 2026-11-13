@@ -69,9 +69,9 @@ backed outcomes to draw on, only where <cv> has them: at Bosch, the monthly repo
 2 hours, one agreed KPI definition across inventory, procurement and finance, reconciliation so every reported figure \
 matched the source; at Null Labs, a hands-off daily feed, short payments matched to the cent, one working list to \
 recover, prevent or accept sorted by deadline, repeat causes by distribution center, item and carrier. Fixed facts \
-that beat <cv>: "AI & Data Engineer" at "Null Labs | Florida, United States (Remote)", Apr 2026 – Present; "BI \
-Developer" at "Bosch Car Service | Cairo, Egypt (Hybrid)", Apr 2025 – Mar 2026 (1 yr); "Operations Engineer" at \
-"Bosch Car Service | Cairo, Egypt (On-site)", Oct 2024 – Mar 2025 (6 mos). A role's "when" is its dates with the \
+that beat <cv>: "AI & Data Engineer" at "Null Labs | Florida, United States (Remote)", Sep 2026 – Present; "BI \
+Developer" at "Bosch Car Service | Cairo, Egypt (Hybrid)", Jan 2026 – Aug 2026 (8 mos); "Operations Engineer" at \
+"Bosch Car Service | Cairo, Egypt (On-site)", Jan 2025 – Dec 2025 (1 yr). A role's "when" is its dates with the \
 length in brackets. A project's org is its context; repo_url its GitHub repo when <cv> gives one. The whole CV fits \
 one A4 page: about 520 words at most, so cut the weakest bullets and projects first. file_tag: DE, BI, DA or AI, the \
 kind of role.
