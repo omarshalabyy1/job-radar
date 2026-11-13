@@ -9,7 +9,7 @@ import streamlit as st
 
 from tracker.applications_tab import render as follow_ups
 from tracker.common import load_jobs, query
-from job_radar.overview import MAIL, STAGES, STATUSES, applications, counts, in_range
+from job_radar.overview import MAIL, STAGES, STATUSES, applications, counts, in_range, needs_you
 
 LABELS = {"waiting": "Waiting", "viewed": "Viewed", "assessment": "Assessment", "interview": "Interview",
           "rejected": "Rejected", "offer": "Offer"}
@@ -26,29 +26,30 @@ open_jobs = jobs[jobs["status"].isin(["new", "saved"]) & jobs["hidden_reason"].i
 everything = applications(list(query(MAIL).itertuples(index=False)), list(query(STATUSES).itertuples(index=False)))
 now = datetime.now(timezone.utc)
 
-# what needs you: every assessment or interview with news in the last 30 days, and your open deadlines (Today page)
+# what needs you: the assessments and interviews not past their day (news in the last 30 days), and your deadlines from today on
 st.subheader("Needs you", icon=":material/priority_high:")
 steps = [{"what": LABELS[a["stage"]], "company": a["company"], "job": a["job"], "due": a["due"], "news": a["latest_email"],
-          "on": a["latest_at"], "link": a["job_url"]} for a in in_range(everything, 30, now) if a["stage"] in ("assessment", "interview")]
+          "on": a["latest_at"], "link": a["link"], "email": a["email_link"]} for a in needs_you(everything, now)]
 deadlines = query("SELECT d.due, d.what, d.note, coalesce(j.company, '') AS company, coalesce(j.title, '') AS title, j.job_url"
                   " FROM core.deadline d LEFT JOIN core.job j USING (job_id)"
-                  " WHERE NOT d.done AND d.due >= (now() AT TIME ZONE 'Africa/Cairo')::date - 14")
+                  " WHERE NOT d.done AND d.due >= (now() AT TIME ZONE 'Africa/Cairo')::date")
 steps += [{"what": f"Deadline: {d.what}", "company": d.company, "job": d.title, "due": d.due, "news": d.note, "on": None,
-           "link": d.job_url} for d in deadlines.itertuples()]
+           "link": d.job_url, "email": None} for d in deadlines.itertuples()]
 if not steps:
     st.caption("Nothing waits on you: no assessment, interview or open deadline.")
 else:
     today = now.astimezone(CAIRO).date()
     todo = pd.DataFrame(steps).assign(
-        when=lambda t: [("" if pd.isna(d) else "Overdue" if d < today else "Today" if d == today else f"In {(d - today).days} days")
+        when=lambda t: [("" if pd.isna(d) else "Today" if d == today else f"In {(d - today).days} days")
                         for d in t["due"]]).sort_values(["due", "on"], ascending=[True, False], na_position="last")
-    st.dataframe(todo, hide_index=True, column_order=["what", "company", "job", "due", "when", "news", "link"], column_config={
+    st.dataframe(todo, hide_index=True, column_order=["what", "company", "job", "due", "when", "news", "link", "email"], column_config={
         "what": st.column_config.TextColumn("To do", width=170), "company": st.column_config.TextColumn("Company", width=150),
         "job": st.column_config.TextColumn("Job", width=220),
         "due": st.column_config.DateColumn("Due", format="ddd D MMM", help="Only when the email or your deadline gives a date"),
         "when": st.column_config.TextColumn("When", width="small"),
         "news": st.column_config.TextColumn("Latest news", width="large"),
-        "link": st.column_config.LinkColumn("Job", display_text="Open", width="small")})
+        "link": st.column_config.LinkColumn("Job", display_text="Open", width="small", help="The job page, else the email"),
+        "email": st.column_config.LinkColumn("Email", display_text="Open", width="small", help="The newest email, in Gmail")})
 
 picked = st.segmented_control("Range", list(RANGES), default="Last 30 days", label_visibility="collapsed",
                               help="Applications with any news in this time: a confirmation, a reply or your status")
@@ -67,7 +68,7 @@ with st.container(horizontal=True):
 
 show = st.segmented_control("Show", ["All", *LABELS.values()], default="All", label_visibility="collapsed")
 table = pd.DataFrame(apps, columns=["company", "job", "board", "stage", "applied_on", "latest_at", "latest_email",
-                                    "job_url"])
+                                    "link", "email_link"])
 if show and show != "All":
     table = table[table["stage"] == next(k for k, v in LABELS.items() if v == show)]
 if table.empty:
@@ -77,7 +78,7 @@ else:
     table = (table.assign(order=table["stage"].map(first).fillna(2)).sort_values(["order", "latest_at"], ascending=[True, False])
              .assign(stage=lambda t: t["stage"].map(LABELS)))
     st.dataframe(table, hide_index=True, column_order=["company", "job", "board", "stage", "applied_on", "latest_at",
-                                                       "latest_email", "job_url"], column_config={
+                                                       "latest_email", "link", "email_link"], column_config={
         "company": st.column_config.TextColumn("Company", width=160), "job": st.column_config.TextColumn("Job", width=240),
         "board": st.column_config.TextColumn("Board", width="small"), "stage": st.column_config.TextColumn("Stage", width="small"),
         "applied_on": st.column_config.DatetimeColumn("Applied on", format="D MMM YYYY", timezone="Africa/Cairo",
@@ -85,7 +86,8 @@ else:
         "latest_at": st.column_config.DatetimeColumn("Latest news", format="D MMM YYYY", timezone="Africa/Cairo",
                                                      help="The newest email or status change"),
         "latest_email": st.column_config.TextColumn("Latest email", width="large"),
-        "job_url": st.column_config.LinkColumn("Job", display_text="Open", width="small")})
+        "link": st.column_config.LinkColumn("Job", display_text="Open", width="small", help="The job page, else the email"),
+        "email_link": st.column_config.LinkColumn("Email", display_text="Open", width="small", help="The newest email, in Gmail")})
 
 # what does not match between your statuses and your mailbox, in this range (check_applications links what it can, hourly)
 no_receipt = [a for a in apps if a["in_tracker"] and not a["receipt"]]

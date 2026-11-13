@@ -3,11 +3,14 @@ your mailbox (core.application_email) together, and the counts of each stage, fo
 
 import re
 from collections import Counter
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
 from datetime import date, datetime, timedelta
 
 from job_radar.applications import channel, name_key
 
 # the current stage of an application, each company in exactly one, so the counts add up to Applied
+CAIRO = ZoneInfo("Africa/Cairo")
 STAGES = ["waiting", "viewed", "assessment", "interview", "rejected", "offer"]
 # the mail reader files an assessment or a test as an interview: these words in its subject or Inbox action split it out
 ASSESSMENT = re.compile(r"assessment|\btest\b|exam|hackerrank|codility|video application|\btask\b|challenge", re.I)
@@ -15,6 +18,8 @@ ASSESSMENT = re.compile(r"assessment|\btest\b|exam|hackerrank|codility|video app
 BODY_ASSESSMENT = re.compile(r"assessment|hackerrank|codility|online test|coding test|coding challenge|video application", re.I)
 # a deadline the email itself states: "expires in 1 days", "(5 days left)", "within 48 hours"
 DUE = re.compile(r"(?:expires? in|within)\s+(\d+)\s+(day|hour)s?|(\d+)\s+(day|hour)s?\s+left", re.I)
+# a calendar invitation's own day: "Invitation: ... @ Thu Oct 29, 2026 2pm"
+CALENDAR = re.compile(r"@ \w{3} (\w{3}) (\d{1,2}), (\d{4})")
 # a job board named in a job's source ("apify:linkedin_remote", "manual:wuzzuf-keywords") or an apply attempt
 BOARDS = {"linkedin": "LinkedIn", "indeed": "Indeed", "wuzzuf": "Wuzzuf", "ashby": "Ashby", "workable": "Workable",
           "naukrigulf": "Naukrigulf", "bayt": "Bayt", "glassdoor": "Glassdoor"}
@@ -23,7 +28,7 @@ APPLIED = {"applied", "interview", "assessment", "offer", "hired", "rejected-sta
 
 # the application news, an email matched to a job going by that job's company and title; the Inbox's action helps spot assessments
 MAIL = ("SELECT coalesce(j.company, e.company), coalesce(j.title, e.title), e.kind, e.received_at, e.subject, m.action, e.sender,"
-        " e.message_id, e.job_id, m.body"
+        " e.message_id, e.job_id, m.body, e.mailbox"
         " FROM core.application_email e LEFT JOIN core.job j USING (job_id)"
         " LEFT JOIN core.mail m ON m.message_id = e.message_id AND m.mailbox = e.mailbox WHERE e.kind <> 'other'")
 # your statuses, with the board of the job's latest apply attempt
@@ -54,11 +59,20 @@ def board(attempt_board: str | None, source: str | None, sender: str | None) -> 
 
 
 def due_date(text: str, received_at: datetime) -> date | None:
-    """The day a step is due, when the email says it ("expires in 1 days", "5 days left", "within 48 hours"); else None."""
+    """The day a step is due, when the email says it ("expires in 1 days", "5 days left", "within 48 hours", a calendar
+    invitation's day); else None."""
+    if c := CALENDAR.search(text or ""):
+        return datetime.strptime(" ".join(c.groups()), "%b %d %Y").date()
     if not (m := DUE.search(text or "")):
         return None
     n, unit = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
     return (received_at + timedelta(**{f"{unit.lower()}s": int(n)})).date()
+
+
+def gmail_link(mailbox: str | None, message_id: str) -> str:
+    """A link that opens one email in Gmail, in the account it came to (Gmail's rfc822msgid search)."""
+    return (f"https://mail.google.com/mail/u/?authuser={quote(mailbox or '', safe='')}"
+            f"#search/rfc822msgid%3A{quote(message_id.strip('<>'), safe='')}")
 
 
 def stage(events: list[tuple[str, datetime]]) -> str:
@@ -88,7 +102,7 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
     to an application at its company whose title says the same in fewer words (a reply: in more words too); else a reply
     or an email naming no title goes to your latest application there sent on or before it. A reply or an email naming no
     title only joins an application you had sent by then; with none, it starts its own.
-    `mail`: (company, title, kind, received_at, subject, action, sender, message_id, job_id, body); `statuses`: (company,
+    `mail`: (company, title, kind, received_at, subject, action, sender, message_id, job_id, body, mailbox); `statuses`: (company,
     title, status, updated_at, source, attempt_board, job_url, job_id, note)."""
     groups: dict[tuple[str, str], dict] = {}
 
@@ -133,7 +147,7 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
         g["names"][company or ""] += 1
         g["titles"][title or ""] += 1
         g["events"].append((email_kind(kind, row[4], row[5], row[9]), at))
-        g["mail"].append((at, row[4], row[6], kind, row[7], row[8], by_title, row[9]))
+        g["mail"].append((at, row[4], row[6], kind, row[7], row[8], by_title, row[9], row[10]))
     out = []
     for g in groups.values():
         kinds = {k for k, _ in g["events"]}
@@ -156,6 +170,9 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
             "latest_email": note.rsplit("; ", 1)[-1] if (note := last_status[5]) and last_status[6] in ("interview", "offer")
                             and (not mails or last_status[0] >= mails[-1][0]) else mails[-1][1] if mails else None,
             "job_url": last_status[3],
+            "email_link": gmail_link(mails[-1][8], mails[-1][4]) if mails else None,  # the newest email, in its mailbox
+            "link": (last_status[3] if (last_status[3] or "").startswith("http") else None)  # the job page (a web page), else the email
+                    or (gmail_link(mails[-1][8], mails[-1][4]) if mails else None),
             "receipt": any(m[3] == "applied" for m in mails),  # a confirmation email came
             # the due day the newest interview or assessment email states, if it states one
             "due": next((due_date(f"{m[1]} {m[7] or ''}", m[0]) for m in reversed(mails) if m[3] == "interview"), None),
@@ -167,6 +184,14 @@ def applications(mail: list[tuple], statuses: list[tuple]) -> list[dict]:
                        if last_status[4] else [],
             "in_tracker": bool(status)})  # you or Claude set a status for it
     return out
+
+
+def needs_you(apps: list[dict], now: datetime) -> list[dict]:
+    """The assessments and interviews with news in the last 30 days that are not past their due day (Cairo), the soonest
+    due first, then the ones with no date, newest news first."""
+    today = now.astimezone(CAIRO).date()
+    open_ = [a for a in in_range(apps, 30, now) if a["stage"] in ("assessment", "interview") and (a["due"] is None or a["due"] >= today)]
+    return sorted(open_, key=lambda a: (a["due"] is None, a["due"] or today, -a["latest_at"].timestamp()))
 
 
 def in_range(apps: list[dict], days: int | None, now: datetime) -> list[dict]:

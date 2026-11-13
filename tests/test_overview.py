@@ -1,6 +1,6 @@
 """The Overview: one row per job you applied to, its stage, and the counts (job_radar/overview.py)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from job_radar.overview import STAGES, applications, board, counts, email_kind, in_range
 
@@ -13,8 +13,8 @@ def day(n: int) -> datetime:
 
 
 def mail(company, kind, at, title="Data Engineer", subject="", action=None, sender="jobs@acme.com", message_id=None, job_id=None,
-         body=None):
-    return (company, title, kind, at, subject, action, sender, message_id or f"<{company}-{kind}-{at:%j}>", job_id, body)
+         body=None, mailbox="me@gmail.com"):
+    return (company, title, kind, at, subject, action, sender, message_id or f"<{company}-{kind}-{at:%j}>", job_id, body, mailbox)
 
 
 def status(company, value, at, title="Data Engineer", source="wuzzuf", attempt=None, url="https://x/1", job_id=1, note=None):
@@ -271,3 +271,33 @@ def test_an_assessment_carries_the_due_date_of_its_newest_email():
     [app] = applications([mail("Valeo", "applied", day(9)),
                           mail("Valeo", "interview", day(7), subject="Your invite to Valeo English Exam - Speaking expires in 1 days")], [])
     assert (app["stage"], app["due"]) == ("assessment", (day(7) + timedelta(days=1)).date())
+
+
+def test_a_calendar_invitation_is_due_on_its_day():
+    from job_radar.overview import due_date
+    assert due_date("Invitation: Omar Sabry - BI Developer @ Thu Oct 29, 2026 2pm - 2:30pm (GMT+2)", day(17)) == date(2026, 10, 29)
+
+
+def test_needs_you_leaves_out_what_is_past():
+    from job_radar.overview import needs_you
+    apps = applications([mail("Valeo", "interview", day(7), subject="English Exam expires in 1 days"),
+                         mail("IBM", "interview", day(1), subject="Next Steps", body="complete the assessment"),
+                         mail("HH", "interview", day(2), subject="Invitation: Call @ Mon Nov 16, 2026 2pm")], [])
+    assert [a["company"] for a in needs_you(apps, NOW)] == ["HH", "IBM"]  # Valeo's exam expired; due first, then undated
+
+
+def test_every_application_links_to_its_newest_email_in_its_mailbox():
+    from job_radar.overview import gmail_link
+    assert gmail_link("me@gmail.com", "<abc.1@mail.x>") == "https://mail.google.com/mail/u/?authuser=me%40gmail.com#search/rfc822msgid%3Aabc.1%40mail.x"
+    [app] = applications([mail("Hire Hangar", "interview", day(1), message_id="<v@hh>", mailbox="b@gmail.com")], [])
+    assert app["email_link"] == gmail_link("b@gmail.com", "<v@hh>")
+    assert app["link"] == app["email_link"]  # no job page: the email is the link
+    [job] = applications([mail("IBM", "applied", day(1), message_id="<i@ibm>")], [status("IBM", "applied", day(1), url="https://ibm.example/1")])
+    assert (job["link"], job["email_link"]) == ("https://ibm.example/1", gmail_link("me@gmail.com", "<i@ibm>"))
+
+
+def test_a_placeholder_job_link_falls_back_to_the_email():
+    """Henkel's manual row has job_url 'mailto:application-sent-to-henkel-26097659': not a page."""
+    [app] = applications([mail("Henkel", "applied", day(3), message_id="<h@henkel>")],
+                         [status("Henkel", "interview", day(1), url="mailto:application-sent-to-henkel-26097659")])
+    assert app["link"] == app["email_link"]
