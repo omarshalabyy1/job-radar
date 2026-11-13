@@ -45,8 +45,10 @@ from .sources.inbox import MAIL_BYTES
 from .tailor import GAP_WORDS, RULES, slug  # GAP_WORDS: Claude's text with one is thrown away, not written
 
 # an offer only as a job offer's words ("Offer Letter", "Job Offer", "Offer of Employment"): "offer" alone brought food deals
-SEARCH = ("(subject:(applying OR application OR applied OR interview OR candidate OR position OR interest OR steps OR registration OR status)"
-          " OR subject:(offer letter) OR subject:(job offer) OR subject:(employment offer))")
+# assessments, exams, screenings and calendar invitations too, and Workable's confirmations ("<role> - <company>", no such word)
+SEARCH = ("(subject:(applying OR application OR applied OR interview OR candidate OR position OR interest OR steps OR registration OR status"
+          " OR assessment OR exam OR screening OR hackerrank OR invitation OR shortlisted)"
+          " OR subject:(offer letter) OR subject:(job offer) OR subject:(employment offer) OR from:(candidates.workablemail.com))")
 BACKFILL_DAYS, DAILY_DAYS, GAP_DAYS = 400, 3, 14
 BODY_CHARS = 2000  # of an email sent to Claude
 # the statuses in the order an application moves up; 'viewed' and 'other' move nothing, 'ignored' is yours
