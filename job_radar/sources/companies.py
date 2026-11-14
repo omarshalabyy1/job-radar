@@ -202,7 +202,7 @@ def detect(url: str) -> tuple[str, str | None, str | None]:
     if r.status_code in (401, 403) or re.search(CHALLENGE, page[:20000]):
         return "blocked", None, f"it shows a bot check (HTTP {r.status_code}): run scripts/open_blocked.py"
     if r.status_code >= 400:
-        return "unreachable", None, f"page not found (HTTP {r.status_code}): check the careers URL"
+        return "unreachable", None, f"page not found (HTTP {r.status_code}): check the careers URL (a SuccessFactors site answers so during its maintenance)"
     for platform, pattern in ATS_PATTERNS:
         if m := re.search(pattern, page):
             return platform, m.group(1), None
@@ -601,8 +601,12 @@ def workday(company: str, base: str) -> list[dict]:
                           or re.match(r"https://(([\w-]+)\.wd\d+\.myworkdayjobs\.com)/(?:[a-z]{2}-[A-Z]{2}/)?([\w-]+)", base)).groups()
     rows = []
     for offset in range(0, 200, 20):
-        data = fetch("POST", f"https://{host}/wday/cxs/{tenant}/{site}/jobs", headers={"Accept": "application/json"},
-                     json={"appliedFacets": {}, "limit": 20, "offset": offset, "searchText": "Egypt"}).json()
+        r = fetch("POST", f"https://{host}/wday/cxs/{tenant}/{site}/jobs", headers={"Accept": "application/json"},
+                  json={"appliedFacets": {}, "limit": 20, "offset": offset, "searchText": "Egypt"})
+        try:
+            data = r.json()
+        except ValueError:  # its weekly maintenance answers 200 with an HTML page, not JSON
+            raise ValueError(f"{host}: Workday is unavailable (maintenance); the next run reads it") from None
         for j in data.get("jobPostings") or []:
             location = " ".join((j.get("locationsText") or "").split())
             if role_of(j["title"]) and place_of(location):

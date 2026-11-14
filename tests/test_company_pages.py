@@ -272,3 +272,18 @@ def test_ibm_is_read_through_its_careers_search_api_for_the_country_its_address_
     assert {"term": {"field_keyword_05": "Egypt"}} in kwargs["json"]["query"]["bool"]["must"]
     assert [(r["title"], r["location"], r["date_posted"]) for r in rows][0] == ("Data Engineer-Data Integration", "Egypt (hybrid)", "2026-11-08")
     assert rows[0]["job_url"] == "https://careers.ibm.com/careers/JobDetail?jobId=140863"
+
+
+def test_a_workday_site_under_maintenance_says_so(monkeypatch):
+    """Workday's weekly maintenance answers 200 with an HTML page ("Workday is currently unavailable"): six companies
+    failed with JSONDecodeError('Expecting value: line 1 column 1') on 2026-11-14."""
+    class Page:
+        headers = {"content-type": "text/html"}
+        text = "<html><body>Workday is currently unavailable.</body></html>"
+
+        def json(self):
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    monkeypatch.setattr(companies, "fetch", lambda *a, **k: Page())
+    with pytest.raises(ValueError, match="Workday is unavailable"):
+        companies.READERS["workday"]("DXC Technology", "https://dxctechnology.wd1.myworkdayjobs.com/DXCJobs")

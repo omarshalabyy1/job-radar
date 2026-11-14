@@ -32,9 +32,9 @@ features:
   embeddings: false         # local Ollama vectors: how close each job is to your CV (CV match); a CV is embedded again only when it changed
   follow_up_drafts: true    # draft a follow-up email (never sent) when an application is 7 or 14 days old with no answer
   interview_prep: true      # draft interview notes when your mailbox shows an interview invite
-  market: true              # the website (Fennec): also keep every other tech job (any role, level and country) the sources
+  market: false             # off 2026-11-14 (Omar: job-radar only, a private project). the website (Fennec): also keep every other tech job (any role, level and country) the sources
                             # bring, with in_scope false; your emails, grades, embeddings and tracker see only in_scope jobs
-  market_harvest: true      # the website: also read every company board the other sources' postings link to (grows the
+  market_harvest: false     # off 2026-11-14 with market. the website: also read every company board the other sources' postings link to (grows the
                             # boards waiting to be read, 40 a run; on since 2026-10-17)
   market_more: false        # the website: also every tech job of the remote boards' feeds (Jobicy, Arbeitnow, Remote OK,
                             # Working Nomads) and Germany's job agency (Bundesagentur); the last step of the growth

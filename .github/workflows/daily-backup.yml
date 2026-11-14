@@ -1,6 +1,6 @@
 # The main collect for the website (Fennec). GitHub collects and publishes to Neon (the website's database) once a
-# day, at 17 minutes past 3 UTC (5am in Cairo in winter, 6am in summer; off the hour, as GitHub delays top-of-hour schedules, and
-# early, as it can start a slot hours late). Airflow on the laptop may collect too; when it has, this waits:
+# day, at 7 minutes past 10 UTC (12:07pm in Cairo in winter, 1:07pm in summer; off the hour, as GitHub delays top-of-hour
+# schedules; it can start a slot late). Omar asked for 12pm, the laptop's own collect time, on 2026-11-14. Airflow on the laptop may collect too; when it has, this waits:
 #   gate    a run skips when a publish landed on Neon in the last 6 hours, from Airflow or from this workflow. The marker is
 #           the 'publish' row in tracker.step_run that publish.py writes (job_radar/publish.py): jobs.job.first_seen is a
 #           date and does not move when a collect finds nothing new. A run started by hand always collects.
@@ -18,7 +18,7 @@ name: daily-backup
 
 on:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "7 10 * * *"
   workflow_dispatch:
 
 concurrency:

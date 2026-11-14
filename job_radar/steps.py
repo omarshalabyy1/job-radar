@@ -414,10 +414,8 @@ def extract_apify(conn) -> None:
     """The website's hard boards and the social hiring posts through Apify (sources/apify.py, settings.yaml apify): every
     enabled board's Actor run inside the month's budget, as wide postings. Off until a board is enabled. A social post whose
     text is already stored under another link is a repost and is dropped. The last line says what the runs cost, which is
-    the line the run log keeps."""
-    if not FEATURES.get("market"):
-        print("extract_apify: off in settings.yaml (features.market)")
-        return
+    the line the run log keeps. Not tied to features.market: LinkedIn, Indeed and Glassdoor bring your own jobs, and with
+    the market collection off load keeps only the titles that are a role of yours."""
     seen: dict[str, set[str]] = {}
     for digest, url in conn.execute("SELECT payload->>'text_hash', job_url FROM raw.job_posting"
                                     " WHERE source IN ('apify:x', 'apify:reddit') AND payload ? 'text_hash'"):
@@ -1068,12 +1066,11 @@ def dead_boards(conn) -> list[str] | None:
         return None
     dead = {board: (last, first) for board, (last, first, read) in counts.items()
             if read > since and first <= since and (last is None or last <= since)}
-    if FEATURES.get("market"):
-        began = min(first for _, first, _ in counts.values())
-        for name, board in ((SETTINGS.get("apify") or {}).get("boards") or {}).items():
-            last, first, _ = counts.get(f"apify:{name}", (None, began, None))
-            if board.get("enabled") and (last is None or last <= since):
-                dead[f"apify:{name}"] = (last, first)
+    began = min(first for _, first, _ in counts.values())  # an enabled Apify board that never returned counts too
+    for name, board in ((SETTINGS.get("apify") or {}).get("boards") or {}).items():
+        last, first, _ = counts.get(f"apify:{name}", (None, began, None))
+        if board.get("enabled") and (last is None or last <= since):
+            dead[f"apify:{name}"] = (last, first)
     return [f"{board}: 0 postings for {(today - (last or first)).days} days"
             + (f" (last on {last})" if last else " (none since counting began)") for board, (last, first) in sorted(dead.items())]
 
