@@ -1,11 +1,11 @@
-"""Egypt's own boards: Wuzzuf (every job of the day) and Tanqeeb (its Egypt and Gulf sites)."""
+"""Egypt's own boards: Wuzzuf (every job of the day), Tanqeeb (its Egypt and Gulf sites) and Joblyin."""
 
 from __future__ import annotations
 
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from bs4 import BeautifulSoup
 
@@ -138,3 +138,50 @@ def tanqeeb() -> list[dict]:
 
     with ThreadPoolExecutor(len(TANQEEB_SITES)) as pool:
         return [r for rows in pool.map(read_site, TANQEEB_SITES, TANQEEB_SITES.values()) for r in rows]
+
+
+JOBLYIN_HOURS = WUZZUF_HOURS  # three days, for the same reason: a late or missed run still finds the days it missed
+
+
+def joblyin() -> list[dict]:
+    """Joblyin, which reposts LinkedIn and Forasna jobs in Egypt (and a few in the Gulf): its whole job list, newest
+    first, 10 cards a page, until a page has nothing from the last JOBLYIN_HOURS hours or links to no next page; each
+    card's title, company, place, date and the board it came from. The job page's JobPosting gives describe its text.
+    Its sitemap's 9,000-odd other job pages are listings over 14 days old (checked 2026-11-14)."""
+    start, rows, page = str(date.today() - timedelta(hours=JOBLYIN_HOURS)), {}, 1
+    while True:
+        if time_left(EXTRACT_SECONDS) < 15:
+            print("joblyin: time budget reached, the rest waits for the next run")
+            break
+        try:
+            # the bytes: its Content-Type names no charset, so requests would read its UTF-8 as Latin-1 (its <meta> says UTF-8)
+            soup = BeautifulSoup(get("https://joblyin.com/jobs", page=page).content, "html.parser")
+        except Held as e:  # keep what the pages before it found
+            held("joblyin", e)
+            break
+        cards = soup.select("article.job-card")
+        if not cards and page == 1:
+            changed("joblyin", "no job cards on joblyin.com/jobs")
+        recent = False
+        for card in cards:
+            stamp = card.select_one("time[datetime]")
+            posted = (stamp["datetime"][:10] if stamp else  # recent cards; older ones say "Posted: Nov 2, 2026"
+                      str(datetime.strptime(card.select_one(".posted-meta").get_text(" ", strip=True)[len("Posted:"):].strip(),
+                                            "%b %d, %Y").date()))
+            if posted < start:
+                continue
+            recent = True
+            title = card.select_one(".job-title-text").get_text(" ", strip=True)
+            href = card.select_one("a.view-job")["href"]
+            if kept(title):
+                company, place = card.select_one(".company"), card.select_one(".job-meta > span")
+                rows[f"https://joblyin.com{href}"] = row(
+                    "joblyin", None, title, company and company.get_text(" ", strip=True),
+                    place and place.get_text(" ", strip=True).removeprefix("Location:").strip(), f"https://joblyin.com{href}",
+                    posted, None, {"board": href.rsplit("/", 1)[1].rsplit("-", 1)[0],
+                                   "remote": bool(card.select_one(".remote-badge")),
+                                   "card": card.get_text(" | ", strip=True)})
+        if not recent or not soup.select_one(f'a[href*="page={page + 1}"]'):  # the list goes on past the last page
+            break
+        page += 1
+    return list(rows.values())  # once each: the list shifts while it is read

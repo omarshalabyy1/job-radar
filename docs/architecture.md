@@ -52,6 +52,7 @@ mindmap
     Egypt<br>onsite in Cairo and Giza
       Wuzzuf<br>every job, last 72 h
       Tanqeeb Egypt
+      Joblyin<br>LinkedIn and Forasna reposts
       Indeed and Bayt
       freehire.me
       LinkedIn search via Apify
@@ -122,7 +123,7 @@ flowchart LR
         direction TB
         boards["extract_boards<br>Indeed"]
         bayt["extract_bayt<br>Bayt"]
-        egypt["extract_egypt<br>Wuzzuf, Tanqeeb x7"]
+        egypt["extract_egypt<br>Wuzzuf, Tanqeeb x7, Joblyin"]
         gulf["extract_gulf<br>NaukriGulf, GulfTalent, Dubizzle"]
         remote["extract_remote<br>10 remote boards"]
         startups["extract_startups<br>5 startup platforms"]

@@ -14,7 +14,7 @@ boards, egypt, gulf, remote, startups, companies, inbox."""
 
 from .base import ERRORS, Challenge, Held, fetch, time_left
 from .boards import bayt, freehire, indeed, jooble, linkedin, workable_jobs
-from .egypt import tanqeeb, wuzzuf
+from .egypt import joblyin, tanqeeb, wuzzuf
 from .gulf import dubizzle, gulftalent, naukrigulf
 from .remote import (arbeitnow, dailyremote, himalayas, hireeing, inclusivelyremote, jobicy, relomote, remoteco, remoteok,
                      remotive, weworkremotely, workingnomads)
@@ -24,7 +24,7 @@ from . import apify, market, social
 from .inbox import LINKEDIN_ALERTS, mailboxes
 
 __all__ = ["ERRORS", "Challenge", "Held", "fetch", "time_left", "bayt", "freehire", "indeed", "jooble", "linkedin",
-           "workable_jobs", "tanqeeb", "wuzzuf", "dubizzle", "gulftalent", "naukrigulf", "arbeitnow",
+           "workable_jobs", "joblyin", "tanqeeb", "wuzzuf", "dubizzle", "gulftalent", "naukrigulf", "arbeitnow",
            "dailyremote", "himalayas", "hireeing", "inclusivelyremote", "jobicy", "relomote", "remoteco", "remoteok", "remotive",
            "weworkremotely", "workingnomads", "builtin", "startup_jobs", "welcometothejungle", "wellfound",
            "ycombinator", "company_portals", "company_sites", "apify", "market", "social", "LINKEDIN_ALERTS",

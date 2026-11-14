@@ -346,7 +346,7 @@ apply:
   enabled: true             # the kill switch: false = nothing is picked; so is a file output/apply.stop
   mode: live                # dry_run: fill the form, screenshot, never click submit; live: submit
   score_floor: 5            # Claude's grade (core.claude_grade) at or above this
-  places: [Egypt, Remote]   # focus: Egypt jobs and remote jobs only (core.job.place); nothing in the Gulf, Europe or the US on site
+  places: [Egypt, UAE, Saudi Arabia, Qatar, Kuwait, Bahrain, Oman, Europe, USA, Remote]   # Omar 2026-11-14: Egypt first, then all the Gulf, Europe, the USA; never India or Pakistan (not places)
   max_years: 3              # skip a job that asks for more years (core.job.years_required): Omar's CV shows about 2
   fresh_hours: 48           # only a posting this fresh
   daily_total: 1000          # submits a day, all boards

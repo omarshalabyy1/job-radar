@@ -223,7 +223,7 @@ def extract_startups(conn) -> None:
 
 
 def extract_egypt(conn) -> None:
-    extract(conn, sources.wuzzuf, sources.tanqeeb)
+    extract(conn, sources.wuzzuf, sources.tanqeeb, sources.joblyin)
 
 
 def extract_gulf(conn) -> None:
