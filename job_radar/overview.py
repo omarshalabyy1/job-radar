@@ -26,7 +26,7 @@ BODY_ASSESSMENT = re.compile(r"assessment|hackerrank|codility|online test|coding
 DUE = re.compile(r"(?:expires? in|within)\s+(\d+)\s+(day|hour)s?|(\d+)\s+(day|hour)s?\s+left", re.I)
 # the hard limit when the email gives one, before any softer "ideally within 3 days": "After 7 days, the assessment
 # invitation link will expire" (IBM), "the link will expire after 24 hours"
-EXPIRY = re.compile(r"after\s+(\d+)\s+(day|hour)s?[^.]{0,80}expire|expire\w*\s+after\s+(\d+)\s+(day|hour)s?", re.I)
+EXPIRY = re.compile(r"after\s+(\d+)\s+(day|hour)s?[^.]{0,80}\bexpire|\bexpire\w*\s+after\s+(\d+)\s+(day|hour)s?", re.I)
 # a calendar invitation's own day: "Invitation: ... @ Thu Oct 29, 2026 2pm"
 CALENDAR = re.compile(r"@ \w{3} (\w{3}) (\d{1,2}), (\d{4})")
 # a job board named in a job's source ("apify:linkedin_remote", "manual:wuzzuf-keywords") or an apply attempt
