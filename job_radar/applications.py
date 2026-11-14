@@ -271,6 +271,29 @@ def read_mailbox(user: str, password: str, days: int, stored: set[str]) -> tuple
     return classified, leftovers, len(uids)
 
 
+# Every email is stored whole by collect_inbox (mail_inbox: All Mail and Spam). The Gmail search above finds English
+# subjects in All Mail only, so the stored ones are read too, except job alerts (extract_email reads those) and tool mail.
+ALERTS = r"jobalerts?|jobs-listings|jobs-noreply|job ?alert|newsletter|digest"
+LINK = re.compile(r"\(https?://([^/)\s]+)[^)]*\)")
+PADDING = re.compile("[\u034f\u00ad\u200b-\u200f\u2060\ufeff]\s*")  # the invisible filler a marketing email opens with
+
+
+def whole_mail(conn, stored: set[str]) -> dict[str, list[dict]]:
+    """The stored emails (core.mail) of the last GAP_DAYS days that are no job alert, no tool mail and not in `stored`,
+    by mailbox and shaped like read_mailbox's leftovers. A link keeps its text and its host: "Apply (forms.acme.com)"."""
+    from .mail_inbox import NOT_JOB  # mail_inbox imports this module
+    found: dict[str, list[dict]] = {}
+    for mailbox, message_id, received_at, sender, subject, body in conn.execute(
+            "SELECT mailbox, message_id, received_at, sender, subject, body FROM core.mail"
+            " WHERE received_at > now() - make_interval(days => %s) AND sender || ' ' || subject !~* %s ORDER BY received_at",
+            (GAP_DAYS, f"{ALERTS}|{NOT_JOB.pattern}")).fetchall():
+        if message_id not in stored:
+            found.setdefault(mailbox, []).append({
+                "message_id": message_id, "received_at": received_at, "sender": sender, "subject": subject, "to": mailbox,
+                "text": PADDING.sub("", LINK.sub(r"(\1)", body))[:BODY_CHARS]})
+    return found
+
+
 def fetch_body(user: str, password: str, message_id: str) -> str | None:
     """The text of the email with this Message-ID (BODY_CHARS characters), downloaded read-only (BODY.PEEK),
     or None when Gmail's All Mail has no such email."""
@@ -723,6 +746,7 @@ def track_applications(conn) -> None:
     cfg = SETTINGS.get("claude") or {}
     jobs = conn.execute("SELECT job_id, title, company, first_seen FROM core.job WHERE in_scope").fetchall()
     emails, leftover, asked, added, matched, moved, kinds, failed = 0, 0, 0, 0, 0, 0, {}, 0
+    whole = whole_mail(conn, stored)
     for n, (address, password) in enumerate(boxes.items(), 1):
         # a mailbox with nothing stored yet is read from the start; else from its newest stored email (a gap of a few
         # days is caught up), at least DAILY_DAYS and at most GAP_DAYS
@@ -732,6 +756,8 @@ def track_applications(conn) -> None:
             classified, leftovers, found = read_mailbox(address, password, days, stored)
             if not found and not known.get(address):
                 raise RuntimeError(f"no email in the last {days} days: wrong mailbox or folder?")
+            searched = {m["message_id"] for m in classified + leftovers} | stored
+            leftovers += [m for m in whole.get(address, []) if m["message_id"] not in searched]
         except Exception as e:  # one mailbox down is a short day: the others are still read (the address is never printed)
             print(f"WARNING track_applications: mailbox {n} of {len(boxes)}: {e!r}"[:300])
             failed += 1
