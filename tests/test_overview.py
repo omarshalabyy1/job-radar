@@ -17,8 +17,9 @@ def mail(company, kind, at, title="Data Engineer", subject="", action=None, send
     return (company, title, kind, at, subject, action, sender, message_id or f"<{company}-{kind}-{at:%j}>", job_id, body, mailbox)
 
 
-def status(company, value, at, title="Data Engineer", source="wuzzuf", attempt=None, url="https://x/1", job_id=1, note=None):
-    return (company, title, value, at, source, attempt, url, job_id, note)
+def status(company, value, at, title="Data Engineer", source="wuzzuf", attempt=None, url="https://x/1", job_id=1, note=None,
+           deadline=None):
+    return (company, title, value, at, source, attempt, url, job_id, note, deadline)
 
 
 def test_email_kind_splits_assessments():
@@ -88,7 +89,9 @@ def test_counts_add_up():
                          mail("D", "interview", day(4)), mail("E", "applied", day(3)), mail("E", "rejected", day(2))],
                         [status("F", "offer", day(1))])
     n = counts(apps)
-    assert n == {"applied": 6, "responses": 5, "waiting": 1, "viewed": 1, "assessment": 1, "interview": 1, "rejected": 1, "offer": 1}
+    # B was only viewed: a view is not a reply, it waits like A (Omar, 2026-11-14)
+    assert n == {"applied": 6, "responses": 4, "waiting": 2, "assessment": 1, "interview": 1, "rejected": 1, "offer": 1}
+    assert "viewed" not in STAGES
     assert sum(n[s] for s in STAGES) == n["applied"]
 
 
@@ -312,3 +315,82 @@ def test_no_news_14_days_after_an_interview_is_a_rejection():
     [recent] = applications([mail("IBM", "interview", day(13), subject="Interview invite")], [], now=NOW)
     assert recent["stage"] == "interview"  # 13 days: not yet
     assert applications(tp, [])[0]["stage"] == "interview"  # without a clock, nothing is ghosted
+
+
+# ---- one application, one row (the 159 "Applied" of 2026-11-14 held about 36 double counts) -----------------------------
+
+def test_a_confirmation_that_came_before_you_set_the_status_joins_that_application():
+    """HCLTech: LinkedIn's "your application was sent to HCLTech" (no title) on the 13th, the status set on the 14th."""
+    apps = applications([mail("HCLTech", "applied", day(1), title=None, subject="Omar, your application was sent to HCLTech")],
+                        [status("HCLTech", "applied", day(0), title="Data Engineer")])
+    assert [(a["job"], a["receipt"], a["in_tracker"]) for a in apps] == [("Data Engineer", True, True)]
+
+
+def test_confirmations_naming_no_job_spread_over_the_applications_without_one():
+    """Cartona: two untitled confirmations on the day of two tracker applications; the April application keeps its own."""
+    apps = applications([mail("Cartona", "applied", day(200), title=None, message_id="<apr>"),
+                         mail("Cartona", "rejected", day(196), title="Data Analyst", message_id="<rej>"),
+                         mail("Cartona", "applied", day(1), title=None, message_id="<n1>"),
+                         mail("Cartona", "applied", day(1) + timedelta(minutes=5), title=None, message_id="<n2>")],
+                        [status("Cartona", "applied", day(0), title="Risk Data Analyst", job_id=5),
+                         status("Cartona", "applied", day(0), title="Growth Data Analyst", job_id=6)])
+    assert sorted((a["job"], a["stage"], a["receipt"]) for a in apps) == [
+        ("Data Analyst", "rejected", True), ("Growth Data Analyst", "waiting", True), ("Risk Data Analyst", "waiting", True)]
+
+
+def test_two_confirmations_of_one_application_are_one_row():
+    """AIS: Workable sends "Thanks for applying to AIS" (no title) and "Data Scientist - AIS" seconds apart."""
+    apps = applications([mail("AIS", "applied", day(1), title=None, message_id="<a>"),
+                         mail("AIS", "applied", day(1) + timedelta(seconds=20), title="Data Scientist", message_id="<b>")], [])
+    assert [(a["company"], a["job"]) for a in apps] == [("AIS", "Data Scientist")]
+
+
+def test_a_company_under_a_longer_or_accented_name_is_one_company():
+    """Advansys / Advansys ME, Mondia / Mondia Media, Systems Limited / Systems Limited - Egypt, Müller`s / Muller's."""
+    apps = applications([mail("Mondia", "applied", day(1), title="Agentic AI Engineer"),
+                         mail("Müller`s Solutions", "applied", day(1), title="Big Data Engineer")],
+                        [status("Mondia Media", "applied", day(0), title="Agentic AI Engineer"),
+                         status("Muller's Solutions", "applied", day(0), title="Big Data Engineer"),
+                         status("Systems Limited", "applied", day(0), title="AI / Data Engineer", job_id=1),
+                         status("Systems Limited - Egypt", "applied", day(0), title="AI / Data Engineer", job_id=2)])
+    assert sorted(a["job"] for a in apps) == ["AI / Data Engineer", "Agentic AI Engineer", "Big Data Engineer"]
+    assert all(a["in_tracker"] for a in apps)
+
+
+def test_short_names_are_not_merged_by_their_first_letters():
+    apps = applications([], [status("TP", "applied", day(0), title="Analyst"), status("TPG Telecom", "applied", day(0), title="Analyst")])
+    assert len(apps) == 2
+
+
+def test_an_indeed_confirmation_naming_no_company_joins_the_nearest_application_with_that_title():
+    """"Indeed Application: Data Engineer" (no company) while Bayzat and Medology both have a Data Engineer application."""
+    apps = applications([mail(None, "applied", day(1), title="Data Engineer", subject="Indeed Application: Data Engineer"),
+                         mail("Bayzat", "applied", day(1), title="Data Engineer", subject="Bayzat - Data Engineer - Acknowledgement")],
+                        [status("Medology clinics", "applied", day(1) + timedelta(hours=1), title="Data Engineer")])
+    assert sorted((a["company"], a["receipt"]) for a in apps) == [("Bayzat", True), ("Medology clinics", True)]
+
+
+def test_indeeds_own_confirmation_joins_the_same_days_application_with_that_title():
+    """AIS: Workable's "Data Scientist - AIS" and Indeed's "Indeed Application: Data Scientist" (no company) are one
+    application, though Monks also has a Data Scientist application from October."""
+    apps = applications([mail("Monks", "applied", day(40), title="Data Scientist"),
+                         mail("AIS", "applied", day(1), title="Data Scientist"),
+                         mail(None, "applied", day(1) + timedelta(minutes=3), title="Data Scientist", subject="Indeed Application: Data Scientist")], [])
+    assert sorted(a["company"] for a in apps) == ["AIS", "Monks"]
+
+
+def test_what_you_told_about_a_rejection_is_its_latest_news():
+    """Teleperformance: the interview, the case study and the English test, then no answer, as Omar told it."""
+    told = "HR screening interview, then a case study task and an English test, both passed, then no answer: ghosted, told by Omar 2026-11-14"
+    [app] = applications([mail("Teleperformance", "interview", day(17), title="BI Developer", subject="Invitation: BI Developer")],
+                         [status("Teleperformance", "rejected", day(0), title="BI Developer", note=told)])
+    assert (app["stage"], app["latest_email"]) == ("rejected", told)
+
+
+def test_your_deadline_for_the_job_is_its_due_day_when_the_email_states_none():
+    [app] = applications([mail("IBM", "interview", day(1), subject="Your IBM Application: Next Steps", body="complete the assessment")],
+                         [status("IBM", "applied", day(2), deadline=date(2026, 11, 20))])
+    assert (app["stage"], app["due"]) == ("assessment", date(2026, 11, 20))
+    [stated] = applications([mail("Valeo", "interview", day(1), subject="English Exam expires in 3 days")],
+                            [status("Valeo", "applied", day(2), deadline=date(2026, 11, 30))])
+    assert stated["due"] == (day(1) + timedelta(days=3)).date()  # the email's own date wins
