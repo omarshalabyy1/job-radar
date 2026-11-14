@@ -50,7 +50,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Elmenus | [elmenus.recruitee.com](https://elmenus.recruitee.com/) | Recruitee, public API |  |
 | Emaar | [emhm.fa.em2.oraclecloud.com](https://emhm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs?location=Egypt&locationId=300000000346395&locationLevel=country&mode=location) | Oracle Cloud page |  |
 | Emirates NBD | [www.emiratesnbd.com.eg](https://www.emiratesnbd.com.eg/en/career/join-us) | careers page (platform found on the first read) |  |
-| Ericsson | [jobs.ericsson.com](https://jobs.ericsson.com/careers?location=Egypt) | careers page (platform found on the first read) |  |
+| Ericsson | [jobs.ericsson.com](https://jobs.ericsson.com/careers?location=Egypt&domain=ericsson.com) | careers page (platform found on the first read) |  |
 | EY | [careers.ey.com](https://careers.ey.com/ey/search/?q=&locationsearch=Egypt) | careers page (platform found on the first read) |  |
 | Fawry | [www.fawry.com](https://www.fawry.com/jobs/) | careers page (platform found on the first read) |  |
 | Finaira | [finaira.ai](https://finaira.ai/work-at-finaira/) | careers page (platform found on the first read) |  |
@@ -82,7 +82,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Mars | [careers.mars.com](https://careers.mars.com/global/en/search-results?qcountry=Egypt) | careers page (platform found on the first read) |  |
 | Mashreq | [hcld.fa.em2.oraclecloud.com](https://hcld.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs?location=Egypt&locationId=300000000281972&locationLevel=country) | Oracle Cloud page |  |
 | Mastercard | [careers.mastercard.com](https://careers.mastercard.com/us/en/search-results?qcountry=Egypt) | careers page (platform found on the first read) |  |
-| Microsoft | [apply.careers.microsoft.com](https://apply.careers.microsoft.com/careers?location=Egypt) | careers page (platform found on the first read) |  |
+| Microsoft | [apply.careers.microsoft.com](https://apply.careers.microsoft.com/careers?location=Egypt&domain=microsoft.com) | careers page (platform found on the first read) |  |
 | MNT-Halan | [jobs.halan.com](https://jobs.halan.com/) | careers page (platform found on the first read) |  |
 | Mondelez | [wd3.myworkdaysite.com](https://wd3.myworkdaysite.com/recruiting/mdlz/External?locationCountry=d865e83093ad42319653b08e61f7db49) | careers page (platform found on the first read) |  |
 | MoneyFellows | [moneyfellows.pinpointhq.com](https://moneyfellows.pinpointhq.com/) | careers page (platform found on the first read) |  |
