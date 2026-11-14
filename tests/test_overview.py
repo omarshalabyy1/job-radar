@@ -13,8 +13,8 @@ def day(n: int) -> datetime:
 
 
 def mail(company, kind, at, title="Data Engineer", subject="", action=None, sender="jobs@acme.com", message_id=None, job_id=None,
-         body=None, mailbox="me@gmail.com"):
-    return (company, title, kind, at, subject, action, sender, message_id or f"<{company}-{kind}-{at:%j}>", job_id, body, mailbox)
+         body=None, mailbox="me@gmail.com", done=False):
+    return (company, title, kind, at, subject, action, sender, message_id or f"<{company}-{kind}-{at:%j}>", job_id, body, mailbox, done)
 
 
 def status(company, value, at, title="Data Engineer", source="wuzzuf", attempt=None, url="https://x/1", job_id=1, note=None,
@@ -404,3 +404,15 @@ def test_ibms_assessment_invitation_expires_seven_days_after_it_came():
             "After 7 days, the assessment invitation link will expire.")
     assert due_date(text, day(2)) == (day(2) + timedelta(days=7)).date()
     assert due_date("The link will expire after 24 hours", day(1)) == (day(1) + timedelta(hours=24)).date()
+
+
+def test_an_assessment_you_marked_done_no_longer_needs_you():
+    """IBM's "Next Steps" asked for the accommodation form; Omar sent it (2026-11-14) and the row stayed under Needs you."""
+    from job_radar.overview import needs_you
+    now = NOW
+
+    def apps(done):
+        return applications([mail("IBM", "applied", day(2)),
+                             mail("IBM", "interview", day(1), subject="Your IBM Application: Next Steps", action="assessment", done=done)], [], now)
+    assert [a["company"] for a in needs_you(apps(False), now)] == ["IBM"]
+    assert needs_you(apps(True), now) == [] and apps(True)[0]["stage"] == "assessment"

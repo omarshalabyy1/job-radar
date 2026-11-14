@@ -37,7 +37,7 @@ APPLIED = {"applied", "interview", "assessment", "offer", "hired", "rejected-sta
 
 # the application news, an email matched to a job going by that job's company and title; the Inbox's action helps spot assessments
 MAIL = ("SELECT coalesce(j.company, e.company), coalesce(j.title, e.title), e.kind, e.received_at, e.subject, m.action, e.sender,"
-        " e.message_id, e.job_id, m.body, e.mailbox"
+        " e.message_id, e.job_id, m.body, e.mailbox, coalesce(m.done, false)"
         " FROM core.application_email e LEFT JOIN core.job j USING (job_id)"
         " LEFT JOIN core.mail m ON m.message_id = e.message_id AND m.mailbox = e.mailbox WHERE e.kind <> 'other'")
 # your statuses, with the board of the job's latest apply attempt and your open deadline for the job (Today page)
@@ -192,7 +192,7 @@ def applications(mail: list[tuple], statuses: list[tuple], now: datetime | None 
         g["names"][name or ""] += 1
         g["titles"][title or ""] += 1
         g["events"].append((email_kind(kind, row[4], row[5], row[9]), at))
-        g["mail"].append((at, row[4], row[6], kind, row[7], row[8], by_title, row[9], row[10]))
+        g["mail"].append((at, row[4], row[6], kind, row[7], row[8], by_title, row[9], row[10], row[11]))
     out = []
     for g in groups.values():
         kinds = {k for k, _ in g["events"]}
@@ -232,6 +232,8 @@ def applications(mail: list[tuple], statuses: list[tuple], now: datetime | None 
             "receipt": any(m[3] == "applied" for m in mails),  # a confirmation email came
             # the due day the newest interview or assessment email states, if it states one
             "due": due,
+            # you did what the newest interview or assessment email asked (the Inbox page's Done): nothing waits on you
+            "done": next((m[9] for m in reversed(mails) if m[3] == "interview"), False),
             "job_id": last_status[4],  # the job you set a status for (the latest), None for an email alone
             # the emails matched to it by title and linked to no job yet: (message_id, kind, received_at); a reply from
             # before the application started (its first confirmation or your status) is about an older one
@@ -243,10 +245,11 @@ def applications(mail: list[tuple], statuses: list[tuple], now: datetime | None 
 
 
 def needs_you(apps: list[dict], now: datetime) -> list[dict]:
-    """The assessments and interviews with news in the last 30 days that are not past their due day (Cairo), the soonest
+    """The assessments and interviews with news in the last 30 days that are not past their due day (Cairo) and not marked done, the soonest
     due first, then the ones with no date, newest news first."""
     today = now.astimezone(CAIRO).date()
-    open_ = [a for a in in_range(apps, 30, now) if a["stage"] in ("assessment", "interview") and (a["due"] is None or a["due"] >= today)]
+    open_ = [a for a in in_range(apps, 30, now) if a["stage"] in ("assessment", "interview") and not a["done"]
+             and (a["due"] is None or a["due"] >= today)]
     return sorted(open_, key=lambda a: (a["due"] is None, a["due"] or today, -a["latest_at"].timestamp()))
 
 
