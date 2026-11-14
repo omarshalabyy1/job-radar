@@ -109,3 +109,22 @@ Windows running short.
 The warehouse's health check timeout is now 30 s (docker-compose.yml), so a stall no longer cuts `pg_isready` off
 mid-login. It is not proven to be the trigger; if resets go on, the fix is more free memory on the laptop during the
 12pm collect.
+
+## 2026-11-14: tasks killed mid-run by the scheduler's own health check
+
+Five tasks ended `SERVER_TERMINATED` from 2026-11-12 to 2026-11-14 ("never ended", an empty log in the alert email).
+Three of them (2026-11-13 12:55 and 23:41 UTC, 2026-11-14 00:01 UTC) had no database reset. In each, the scheduler's
+loop stalled (`Heartbeat recovered after 42.49 seconds`, 74.22, 47.29) while the VM was busy (a collect, or the gate's
+tests on the warehouse). Its own heartbeat was then older than `scheduler_health_check_threshold` (default 30 s), so
+its orphan check (`adopt_or_reset_orphaned_tasks`, scheduler_job_runner.py) logged `Marked 1 SchedulerJob instances as
+failed` and `Reset the following N orphaned TaskInstances`: with one scheduler, the job it marked dead was its own.
+The running task's next heartbeat got 410 (`Task Instance not found, it may have been moved to the Task Instance
+History table`) and its supervisor killed it. The task's own heartbeats were all answered (204) until then.
+
+`AIRFLOW__SCHEDULER__SCHEDULER_HEALTH_CHECK_THRESHOLD` is now 300 (docker-compose.yml). The stalls logged that week
+were 31 to 75 s, and 235 s once. After a real crash, the old scheduler's tasks are now reset after about 5 minutes
+instead of 30 s. `Heartbeat recovered after` is only logged above the threshold (job.py), so a stall under 300 s no
+longer shows in the log: its absence does not mean no stall.
+
+The other two kills are not fixed by this: 2026-11-12 17:54 UTC (airflow-db `in recovery mode`, the API server
+answered the heartbeat with an error three times) and 2026-11-13 12:41 UTC (the warehouse reset of 12:37 above).

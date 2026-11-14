@@ -91,6 +91,9 @@ services:
       AIRFLOW__CORE__PARALLELISM: "1"
       # one at a time, the last extracts wait over 10 min in the queue; Airflow's default fails them unrun
       AIRFLOW__SCHEDULER__TASK_QUEUED_TIMEOUT: "3600"
+      # the one scheduler stalls 30 to 75 s when the laptop is busy (235 s once); past the default 30 s it marked itself
+      # dead and reset its own running tasks, which Airflow then killed mid-run (2026-11-13, docs/warehouse-resets.md)
+      AIRFLOW__SCHEDULER__SCHEDULER_HEALTH_CHECK_THRESHOLD: "300"
       # reading the DAG file may take longer than 30 s when the laptop is busy
       AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "120"
       # the DAG file changes only when you edit it: read every 5 minutes, not every 30 seconds
