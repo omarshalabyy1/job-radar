@@ -74,7 +74,8 @@ WAITS = OUTPUT / "waits"
 # Seconds between two requests to one host, across a step's threads (request()): 1, unless named here.
 # Workable's search is limited by the day, not the second (one round a day); the 28,000-company feed
 # is files on GitHub's servers.
-GAP = {"jobs.workable.com": 0.25, "riley-dorrington.github.io": 0.0}
+# Jobgether's robots.txt asks for 2 seconds.
+GAP = {"jobs.workable.com": 0.25, "riley-dorrington.github.io": 0.0, "jobgether.com": 2.0}
 
 NEXT_TURN: dict[str, float] = {}
 

@@ -1,0 +1,294 @@
+{
+ "data": [
+  {
+   "id": "ebfc38e4-e7fe-492a-826a-f94fe7912869",
+   "title": "Analytics Engineer III (Data Directorate - FP&A)",
+   "url": "https://remotejobs.org/remote-jobs/analytics-engineer-iii-diretoria-de-dados-fpa-grupo-boticrio",
+   "apply_url": "https://remotejobs.org/remote-jobs/analytics-engineer-iii-diretoria-de-dados-fpa-grupo-boticrio",
+   "company": {
+    "name": "Grupo Boticário",
+    "logo_url": null,
+    "website": "https://grupo.io",
+    "url": "https://remotejobs.org/companies/grupo-boticrio"
+   },
+   "category": {
+    "name": "Data Science",
+    "slug": "data-science"
+   },
+   "location": "Brazil",
+   "location_normalization": {
+    "raw": "Brazil",
+    "input": {},
+    "scope": "restricted",
+    "status": "known",
+    "regions": [],
+    "version": "job-location/1",
+    "timezones": [],
+    "unresolved": [],
+    "work_arrangement": "unknown",
+    "allowed_countries": [
+     "BR"
+    ],
+    "reference_version": "iso-3166@4.4.0",
+    "excluded_countries": [],
+    "allowed_subdivisions": [],
+    "excluded_subdivisions": []
+   },
+   "applicant_location_requirements": {
+    "scope": "restricted",
+    "status": "known",
+    "regions": [],
+    "version": "applicant-location/1",
+    "timezones": [],
+    "conditions": [],
+    "unresolved": [],
+    "evidence_ids": [
+     "source-location"
+    ],
+    "allowed_regions": [],
+    "work_arrangement": "unknown",
+    "allowed_countries": [
+     "BR"
+    ],
+    "reference_version": "iso-3166@4.4.0",
+    "excluded_countries": [],
+    "extraction_version": "applicant-location/1|semantic-geography/3|iso-3166@4.4.0|claude-haiku-5-5|description-presentation/1|description-sanitizer/1|greenhouse-content/1|geography-prompt/5",
+    "allowed_subdivisions": [],
+    "excluded_subdivisions": [],
+    "worldwide_permission_verified": false
+   },
+   "search_facts": {
+    "status": "known",
+    "version": "job-search-enrichment/1|description-presentation/1|description-sanitizer/1",
+    "seniority": null,
+    "role_family": null,
+    "required_skills": [],
+    "mentioned_skills": [
+     "python",
+     "sql"
+    ],
+    "preferred_skills": [],
+    "experience_requirements": []
+   },
+   "salary_min": null,
+   "salary_max": null,
+   "salary_text": null,
+   "salary_source_text": null,
+   "salary_currency": null,
+   "salary_period": "year",
+   "type": "Full-time",
+   "employment_types": [
+    "FULL_TIME"
+   ],
+   "employer_job_id": null,
+   "direct_apply": null,
+   "description": "<p>One of the largest beauty groups in the world, the Grupo Boticário is a Brazilian company present in more than 40 countries. It owns the brands O Boticário, Eudora, Quem Disse, Berenice?, Vult, O.U.i, Dr. JONES, TRUSS, and the marketplace Beleza na Web, in addition to operating licensed products ",
+   "posted_at": "2026-11-13T20:36:12+00:00",
+   "is_translated": true,
+   "original_language": "pt"
+  },
+  {
+   "id": "7ea6e444-dba5-4862-a3f6-93ddf3b477ef",
+   "title": "Platform Engineer - AI",
+   "url": "https://remotejobs.org/remote-jobs/platform-engineer-ai-banyan-software",
+   "apply_url": "https://remotejobs.org/remote-jobs/platform-engineer-ai-banyan-software",
+   "company": {
+    "name": "Banyan Software",
+    "logo_url": "https://assets.remotejobs.org/company-logos/scraped/6581aa0f41c13a0ffd4b8b18eecb58042372c68c512f15f88b5c5793a67114c8.png",
+    "website": "https://banyansoftware.com",
+    "url": "https://remotejobs.org/companies/banyan-software"
+   },
+   "category": {
+    "name": "Programming",
+    "slug": "programming"
+   },
+   "location": "India",
+   "location_normalization": {
+    "raw": "India",
+    "input": {},
+    "scope": "restricted",
+    "status": "known",
+    "regions": [],
+    "version": "job-location/1",
+    "timezones": [],
+    "unresolved": [],
+    "work_arrangement": "unknown",
+    "allowed_countries": [
+     "IN"
+    ],
+    "reference_version": "iso-3166@4.4.0",
+    "excluded_countries": [],
+    "allowed_subdivisions": [],
+    "excluded_subdivisions": []
+   },
+   "applicant_location_requirements": {
+    "scope": "restricted",
+    "status": "partial",
+    "regions": [],
+    "version": "applicant-location/1",
+    "timezones": [],
+    "conditions": [
+     {
+      "kind": "timezone",
+      "areas": [],
+      "effect": "require",
+      "details": "Availability to work hours that overlap the first half of the US Eastern working day, so you work with your counterparts rather than around them.",
+      "regions": [],
+      "timezones": [],
+      "evidence_id": "c1",
+      "conditional_on": null
+     }
+    ],
+    "unresolved": [
+     "The working-hour requirement to overlap the first half of the US Eastern working day is vague and cannot be represented as a precise IANA timezone or hour range."
+    ],
+    "evidence_ids": [
+     "c1",
+     "source-location"
+    ],
+    "allowed_regions": [],
+    "work_arrangement": "unknown",
+    "allowed_countries": [
+     "IN"
+    ],
+    "reference_version": "iso-3166@4.4.0",
+    "excluded_countries": [],
+    "extraction_version": "applicant-location/1|semantic-geography/3|iso-3166@4.4.0|claude-haiku-5-5|description-presentation/1|description-sanitizer/1|greenhouse-content/1|geography-prompt/5",
+    "allowed_subdivisions": [],
+    "excluded_subdivisions": [],
+    "worldwide_permission_verified": false
+   },
+   "search_facts": {
+    "status": "known",
+    "version": "job-search-enrichment/1|description-presentation/1|description-sanitizer/1",
+    "seniority": null,
+    "role_family": "devops",
+    "required_skills": [],
+    "mentioned_skills": [
+     "aws",
+     "csharp",
+     "dotnet"
+    ],
+    "preferred_skills": [
+     "aws",
+     "postgresql",
+     "react",
+     "typescript"
+    ],
+    "experience_requirements": []
+   },
+   "salary_min": null,
+   "salary_max": null,
+   "salary_text": null,
+   "salary_source_text": null,
+   "salary_currency": null,
+   "salary_period": "year",
+   "type": "Full-time",
+   "employment_types": [
+    "FULL_TIME"
+   ],
+   "employer_job_id": null,
+   "direct_apply": null,
+   "description": "<p>TechGrove is the <strong>Centre of Excellence</strong> for Banyan Software, based in Chennai, India. It plays a key role in supporting Banyan’s global businesses through technology, security, and software development. TechGrove brings together India’s deep pool of technical talent with Banyan’s l",
+   "posted_at": "2026-11-13T20:35:39+00:00",
+   "is_translated": false,
+   "original_language": null
+  },
+  {
+   "id": "defb95bd-0411-445f-a882-34af999fcf2b",
+   "title": "Enterprise Sales Engineer - Central",
+   "url": "https://remotejobs.org/remote-jobs/enterprise-sales-engineer-central-chainguard-beefc648608b4d46ae2ef83f4f9032aa",
+   "apply_url": "https://remotejobs.org/remote-jobs/enterprise-sales-engineer-central-chainguard-beefc648608b4d46ae2ef83f4f9032aa",
+   "company": {
+    "name": "Chainguard",
+    "logo_url": "https://assets.remotejobs.org/company-logos/scraped/a11be1d80b2b48538e45085f36bcfa4a7f3400ff84724a18fc8338bbc85c6c7d.jpeg",
+    "website": "https://chainguard.com",
+    "url": "https://remotejobs.org/companies/chainguard"
+   },
+   "category": {
+    "name": "Sales",
+    "slug": "sales"
+   },
+   "location": "United States - Remote",
+   "location_normalization": {
+    "raw": "United States - Remote",
+    "input": {},
+    "scope": "restricted",
+    "status": "known",
+    "regions": [],
+    "version": "job-location/1",
+    "timezones": [],
+    "unresolved": [],
+    "work_arrangement": "remote",
+    "allowed_countries": [
+     "US"
+    ],
+    "reference_version": "iso-3166@4.4.0",
+    "excluded_countries": [],
+    "allowed_subdivisions": [],
+    "excluded_subdivisions": []
+   },
+   "applicant_location_requirements": {
+    "scope": "restricted",
+    "status": "partial",
+    "regions": [],
+    "version": "applicant-location/1",
+    "timezones": [],
+    "conditions": [],
+    "unresolved": [
+     "Applicants must be located in the Central region of the US (description:27); this broad region cannot be mapped to specific ISO 3166-2 subdivisions without guessing.",
+     "Unresolved area: description:27"
+    ],
+    "evidence_ids": [
+     "c2",
+     "source-location"
+    ],
+    "allowed_regions": [],
+    "work_arrangement": "remote",
+    "allowed_countries": [
+     "US"
+    ],
+    "reference_version": "iso-3166@4.4.0",
+    "excluded_countries": [],
+    "extraction_version": "applicant-location/1|semantic-geography/3|iso-3166@4.4.0|claude-haiku-5-5|description-presentation/1|description-sanitizer/1|greenhouse-content/1|geography-prompt/5",
+    "allowed_subdivisions": [],
+    "excluded_subdivisions": [],
+    "worldwide_permission_verified": false
+   },
+   "search_facts": {
+    "status": "known",
+    "version": "job-search-enrichment/1|description-presentation/1|description-sanitizer/1",
+    "seniority": null,
+    "role_family": null,
+    "required_skills": [],
+    "mentioned_skills": [
+     "aws",
+     "docker",
+     "kubernetes"
+    ],
+    "preferred_skills": [],
+    "experience_requirements": []
+   },
+   "salary_min": null,
+   "salary_max": null,
+   "salary_text": null,
+   "salary_source_text": null,
+   "salary_currency": null,
+   "salary_period": null,
+   "type": null,
+   "employment_types": null,
+   "employer_job_id": "4723777006",
+   "direct_apply": null,
+   "description": "<p>Chainguard is the trusted source for open source. By delivering hardened, secure, and production-ready builds of all the open source software engineers and AI agents rely on, Chainguard helps organizations build faster, stay compliant, and eliminate risk. <br>\n<br>\nOur customers include Fortune 5",
+   "posted_at": "2026-11-13T20:49:28+00:00",
+   "is_translated": false,
+   "original_language": null
+  }
+ ],
+ "pagination": {
+  "total": 3243,
+  "limit": 50,
+  "offset": 0,
+  "has_more": true
+ }
+}
