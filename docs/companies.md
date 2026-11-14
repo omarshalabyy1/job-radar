@@ -1,6 +1,6 @@
 # Your companies
 
-The 252 companies whose own career sites job-radar reads: only companies that hire in
+The 249 companies whose own career sites job-radar reads: only companies that hire in
 Egypt, or remote-first ones that hire worldwide, each through its jobs page filtered to Egypt where the site has a filter.
 Only their jobs in Egypt are kept; a company marked (+ remote) also keeps its remote jobs open to someone in Egypt
 (worldwide, anywhere, EMEA, MENA). Jobs at these companies are starred in your email, from any source. A site
@@ -66,7 +66,6 @@ there, then run the script. The tracker's Companies page shows how each site was
 | IBM | [www.ibm.com](https://www.ibm.com/careers/search?field_keyword_05[0]=Egypt) | careers page (platform found on the first read) |  |
 | inDrive | [careers.indrive.com](https://careers.indrive.com/vacancies/?position=&department=&country=Egypt) | careers page (platform found on the first read) |  |
 | Instabug | [instabug.bamboohr.com](https://instabug.bamboohr.com/careers) | BambooHR, through the 28,000-company feed |  |
-| Intelligent Systems | [isys.ai](https://isys.ai/Join-Us) | careers page (platform found on the first read) |  |
 | Intercom | [www.intercom.com.eg](https://www.intercom.com.eg/home/careers/vacancies/) | careers page (platform found on the first read) |  |
 | IQVIA (not starred) | [iqvia.wd1.myworkdayjobs.com](https://iqvia.wd1.myworkdayjobs.com/IQVIA?Location_Country=d865e83093ad42319653b08e61f7db49) | Workday, through the 28,000-company feed |  |
 | ITIDA | [itida.gov.eg](https://itida.gov.eg/English/Careers/Pages/default.aspx) | careers page (platform found on the first read) |  |
@@ -93,11 +92,10 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Nestlé | [jobdetails.nestle.com](https://jobdetails.nestle.com/search/?q=&locationsearch=Egypt) | careers page (platform found on the first read) |  |
 | Nokia | [jobs.nokia.com](https://jobs.nokia.com/en/sites/CX_1/jobs) | careers page (platform found on the first read) |  |
 | noon | [joinnoon.com](https://joinnoon.com/jobs?country=eg) | careers page (platform found on the first read) |  |
-| Ora Developers | [www.ora-egypt.com](https://www.ora-egypt.com/career) | careers page (platform found on the first read) |  |
 | Oracle | [careers.oracle.com](https://careers.oracle.com/en/sites/jobsearch/jobs?location=Egypt&locationId=300000000106827&locationLevel=country) | careers page (platform found on the first read) |  |
 | Orange | [orange.jobs](https://orange.jobs/gb/en/search-results?qcountry=EGYPT) | careers page (platform found on the first read) |  |
 | Palm Hills | [careers.palmhillsdevelopments.com](https://careers.palmhillsdevelopments.com/jobs) | careers page (platform found on the first read) |  |
-| Paymob | [paymob.com](https://paymob.com/en/careers) | careers page (platform found on the first read) |  |
+| Paymob | [paymob.com](https://paymob.com/about/careers-and-culture) | careers page (platform found on the first read) |  |
 | Paysky | [paysky.io](https://paysky.io/jobs/) | careers page (platform found on the first read) |  |
 | PepsiCo | [www.pepsicojobs.com](https://www.pepsicojobs.com/main/jobs?location=Egypt) | careers page (platform found on the first read) |  |
 | Procter & Gamble | [www.pgcareers.com](https://www.pgcareers.com/global/en/search-results?qcountry=Egypt) | careers page (platform found on the first read) |  |
@@ -247,7 +245,6 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Luciq | [instabug.bamboohr.com](https://instabug.bamboohr.com/careers) | BambooHR, through the 28,000-company feed | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Lynks | [lynks.com](https://lynks.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Madinet Masr | [madinetmasr.com](https://madinetmasr.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
-| Mostaql | [mostaql.com](https://mostaql.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Naeem Holding | [naeemholding.com](https://naeemholding.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Orascom Construction | [fa-esco-saasfaprod1.fa.ocs.oraclecloud.com](https://fa-esco-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs) | Oracle Cloud page | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |
 | Orascom Development | [orascomdh.com](https://orascomdh.com/careers) | careers page (platform found on the first read) | Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09 |

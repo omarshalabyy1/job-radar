@@ -653,7 +653,6 @@ companies:
   - {name: "IBM", link: "https://www.ibm.com/careers/search?field_keyword_05[0]=Egypt"}
   - {name: "inDrive", link: "https://careers.indrive.com/vacancies/?position=&department=&country=Egypt"}
   - {name: "Instabug", link: "https://instabug.bamboohr.com/careers"}
-  - {name: "Intelligent Systems", link: "https://isys.ai/Join-Us"}
   - {name: "Intercom", link: "https://www.intercom.com.eg/home/careers/vacancies/"}
   - {name: "IQVIA", link: "https://iqvia.wd1.myworkdayjobs.com/IQVIA?Location_Country=d865e83093ad42319653b08e61f7db49", starred: false}
   - {name: "ITIDA", link: "https://itida.gov.eg/English/Careers/Pages/default.aspx"}
@@ -680,11 +679,10 @@ companies:
   - {name: "Nestlé", link: "https://jobdetails.nestle.com/search/?q=&locationsearch=Egypt"}
   - {name: "Nokia", link: "https://jobs.nokia.com/en/sites/CX_1/jobs"}
   - {name: "noon", link: "https://joinnoon.com/jobs?country=eg"}
-  - {name: "Ora Developers", link: "https://www.ora-egypt.com/career"}
   - {name: "Oracle", link: "https://careers.oracle.com/en/sites/jobsearch/jobs?location=Egypt&locationId=300000000106827&locationLevel=country"}
   - {name: "Orange", link: "https://orange.jobs/gb/en/search-results?qcountry=EGYPT"}
   - {name: "Palm Hills", link: "https://careers.palmhillsdevelopments.com/jobs"}
-  - {name: "Paymob", link: "https://paymob.com/en/careers"}
+  - {name: "Paymob", link: "https://paymob.com/about/careers-and-culture"}
   - {name: "Paysky", link: "https://paysky.io/jobs/"}
   - {name: "PepsiCo", link: "https://www.pepsicojobs.com/main/jobs?location=Egypt"}
   - {name: "Procter & Gamble", link: "https://www.pgcareers.com/global/en/search-results?qcountry=Egypt"}
@@ -841,7 +839,6 @@ companies:
   - {name: "Luciq", link: "https://instabug.bamboohr.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Lynks", link: "https://lynks.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Madinet Masr", link: "https://madinetmasr.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
-  - {name: "Mostaql", link: "https://mostaql.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Naeem Holding", link: "https://naeemholding.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Orascom Construction", link: "https://fa-esco-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
   - {name: "Orascom Development", link: "https://orascomdh.com/careers", note: "Egypt employer shortlist; careers page answered HTTP 200 on 2026-11-09"}
