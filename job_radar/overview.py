@@ -242,6 +242,7 @@ def applications(mail: list[tuple], statuses: list[tuple], now: datetime | None 
             # you did what the newest interview or assessment email asked (the Inbox page's Done): nothing waits on you
             "done": next((m[9] for m in reversed(mails) if m[3] == "interview"), False),
             "job_id": last_status[4],  # the job you set a status for (the latest), None for an email alone
+            "emails": [(m[4], m[8]) for m in mails],  # (message_id, mailbox) of each of its emails, oldest first
             # the emails matched to it by title and linked to no job yet: (message_id, kind, received_at); a reply from
             # before the application started (its first confirmation or your status) is about an older one
             "to_link": [(m[4], m[3], m[0]) for m in mails if m[6] and m[5] is None
