@@ -3,7 +3,7 @@ same company and title (job_radar/overview.py reads them so), then moves that jo
 to no job are touched, so a link or a status you corrected by hand is never redone, and a rerun changes nothing.
 
 An application your mailbox confirms that the tracker has no job for (you applied on a site the radar never listed) gets
-its job and status here, from what the email itself says: its company, its title and, for LinkedIn, the posting's link and
+its job (source 'applied', never in_scope: it is no job to find, grade or apply to) and status here, from what the email itself says: its company, its title and, for LinkedIn, the posting's link and
 place. One whose emails name no title is left out: nothing is invented."""
 
 import re
@@ -27,7 +27,8 @@ def add_job(cur, app: dict) -> int | None:
     stage; None when no email of it names a title, or the job already has a status of yours."""
     from .steps import job_key  # steps imports this module
 
-    title, location, url = app["job"], "", app["email_link"]
+    # with no posting link, the job's link is its confirmation email, without the mailbox: publish sends job_url to Neon
+    title, location, url = app["job"], "", re.sub(r"\?authuser=[^#]*", "", app["email_link"])
     if not title:
         for message_id, mailbox in app["emails"]:
             body = cur.execute("SELECT body FROM core.mail WHERE message_id = %s AND mailbox = %s", (message_id, mailbox)).fetchone()
@@ -40,9 +41,9 @@ def add_job(cur, app: dict) -> int | None:
     row = cur.execute("SELECT job_id FROM core.job WHERE job_key = %s", (key,)).fetchone()
     job_id = row[0] if row else cur.execute(
         "INSERT INTO core.job (job_key, title, company, location, place, source, job_url, role_rank, role, target_company,"
-        " first_seen, in_scope) VALUES (%s, %s, %s, %s, %s, 'email', %s, %s, %s, false, %s, %s) RETURNING job_id",
+        " first_seen, in_scope) VALUES (%s, %s, %s, %s, %s, 'applied', %s, %s, %s, false, %s, false) RETURNING job_id",
         (key, title, app["company"], location, place_of(location) or "Unknown location", url, rank or 0,
-         ROLE_LABEL.get(rank, "Other"), app["applied_on"].date(), rank is not None)).fetchone()[0]
+         ROLE_LABEL.get(rank, "Other"), app["applied_on"].date())).fetchone()[0]
     cur.execute("INSERT INTO core.application (job_id, status, note, updated_at) VALUES (%s, %s, %s, %s) ON CONFLICT (job_id) DO NOTHING",
                 (job_id, STATUS[app["stage"]], f"confirmed by email {app['applied_on']:%Y-%m-%d} (check_applications)", app["latest_at"]))
     if not cur.rowcount:  # the job has your own status already (one you ignored): it stays yours

@@ -39,8 +39,10 @@ def test_an_application_known_from_emails_alone_gets_its_job_and_status_once(con
     first = jobs(conn)
     assert [(r[0], r[1], r[5]) for r in first] == [("Business Intelligence Analyst", "Zzmailb", "applied"),
                                                    ("Data Engineer", "Zzmaila", "rejected")]
-    assert first[0][2:5] == ("Melville, NY (Hybrid)", "https://www.linkedin.com/jobs/view/4490514018/", "email")
-    assert first[1][3].startswith("https://mail.google.com/")  # no posting link: the email itself
+    assert first[0][2:5] == ("Melville, NY (Hybrid)", "https://www.linkedin.com/jobs/view/4490514018/", "applied")
+    # no posting link: the email itself, without the mailbox (job_url is published to Neon)
+    assert first[1][3].startswith("https://mail.google.com/mail/u/#search/rfc822msgid") and "gmail.com" not in first[1][3]
+    assert conn.execute("SELECT count(*) FROM core.job WHERE company LIKE 'Zzmail%' AND in_scope").fetchone() == (0,)
     assert conn.execute("SELECT count(*) FROM core.application_email WHERE message_id LIKE '<zz-mailonly-%' AND job_id IS NOT NULL"
                         ).fetchone() == (3,)
     check_applications(RolledBack(conn))
