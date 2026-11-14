@@ -67,6 +67,8 @@ mindmap
       APIs and feeds
         Himalayas, Remotive, Remote OK
         Jobicy, Working Nomads, Arbeitnow
+        RemoteJobs.org, hiring.cafe
+        Jobgether, Remote Rocketship
         We Work Remotely RSS
       Pages
         Relomote, DailyRemote

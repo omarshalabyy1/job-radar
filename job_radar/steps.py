@@ -221,7 +221,7 @@ def extract_remote(conn) -> None:
 
     extract(conn, sources.himalayas, sources.weworkremotely, sources.relomote, sources.remotive, sources.remoteok,
             sources.jobicy, sources.workingnomads, sources.arbeitnow, sources.dailyremote, sources.inclusivelyremote,
-            remoteco, hireeing)
+            sources.hiringcafe, sources.remotejobs, sources.jobgether, sources.remoterocketship, remoteco, hireeing)  # the two that read until the time is up, last
 
 
 def extract_startups(conn) -> None:

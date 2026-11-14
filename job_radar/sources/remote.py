@@ -43,6 +43,101 @@ def himalayas() -> list[dict]:
     return rows
 
 
+# hiring.cafe's own location filter for a country: the jobs there, and the remote ones open to its continent or the world
+HIRINGCAFE_EGYPT = {"formatted_address": "Egypt", "types": ["country"], "geometry": {"location": {"lat": 0, "lon": 0}},
+                    "id": "user_country", "address_components": [{"long_name": "Egypt", "short_name": "EG", "types": ["country"]}],
+                    "options": {"flexible_regions": ["anywhere_in_continent", "anywhere_in_world"]}}
+
+
+def hiringcafe() -> list[dict]:
+    """hiring.cafe: jobs it collects from employers' own career sites, in Egypt or remote and open to it, newest first,
+    per keyword. Its search page carries the results as JSON (__NEXT_DATA__); a job's link is the employer's posting.
+    The site estimates a job's date, so the window is a week (week()). It gives no description, only a summary of up to
+    about 300 characters: that stays in the payload, so describe reads the employer's page for the whole text."""
+    rows, read, seen = [], 0, set()
+    for keyword in KEYWORDS:
+        try:
+            page = get("https://hiringcafe.com/classic", searchState=json.dumps(
+                {"searchQuery": keyword, "locations": [HIRINGCAFE_EGYPT], "sortBy": "date"})).text
+        except Held as e:  # keep what the searches before it found
+            held("hiringcafe", e)
+            return rows
+        data = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', page, re.S)
+        hits = json.loads(data.group(1))["props"]["pageProps"]["ssrHits"] if data else []
+        read += len(hits)
+        for h in hits:
+            job, title, url = h["v5_processed_job_data"], h["job_information"]["title"], h["apply_url"]
+            where = job.get("formatted_workplace_location") or ""
+            location = f"{where} (remote)" if job.get("workplace_type") == "Remote" else where
+            posted = str(job.get("estimated_publish_date") or "")[:10]
+            if url in seen or h.get("is_expired") or posted < week() or not role_of(title) or not place_of(location):
+                continue
+            seen.add(url)
+            rows.append(row("hiringcafe", None, title, job.get("company_name"), location, url, posted, None,
+                            {"id": h["id"], "ats": h.get("source"), **job}))
+    if not read:
+        changed("hiringcafe", "its search page returned no jobs for any keyword")
+    return rows
+
+
+def remotejobs() -> list[dict]:
+    """RemoteJobs.org's public API: the 50 newest remote jobs matching each keyword. Its search is a loose word match
+    ("data engineer" finds any engineer), so the role filter does the choosing."""
+    jobs: dict[str, dict] = {}
+    for keyword in KEYWORDS:
+        try:
+            for j in get("https://remotejobs.org/api/v1/jobs", q=keyword, limit=50).json()["data"]:
+                jobs.setdefault(j["url"], {**j, "company_name": (j.get("company") or {}).get("name")})
+        except Held as e:  # keep what the searches before it found
+            held("remotejobs", e)
+            break
+    return remote_board("remotejobs", list(jobs.values()), "title", "company_name", "location", "url", "posted_at", "description")
+
+def jobgether() -> list[dict]:
+    """Jobgether's public API: remote jobs open to someone in Egypt (its Egypt filter also gives the ones open to anyone),
+    newest first, 25 a keyword. Its robots.txt asks for 2 seconds between calls (GAP). The list has no description."""
+    jobs: dict[str, dict] = {}
+    for keyword in KEYWORDS:
+        try:
+            for j in get("https://jobgether.com/api/v1/jobs", keyword=keyword, locations="egypt", sort="date", limit=25).json()["jobs"]:
+                jobs.setdefault(j["url"], j)
+        except Held as e:  # keep what the searches before it found
+            held("jobgether", e)
+            break
+    return remote_board("jobgether", list(jobs.values()), "title", "company", "location", "url", "postedAt", "description")
+
+
+# Remote Rocketship's job title pages (it has no page for Power BI)
+ROCKETSHIP_TITLES = ("data-engineer", "analytics-engineer", "bi-developer", "business-intelligence-developer", "data-analyst",
+                     "ai-engineer", "machine-learning-engineer", "data-scientist")
+
+
+def remoterocketship() -> list[dict]:
+    """Remote Rocketship: remote jobs open to someone in Egypt, by job title. Its Egypt page of a title lists the jobs in
+    Egypt, the worldwide ones and those naming Egypt among their countries, the 20 newest, as JSON in the page
+    (__NEXT_DATA__). A job's link is the employer's posting; the page gives a one-line summary, no description."""
+    rows, read, seen = [], 0, set()
+    for slug in ROCKETSHIP_TITLES:
+        try:
+            page = get(f"https://www.remoterocketship.com/country/egypt/jobs/{slug}/").text
+        except Held as e:  # keep what the pages before it gave
+            held("remoterocketship", e)
+            return rows
+        data = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', page, re.S)
+        jobs = (json.loads(data.group(1))["props"]["pageProps"].get("initialJobOpenings") or []) if data else []
+        read += len(jobs)
+        for j in jobs:
+            location = ", ".join(j.get("locationCountries") or [j.get("location") or ""]) + " (remote)"
+            posted = str(j.get("created_at") or "")[:10]
+            if j["url"] in seen or posted < week() or not role_of(j["roleTitle"]) or not place_of(location):
+                continue
+            seen.add(j["url"])
+            rows.append(row("remoterocketship", None, j["roleTitle"], (j.get("company") or {}).get("name"), location, j["url"],
+                            posted, None, {k: j.get(k) for k in ("id", "slug", "jobDescriptionSummary", "salaryRange", "techStack")}))
+    if not read:
+        changed("remoterocketship", "its Egypt pages returned no jobs for any title")
+    return rows
+
 def weworkremotely() -> list[dict]:
     """We Work Remotely's RSS feed of its latest jobs, kept when open to anywhere or EMEA."""
     rows, items = [], list(ET.fromstring(get("https://weworkremotely.com/remote-jobs.rss").content).iter("item"))

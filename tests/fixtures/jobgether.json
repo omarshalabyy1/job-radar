@@ -1,0 +1,51 @@
+{
+ "jobs": [
+  {
+   "id": "6af3d3851b1a9ee7d66248d4",
+   "title": "Senior Data Engineer - Datenplattform",
+   "company": "Coopers Group AG",
+   "url": "https://jobgether.com/offer/6af3d3851b1a9ee7d66248d4-senior-data-engineer---datenplattform",
+   "location": "Anywhere",
+   "remote": "Full Remote",
+   "contractType": "Fixed term",
+   "experience": "Senior (5-10 years)",
+   "jobFunctions": [
+    "Data Engineer"
+   ],
+   "postedAt": "2026-11-11T02:31:33.251Z"
+  },
+  {
+   "id": "6adfaa8f22c2644c03f579c4",
+   "title": "Data Engineer",
+   "company": "Soum",
+   "url": "https://jobgether.com/offer/6adfaa8f22c2644c03f579c4-data-engineer",
+   "location": "Africa, Asia, Middle East, Sub-Saharan Africa, Northern Africa, EMEA, APAC, Egypt, Uzbekistan, Nigeria",
+   "remote": "Full Remote",
+   "contractType": "Full time",
+   "experience": "Mid-level (2-5 years)",
+   "jobFunctions": [
+    "Data Engineer"
+   ],
+   "postedAt": "2026-10-26T19:31:27.544Z"
+  },
+  {
+   "id": "6af3d3851b1a9ee7d66248d6",
+   "title": "Data & Platform Engineer",
+   "company": "Coopers Group AG",
+   "url": "https://jobgether.com/offer/6af3d3851b1a9ee7d66248d6-data-platform-engineer",
+   "location": "Anywhere",
+   "remote": "Full Remote",
+   "contractType": "Fixed term",
+   "experience": "",
+   "jobFunctions": [
+    "Data Platform Engineer"
+   ],
+   "postedAt": "2026-11-11T02:31:33.251Z"
+  }
+ ],
+ "pagination": {
+  "page": 1,
+  "limit": 25,
+  "hasMore": true
+ }
+}

@@ -210,6 +210,10 @@ How each source is read, and the reasoning behind each choice: [docs/scraping-pl
 | Workable | its public job search, every company on it; remote only outside Egypt | one round a day: it allows few searches a day, and each covers the whole day |
 | Himalayas, We Work Remotely | public search API, RSS feed | 1 second between pages |
 | Remotive, Remote OK, Jobicy, Working Nomads, Arbeitnow | public APIs, no key: each board's newest remote jobs from the last week (several publish a day or more late) | one call each a run; Remotive held 6 hours after each (it asks for at most 4 a day) |
+| RemoteJobs.org | public API, no key: the 50 newest remote jobs matching each search word (a loose word match, so the role filter chooses) | one call a search word a run |
+| hiring.cafe | its search page's own JSON: jobs from employers' career sites in Egypt, or remote and open to it, newest first; each job links to the employer's posting | one page a search word a run |
+| Jobgether | public API, no key: remote jobs open to someone in Egypt or to anyone, newest first, 25 a search word | one call a search word a run, 2 seconds apart (its robots.txt) |
+| Remote Rocketship | its Egypt page of each job title (8 titles): jobs in Egypt, worldwide, or naming Egypt among their countries, the 20 newest, from the page's JSON | 8 pages a run |
 | DailyRemote | its newest remote jobs in your fields (the company is behind its paid plan, so none shows) | about 2 pages a run |
 | Remote.co | its latest-jobs sitemap, then the pages of jobs titled like your roles and not read before (its search sits behind a bot check) | 1 call plus a few pages a run, 1 second apart |
 | [Relomote](https://relomote.com) | remote jobs from 75,000 companies' career pages, each checked for the countries it can hire from: its data and engineering pages open to Egypt | about 3 pages a run, 1 second apart (its robots.txt allows them) |
