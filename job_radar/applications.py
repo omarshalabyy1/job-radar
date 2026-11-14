@@ -236,6 +236,12 @@ def sender_company(sender: str) -> str | None:
                  if who == address or domain == who or domain.endswith(f".{who}")), None)
 
 
+def unnamed(mail: dict) -> bool:
+    """A confirmation whose subject names no job title or no company ("Thank you for applying at Kasha", "Indeed
+    Application: Data Analyst"): its text says which, so it is read too."""
+    return mail.get("kind") == "applied" and not (mail.get("company") and mail.get("title"))
+
+
 def read_mailbox(user: str, password: str, days: int, stored: set[str]) -> tuple[list[dict], list[dict], int]:
     """(classified, leftovers, found): the emails of the last `days` days not stored yet, those a
     pattern told apart and those no pattern fits (with their text), and how many the search found."""
@@ -263,11 +269,12 @@ def read_mailbox(user: str, password: str, days: int, stored: set[str]) -> tuple
                     else received_at.replace(tzinfo=timezone.utc), "sender": sender, "subject": subject,
                     "to": clean(str(h["To"] or ""))}
             found = classify(sender, subject, user)
-            if found:  # the kind, company and title from the patterns
-                classified.append({**mail, "kind": found[0], "company": found[1], "title": found[2]})
-            else:  # only now is the email itself downloaded
+            found = dict(zip(("kind", "company", "title"), found)) if found else {}
+            if found and not unnamed(found):  # the kind, company and title from the patterns
+                classified.append({**mail, **found})
+            else:  # only now is the email itself downloaded; what a pattern did tell (its kind) is kept
                 msg = email.message_from_bytes(imap.uid("fetch", uid, "(BODY.PEEK[])")[1][0][1], policy=email.policy.default)
-                leftovers.append({**mail, "text": body_text(msg)})
+                leftovers.append({**mail, **found, "text": body_text(msg)})
     return classified, leftovers, len(uids)
 
 
@@ -352,8 +359,10 @@ def ask_claude(leftovers: list[dict], cfg: dict, me: str = "") -> list[dict]:
             continue
         if r.parsed_output is not None:
             m = r.parsed_output
-            classified.append({**mail, "kind": m.kind, "company": clean(m.company).strip(" .!") or None,
-                               "title": clean(m.title).strip(" .!") or None})
+            # a pattern's own kind, company and title stand; Claude fills what the subject did not say
+            classified.append({**mail, "kind": mail.get("kind") or m.kind,
+                               "company": mail.get("company") or clean(m.company).strip(" .!") or None,
+                               "title": mail.get("title") or clean(m.title).strip(" .!") or None})
     return classified
 
 
