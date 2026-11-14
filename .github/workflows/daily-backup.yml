@@ -1,11 +1,9 @@
-# The main collect for the website (Fennec). GitHub collects and publishes to Neon (the website's database) twice a
-# day, at 17 minutes past 6 and 18 UTC (9am and 9pm in Cairo in summer) (off the hour, as GitHub delays top-of-hour schedules). Airflow on the laptop may
-# collect too; when it has, this waits:
+# The main collect for the website (Fennec). GitHub collects and publishes to Neon (the website's database) once a
+# day, at 17 minutes past 3 UTC (5am in Cairo in winter, 6am in summer; off the hour, as GitHub delays top-of-hour schedules, and
+# early, as it can start a slot hours late). Airflow on the laptop may collect too; when it has, this waits:
 #   gate    a run skips when a publish landed on Neon in the last 6 hours, from Airflow or from this workflow. The marker is
 #           the 'publish' row in tracker.step_run that publish.py writes (job_radar/publish.py): jobs.job.first_seen is a
-#           date and does not move when a collect finds nothing new. 6 hours, not 8: this workflow publishes about 45
-#           minutes into its run, and a gate of 7 or more would make its own next slot, 8 hours later, skip on a slow day.
-#           A run started by hand always collects.
+#           date and does not move when a collect finds nothing new. A run started by hand always collects.
 #   backup  the same steps as dags/job_radar.py on a fresh Postgres, seeded from Neon first (job_radar/seed.py: every Neon
 #           job with its own job_key, marked emailed), so a job Neon already has is matched by its job_key, never added
 #           twice, and published under the same id (made from job_key). Every extract_ step in job_radar/__main__.py's STEPS
@@ -20,7 +18,7 @@ name: daily-backup
 
 on:
   schedule:
-    - cron: "17 6,18 * * *"
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -73,14 +71,14 @@ jobs:
       APIFY_TOKENS: ${{ secrets.APIFY_TOKENS }}  # optional: LinkedIn's search and the Apify boards, spread over the accounts
       PYTHONUNBUFFERED: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.10"  # the Dockerfile's
           cache: pip
           cache-dependency-path: requirements.txt
       - name: Keep the sources' holds between runs  # else LinkedIn's 20-hour Apify hold is forgotten and it runs every collect
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: output/waits
           key: waits-${{ github.run_id }}
@@ -105,7 +103,7 @@ jobs:
         run: python -m job_radar publish
       - name: Save the sources' holds  # always: a failed publish must not make the next run pay for Apify again
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: output/waits
           key: waits-${{ github.run_id }}
