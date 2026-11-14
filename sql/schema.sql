@@ -958,7 +958,9 @@ SELECT j.job_id, j.role_rank, j.role, j.title, j.company, j.place, j.location, j
        j.cv_similarity, j.years_required, v.skills_on_cv, v.skills_missing, j.cv_evidence
 FROM core.job j
 LEFT JOIN (SELECT job_id, count(*) AS skill_matches, string_agg(skill, ', ' ORDER BY skill) AS skills_matched
-           FROM core.job_skill JOIN core.skill USING (skill) WHERE track IS NOT NULL GROUP BY job_id) k USING (job_id)
+           FROM core.job_skill JOIN core.skill USING (skill) WHERE track IS NOT NULL
+           -- your jobs only: with the website's other jobs here too, the view built 13,000 jobs' skills to show 586
+           AND job_id IN (SELECT job_id FROM core.job WHERE in_scope) GROUP BY job_id) k USING (job_id)
 -- the best CV for the job (highest coverage) and which of the job's skills that CV shows and does not show
 LEFT JOIN (SELECT DISTINCT ON (job_id) job_id, label AS cv_label, cv_coverage, skills_on_cv, skills_missing
            FROM (SELECT k.job_id, c.label, round(100.0 * count(cs.skill) / count(*)) AS cv_coverage,
@@ -966,6 +968,7 @@ LEFT JOIN (SELECT DISTINCT ON (job_id) job_id, label AS cv_label, cv_coverage, s
                         string_agg(k.skill, ', ' ORDER BY k.skill) FILTER (WHERE cs.skill IS NULL) AS skills_missing
                  FROM core.job_skill k JOIN core.skill ks ON ks.skill = k.skill AND ks.track IS NOT NULL CROSS JOIN core.cv c
                  LEFT JOIN core.cv_skill cs ON cs.label = c.label AND cs.skill = k.skill
+                 WHERE k.job_id IN (SELECT job_id FROM core.job WHERE in_scope)
                  GROUP BY k.job_id, c.label) per_cv
            ORDER BY job_id, cv_coverage DESC) v USING (job_id)
 LEFT JOIN core.claude_grade g USING (job_id)

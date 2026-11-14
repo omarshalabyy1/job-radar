@@ -138,9 +138,13 @@ def drop_warning(conn, board: str, postings: int, dropped: int, judged: bool = T
     7 or more) is a warning every day until it gives one: dead - changed, blocked, held or without its key - not a quiet week.
     Not for EMPTY_BY_DESIGN, nor for a company's own board (`ats:token`: most have no job in scope on most days). None when
     they look normal."""
-    conn.execute("INSERT INTO core.extract_count (day, board, postings, dropped) VALUES (current_date, %s, %s, %s)"
-                 " ON CONFLICT (day, board) DO UPDATE SET postings = EXCLUDED.postings, dropped = EXCLUDED.dropped",
-                 (board, postings, dropped))
+    # a second run the same day keeps the day's larger count: a board that gave 3 at noon and nothing new at night gave 3
+    # that day (the 0 written over it emptied the week's history, 2026-11-13). The warnings below still judge this run.
+    conn.execute(
+        "INSERT INTO core.extract_count AS c (day, board, postings, dropped) VALUES (current_date, %s, %s, %s)"
+        " ON CONFLICT (day, board) DO UPDATE SET postings = greatest(c.postings, EXCLUDED.postings),"
+        " dropped = CASE WHEN EXCLUDED.postings >= c.postings THEN EXCLUDED.dropped ELSE c.dropped END",
+        (board, postings, dropped))
     before, before_dropped = conn.execute(
         "SELECT coalesce(sum(postings), 0), coalesce(sum(dropped), 0) FROM core.extract_count"
         " WHERE board = %s AND day BETWEEN current_date - 7 AND current_date - 1", (board,)).fetchone()
@@ -254,21 +258,21 @@ def extract_companies(conn) -> None:
         f" AND (checked_at IS NULL OR checked_at < now() - interval '{REREAD_HOURS} hours')"
         " ORDER BY checked_at NULLS FIRST").fetchall()
     slow = [s for s in sites if sources.companies.needs_browser(s[2], s[1])]
-    queue = [(s, sources.companies.FAST_THREADS) for s in sites if s not in slow] + [(s, 4) for s in slow]
+    fast = [s for s in sites if s not in slow]
     batches = postings = dropped = 0
     outcome, left = Counter(), 0
     # 50 sites at a time, each batch saved before the next: a run stopped part way keeps what it found,
-    # and no batch starts once the step's time budget is nearly spent
-    for start in range(0, len(queue), 50):
-        batch = queue[start:start + 50]
+    # and no batch starts once the step's time budget is nearly spent. One kind a batch: a batch begun by API sites
+    # ran the pages after them 12 at a time too, and 12 Chromiums starting at once spent every page's minute (2026-11-13)
+    queue = [(kind[i:i + 50], threads) for kind, threads in ((fast, sources.companies.FAST_THREADS), (slow, 4))
+             for i in range(0, len(kind), 50)]
+    for n, (batch, threads) in enumerate(queue):
         if sources.time_left(COMPANY_SECONDS) < 70:
-            print(f"extract_companies: time budget reached, {len(queue) - start} sites wait for the next run")
-            left = len(queue) - start
+            left = sum(len(b) for b, _ in queue[n:])
+            print(f"extract_companies: time budget reached, {left} sites wait for the next run")
             break
-        threads = batch[0][1]
         try:
-            rows, found = sources.company_sites([s for s, _ in batch]) if threads == 4 else \
-                sources.company_sites([s for s, _ in batch], threads=threads)
+            rows, found = sources.company_sites(batch) if threads == 4 else sources.company_sites(batch, threads=threads)
         except Exception as e:  # one batch down is a short day, not a failed run
             print(f"WARNING company_sites: {e!r}"[:300])
             outcome["failed"] += len(batch)

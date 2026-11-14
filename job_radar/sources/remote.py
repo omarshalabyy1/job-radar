@@ -123,6 +123,8 @@ def hireeing(seen: set[str]) -> list[dict]:
         listing = get("https://hireeing.com/jobs", q=role["search"][0]).text
         urls += [urljoin("https://hireeing.com", href) for href in re.findall(r'href="(/jobs/[^"]+)"', listing)]
         time.sleep(1)
+    if not urls:  # a quiet day still lists older jobs (stored before); none at all is a changed page
+        changed("hireeing", "its role searches list no job pages")
     rows = []
     for url in dict.fromkeys(urls):
         words = re.sub(r"-[0-9a-f]{8}$", "", url.rsplit("/", 1)[1]).replace("-", " ")
