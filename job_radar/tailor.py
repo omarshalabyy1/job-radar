@@ -108,6 +108,8 @@ letter correction is one line in changes, starting "Letter: ".
 
 """
 
+# the CV body's font size: the layout's own first, then a little smaller, for a CV a line or two over one page
+FIT_SIZES = ("9.6pt", "9.3pt", "9.0pt", "8.8pt")
 CV_CSS = """@page { size: A4; margin: 8mm 12mm; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Calibri, Carlito, "Segoe UI", Arial, sans-serif; font-size: 9.6pt; line-height: 1.2; color: #000;
@@ -290,6 +292,23 @@ def pdf_of(page_html: str) -> bytes:
             browser.close()
 
 
+def pages_of(pdf: bytes) -> int:
+    from pypdf import PdfReader
+
+    return len(PdfReader(io.BytesIO(pdf)).pages)
+
+
+def fit_one_page(page_html: str) -> tuple[str, bytes]:
+    """The CV page and its PDF at the largest body font size of FIT_SIZES that prints on one page; at the smallest when
+    none does (pdf_problems then says it is too long). Five words on a second page once failed a whole run."""
+    for size in FIT_SIZES:
+        fitted = page_html.replace(f"font-size: {FIT_SIZES[0]};", f"font-size: {size};", 1)
+        pdf = pdf_of(fitted)
+        if pages_of(pdf) <= 1:
+            break
+    return fitted, pdf
+
+
 def pdf_problems(pdf: bytes, page_html: str, pages: int = 1) -> list[str]:
     """What is wrong with a printed page: more than `pages` pages, a link of the page missing from the PDF's
     annotations (/Annots), so it is not clickable, or a section heading missing from the PDF's text, so an applicant
@@ -311,12 +330,11 @@ def write_draft(folder: Path, d: Draft, company: str) -> list[str]:
     """Write the drafts and their PDFs into `folder` ("<name> <Company> <TAG>.pdf" and its "Cover Letter.pdf");
     the problems of the CV's PDF (pdf_problems), empty when it is one page with every link."""
     folder.mkdir(parents=True, exist_ok=True)
-    cv, letter = cv_html(d), letter_html(d)
+    (cv, cv_pdf), letter = fit_one_page(cv_html(d)), letter_html(d)
     for name, text in (("cv.md", cv_markdown(d)), ("cv.html", cv), ("cover-letter.md", d.cover_letter_md),
                        ("cover-letter.html", letter), ("notes.md", d.notes_md), ("forms.md", d.form_answers_md)):
         (folder / name).write_text(text, encoding="utf-8")
     stem = f"{d.name} {re.sub(r'[^A-Za-z0-9 &.-]+', '', company).strip() or 'Job'} {d.file_tag.strip().upper() or 'CV'}"
-    cv_pdf = pdf_of(cv)
     (folder / f"{stem}.pdf").write_bytes(cv_pdf)
     (folder / f"{stem} Cover Letter.pdf").write_bytes(pdf_of(letter))
     return pdf_problems(cv_pdf, cv)

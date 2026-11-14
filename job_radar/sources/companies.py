@@ -398,8 +398,11 @@ def successfactors(company: str, base: str) -> list[dict]:
     per place."""
     rows = []
     for _, location, _ in [p for p in PLACES if p[0] in ONSITE_PLACES]:
-        soup = BeautifulSoup(get(f"{base}/search/", q="", locationsearch=location, sortColumn="referencedate",
-                                 sortDirection="desc").text, "html.parser")
+        page = get(f"{base}/search/", q="", locationsearch=location, sortColumn="referencedate", sortDirection="desc")
+        landed = urlsplit(page.url)  # a sign-in or maintenance page answers 200 with no job: not a quiet day
+        if landed.hostname != urlsplit(base).hostname or "/search/" not in landed.path:
+            raise ValueError(f"{base}: its search led to {page.url}"[:200])
+        soup = BeautifulSoup(page.text, "html.parser")
         for tr in soup.select("tr.data-row"):
             link, where, when = tr.select_one("a.jobTitle-link"), tr.select_one(".jobLocation"), tr.select_one(".jobDate")
             title, place_text = link.get_text(" ", strip=True), where.get_text(" ", strip=True) if where else ""
