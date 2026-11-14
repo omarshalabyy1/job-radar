@@ -1,6 +1,6 @@
 # Your companies
 
-The 245 companies whose own career sites job-radar reads: only companies that hire in
+The 252 companies whose own career sites job-radar reads: only companies that hire in
 Egypt, or remote-first ones that hire worldwide, each through its jobs page filtered to Egypt where the site has a filter.
 Only their jobs in Egypt are kept; a company marked (+ remote) also keeps its remote jobs open to someone in Egypt
 (worldwide, anywhere, EMEA, MENA). Jobs at these companies are starred in your email, from any source. A site
@@ -16,6 +16,8 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Accenture | [accenture.wd103.myworkdayjobs.com](https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers?locationCountry=d865e83093ad42319653b08e61f7db49) | Workday, through the 28,000-company feed |  |
 | ADIB | [www.adib.eg](https://www.adib.eg/careers) | careers page (platform found on the first read) |  |
 | Alexbank | [apply.workable.com](https://apply.workable.com/alexbank/) | Workable, public API |  |
+| Amazon | [www.amazon.jobs](https://www.amazon.jobs/en/search?country%5B%5D=EGY) | careers page (platform found on the first read) |  |
+| Analog Devices | [analogdevices.wd1.myworkdayjobs.com](https://analogdevices.wd1.myworkdayjobs.com/External) | Workday, through the 28,000-company feed |  |
 | Andersen | [eg.andersen.com](https://eg.andersen.com/open-vacancies/) | careers page (platform found on the first read) |  |
 | Aqarmap | [aqarmap.zohorecruit.com](https://aqarmap.zohorecruit.com/jobs/Careers) | careers page (platform found on the first read) |  |
 | Aramex | [careers.aramex.com](https://careers.aramex.com/search/?q=&locationsearch=Egypt) | careers page (platform found on the first read) |  |
@@ -23,6 +25,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Banque Misr | [www.banquemisr.com](https://www.banquemisr.com/en/Careers) | careers page (platform found on the first read) |  |
 | BCG | [careers.bcg.com](https://careers.bcg.com/global/en/search-results?qcountry=Egypt) | careers page (platform found on the first read) |  |
 | BDO | [www.bdo.com.eg](https://www.bdo.com.eg/en-gb/home) | careers page (platform found on the first read) |  |
+| Bosch | [careers.smartrecruiters.com](https://careers.smartrecruiters.com/BoschGroup) | SmartRecruiters, public API |  |
 | Bosta | [jobs.lever.co](https://jobs.lever.co/Bosta) | Lever, public API |  |
 | Breadfast | [www.breadfast.com](https://www.breadfast.com/careers) | careers page (platform found on the first read) |  |
 | Brimore | [careers.smartrecruiters.com](https://careers.smartrecruiters.com/Brimore) | SmartRecruiters, public API |  |
@@ -38,6 +41,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | DHL | [careers.dhl.com](https://careers.dhl.com/global/en/search-results?qcountry=Egypt) | careers page (platform found on the first read) |  |
 | DP World | [ehpv.fa.em2.oraclecloud.com](https://ehpv.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs?location=Egypt&locationId=300000000273835&locationLevel=country&mode=location) | Oracle Cloud page |  |
 | dubizzle | [apply.workable.com](https://apply.workable.com/dubizzlemena/) | Workable, public API |  |
+| DXC Technology | [dxctechnology.wd1.myworkdayjobs.com](https://dxctechnology.wd1.myworkdayjobs.com/DXCJobs) | Workday, through the 28,000-company feed |  |
 | e& Egypt | [etisalatmisr.taleo.net](https://etisalatmisr.taleo.net/careersection/ex/joblist.ftl?lang=en) | Taleo page |  |
 | Edita | [career5.successfactors.eu](https://career5.successfactors.eu/portalcareer?company=Edita&navBarLevel=JOB_SEARCH) | SuccessFactors search page |  |
 | EFG Hermes | [careers.efghldg.com](https://careers.efghldg.com/joinUs/Index/en) | careers page (platform found on the first read) |  |
@@ -60,6 +64,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | HSBC | [portal.careers.hsbc.com](https://portal.careers.hsbc.com/careers?domain=hsbc.com&location=Egypt) | careers page (platform found on the first read) |  |
 | Huawei | [career.huawei.com](https://career.huawei.com/reccampportal/portal5/social-recruitment.html) | careers page (platform found on the first read) |  |
 | IBM | [www.ibm.com](https://www.ibm.com/careers/search?field_keyword_05[0]=Egypt) | careers page (platform found on the first read) |  |
+| inDrive | [careers.indrive.com](https://careers.indrive.com/vacancies/?position=&department=&country=Egypt) | careers page (platform found on the first read) |  |
 | Instabug | [instabug.bamboohr.com](https://instabug.bamboohr.com/careers) | BambooHR, through the 28,000-company feed |  |
 | Intelligent Systems | [isys.ai](https://isys.ai/Join-Us) | careers page (platform found on the first read) |  |
 | Intercom | [www.intercom.com.eg](https://www.intercom.com.eg/home/careers/vacancies/) | careers page (platform found on the first read) |  |
@@ -105,6 +110,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Robusta | [apply.workable.com](https://apply.workable.com/robusta/) | Workable, public API |  |
 | Rology | [rology.ai](https://rology.ai/careers/) | careers page (platform found on the first read) |  |
 | SAP | [careers.sap.com](https://careers.sap.com/search/?q=&locationsearch=Egypt) | careers page (platform found on the first read) |  |
+| Si-Ware Systems | [siwaresystems.recruitee.com](https://siwaresystems.recruitee.com/) | Recruitee, public API |  |
 | Siemens | [jobs.siemens.com](https://jobs.siemens.com/en_US/externaljobs/SearchJobs/?42386=%5B812002%5D&42386_format=17546&listFilterMode=1) | careers page (platform found on the first read) |  |
 | SODIC | [www.sodic.com](https://www.sodic.com/careers) | careers page (platform found on the first read) |  |
 | SOUM (not starred) | [jobs.lever.co](https://jobs.lever.co/soum) | Lever, public API |  |
@@ -113,6 +119,7 @@ there, then run the script. The tracker's Companies page shows how each site was
 | Swvl | [apply.workable.com](https://apply.workable.com/swvl/) | Workable, public API |  |
 | Sympl | [sympl.ai](https://sympl.ai/) | careers page (platform found on the first read) |  |
 | Synapse Analytics | [synapseanalytics.recruitee.com](https://synapseanalytics.recruitee.com/) | Recruitee, public API |  |
+| Synopsys | [careers.synopsys.com](https://careers.synopsys.com/location/egypt-jobs/44408/357994/2) | careers page (platform found on the first read) |  |
 | Tabby | [tabby.pinpointhq.com](https://tabby.pinpointhq.com/) | careers page (platform found on the first read) |  |
 | Talaat Moustafa | [careers.tmg.com.eg](https://careers.tmg.com.eg/search/?q=) | careers page (platform found on the first read) |  |
 | talabat | [careers.deliveryhero.com](https://careers.deliveryhero.com/jobs?options=252,845&page=1) | careers page (platform found on the first read) |  |

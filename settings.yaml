@@ -100,7 +100,11 @@ roles:
       - [data analyst*, business analyst*, reporting analyst*, insight analyst*, insights analyst*,
          analytics analyst*, product analyst*, marketing analyst*, quantitative analyst*, data analysis*,
          data analytics*, analytics specialist*, analytics associate*, analytics executive*,
-         data specialist*, محلل بيانات*]
+         data specialist*, محلل بيانات*,
+         # titles the rule missed in Egypt (2026-11-14: PwC, IBM, Darsel, Property Finder, PepsiCo, DXC; Omar applied to four by hand)
+         "data & analytics*", data and analytics*, data systems analyst*, data operations*, microsoft analytics*,
+         analytics cloud*, analytics consultant*, marketing science analyst*, "strategy & operations analyst*",
+         strategy and operations analyst*]
 
 # Searched as they are on the sources that take plain words (Himalayas, Workable, Jooble)
 search_words: [data engineer, analytics engineer, ETL developer, databricks, AI engineer, machine learning engineer,
@@ -593,6 +597,8 @@ companies:
   - {name: "Accenture", link: "https://accenture.wd103.myworkdayjobs.com/en-US/AccentureCareers?locationCountry=d865e83093ad42319653b08e61f7db49"}
   - {name: "ADIB", link: "https://www.adib.eg/careers"}
   - {name: "Alexbank", link: "https://apply.workable.com/alexbank/"}
+  - {name: "Amazon", link: "https://www.amazon.jobs/en/search?country%5B%5D=EGY"}
+  - {name: "Analog Devices", link: "https://analogdevices.wd1.myworkdayjobs.com/External"}
   - {name: "Andersen", link: "https://eg.andersen.com/open-vacancies/"}
   - {name: "Aqarmap", link: "https://aqarmap.zohorecruit.com/jobs/Careers"}
   - {name: "Aramex", link: "https://careers.aramex.com/search/?q=&locationsearch=Egypt"}
@@ -600,6 +606,7 @@ companies:
   - {name: "Banque Misr", link: "https://www.banquemisr.com/en/Careers"}
   - {name: "BCG", link: "https://careers.bcg.com/global/en/search-results?qcountry=Egypt"}
   - {name: "BDO", link: "https://www.bdo.com.eg/en-gb/home"}
+  - {name: "Bosch", link: "https://careers.smartrecruiters.com/BoschGroup"}
   - {name: "Bosta", link: "https://jobs.lever.co/Bosta"}
   - {name: "Breadfast", link: "https://www.breadfast.com/careers"}
   - {name: "Brimore", link: "https://careers.smartrecruiters.com/Brimore"}
@@ -615,6 +622,7 @@ companies:
   - {name: "DHL", link: "https://careers.dhl.com/global/en/search-results?qcountry=Egypt"}
   - {name: "DP World", link: "https://ehpv.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs?location=Egypt&locationId=300000000273835&locationLevel=country&mode=location"}
   - {name: "dubizzle", link: "https://apply.workable.com/dubizzlemena/"}
+  - {name: "DXC Technology", link: "https://dxctechnology.wd1.myworkdayjobs.com/DXCJobs"}
   - {name: "e& Egypt", link: "https://etisalatmisr.taleo.net/careersection/ex/joblist.ftl?lang=en"}
   - {name: "Edita", link: "https://career5.successfactors.eu/portalcareer?company=Edita&navBarLevel=JOB_SEARCH"}
   - {name: "EFG Hermes", link: "https://careers.efghldg.com/joinUs/Index/en"}
@@ -637,6 +645,7 @@ companies:
   - {name: "HSBC", link: "https://portal.careers.hsbc.com/careers?domain=hsbc.com&location=Egypt"}
   - {name: "Huawei", link: "https://career.huawei.com/reccampportal/portal5/social-recruitment.html"}
   - {name: "IBM", link: "https://www.ibm.com/careers/search?field_keyword_05[0]=Egypt"}
+  - {name: "inDrive", link: "https://careers.indrive.com/vacancies/?position=&department=&country=Egypt"}
   - {name: "Instabug", link: "https://instabug.bamboohr.com/careers"}
   - {name: "Intelligent Systems", link: "https://isys.ai/Join-Us"}
   - {name: "Intercom", link: "https://www.intercom.com.eg/home/careers/vacancies/"}
@@ -682,6 +691,7 @@ companies:
   - {name: "Robusta", link: "https://apply.workable.com/robusta/"}
   - {name: "Rology", link: "https://rology.ai/careers/"}
   - {name: "SAP", link: "https://careers.sap.com/search/?q=&locationsearch=Egypt"}
+  - {name: "Si-Ware Systems", link: "https://siwaresystems.recruitee.com/"}
   - {name: "Siemens", link: "https://jobs.siemens.com/en_US/externaljobs/SearchJobs/?42386=%5B812002%5D&42386_format=17546&listFilterMode=1"}
   - {name: "SODIC", link: "https://www.sodic.com/careers"}
   - {name: "SOUM", link: "https://jobs.lever.co/soum", starred: false}
@@ -690,6 +700,7 @@ companies:
   - {name: "Swvl", link: "https://apply.workable.com/swvl/"}
   - {name: "Sympl", link: "https://sympl.ai/"}
   - {name: "Synapse Analytics", link: "https://synapseanalytics.recruitee.com/"}
+  - {name: "Synopsys", link: "https://careers.synopsys.com/location/egypt-jobs/44408/357994/2"}
   - {name: "Tabby", link: "https://tabby.pinpointhq.com/"}
   - {name: "Talaat Moustafa", link: "https://careers.tmg.com.eg/search/?q="}
   - {name: "talabat", link: "https://careers.deliveryhero.com/jobs?options=252,845&page=1"}
