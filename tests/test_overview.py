@@ -394,3 +394,13 @@ def test_your_deadline_for_the_job_is_its_due_day_when_the_email_states_none():
     [stated] = applications([mail("Valeo", "interview", day(1), subject="English Exam expires in 3 days")],
                             [status("Valeo", "applied", day(2), deadline=date(2026, 11, 30))])
     assert stated["due"] == (day(1) + timedelta(days=3)).date()  # the email's own date wins
+
+
+def test_ibms_assessment_invitation_expires_seven_days_after_it_came():
+    """IBM's invitation (2026-10-11): "ideally within 3 days of receiving this email. After 7 days, the assessment
+    invitation link will expire." The link's expiry is the deadline, not the ideal."""
+    from job_radar.overview import due_date
+    text = ("Please complete the test in a single session, as soon as possible – ideally within 3 days of receiving this email. "
+            "After 7 days, the assessment invitation link will expire.")
+    assert due_date(text, day(2)) == (day(2) + timedelta(days=7)).date()
+    assert due_date("The link will expire after 24 hours", day(1)) == (day(1) + timedelta(hours=24)).date()

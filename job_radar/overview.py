@@ -24,6 +24,9 @@ ASSESSMENT = re.compile(r"assessment|\btest\b|exam|hackerrank|codility|video app
 BODY_ASSESSMENT = re.compile(r"assessment|hackerrank|codility|online test|coding test|coding challenge|video application", re.I)
 # a deadline the email itself states: "expires in 1 days", "(5 days left)", "within 48 hours"
 DUE = re.compile(r"(?:expires? in|within)\s+(\d+)\s+(day|hour)s?|(\d+)\s+(day|hour)s?\s+left", re.I)
+# the hard limit when the email gives one, before any softer "ideally within 3 days": "After 7 days, the assessment
+# invitation link will expire" (IBM), "the link will expire after 24 hours"
+EXPIRY = re.compile(r"after\s+(\d+)\s+(day|hour)s?[^.]{0,80}expire|expire\w*\s+after\s+(\d+)\s+(day|hour)s?", re.I)
 # a calendar invitation's own day: "Invitation: ... @ Thu Oct 29, 2026 2pm"
 CALENDAR = re.compile(r"@ \w{3} (\w{3}) (\d{1,2}), (\d{4})")
 # a job board named in a job's source ("apify:linkedin_remote", "manual:wuzzuf-keywords") or an apply attempt
@@ -67,11 +70,11 @@ def board(attempt_board: str | None, source: str | None, sender: str | None) -> 
 
 
 def due_date(text: str, received_at: datetime) -> date | None:
-    """The day a step is due, when the email says it ("expires in 1 days", "5 days left", "within 48 hours", a calendar
-    invitation's day); else None."""
+    """The day a step is due, when the email says it ("expires in 1 days", "5 days left", "within 48 hours", "after 7 days
+    the link will expire", a calendar invitation's day); else None."""
     if c := CALENDAR.search(text or ""):
         return datetime.strptime(" ".join(c.groups()), "%b %d %Y").date()
-    if not (m := DUE.search(text or "")):
+    if not (m := EXPIRY.search(text or "") or DUE.search(text or "")):
         return None
     n, unit = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
     return (received_at + timedelta(**{f"{unit.lower()}s": int(n)})).date()
