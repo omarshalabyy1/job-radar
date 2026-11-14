@@ -38,7 +38,6 @@ greenhouse,samsara
 greenhouse,sumup
 greenhouse,toast
 lever,spotify
-lever,mistral
 lever,palantir
 lever,binance
 ashby,openai
@@ -51,7 +50,6 @@ ashby,posthog
 ashby,cohere
 ashby,elevenlabs
 ashby,replit
-greenhouse,doctolib
 greenhouse,trivago
 greenhouse,wolt
 greenhouse,adyen
@@ -67,7 +65,6 @@ greenhouse,datacamp
 greenhouse,squarespace
 lever,kraken
 lever,whoop
-lever,anyscale
 ashby,cursor
 ashby,perplexity
 ashby,prefect

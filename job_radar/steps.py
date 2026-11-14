@@ -17,6 +17,7 @@ from __future__ import annotations
 import threading
 import html
 import json
+import os
 import re
 import socket
 import time
@@ -183,7 +184,13 @@ def online() -> bool:
 def extract(conn, *source_functions) -> None:
     if not online():  # a red task Airflow retries, not a green run that found nothing
         raise RuntimeError("no network: host names do not resolve")
+    off = set(SETTINGS.get("sources_off") or [])  # a site that refuses every client
+    if os.environ.get("GITHUB_ACTIONS"):  # and those that answer the laptop but refuse GitHub's servers
+        off |= set(SETTINGS.get("sources_off_github") or [])
     for source in source_functions:
+        if source.__name__ in off:
+            print(f"{source.__name__}: off in settings.yaml, not read")
+            continue
         try:
             rows = source()
         except Exception as e:  # one source down is a short day, not a failed run

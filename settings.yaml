@@ -47,6 +47,12 @@ embeddings:
   model: nomic-embed-text
   url: http://host.docker.internal:11434
 
+# Sources left out, by the name their postings carry (job_radar/steps.py extract). sources_off: in every collect (a site
+# that refuses every client). sources_off_github: on GitHub Actions only (they answer the laptop but refuse GitHub's
+# servers with a 403, so Airflow's collect is the one that reads them).
+sources_off: [relomote]   # 403 to every client since late October 2026
+sources_off_github: [tanqeeb, startup_jobs, gulftalent]
+
 # The jobs you want, in your order: the email lists them in this order, and a title takes the
 # first role it fits.
 #   search:      what Indeed and Bayt are searched for
