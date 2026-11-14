@@ -11,9 +11,9 @@ from tracker.applications_tab import render as follow_ups
 from tracker.common import load_jobs, query
 from job_radar.overview import MAIL, STAGES, STATUSES, applications, counts, in_range, needs_you
 
-LABELS = {"waiting": "Waiting", "viewed": "Viewed", "assessment": "Assessment", "interview": "Interview",
+LABELS = {"waiting": "Waiting", "assessment": "Assessment", "interview": "Interview",
           "rejected": "Rejected", "offer": "Offer"}
-HELP = {"waiting": "Applied, no reply yet", "viewed": "The employer opened or is reviewing it, no decision yet",
+HELP = {"waiting": "Applied, no reply yet; an employer only viewing it counts as waiting",
         "assessment": "An assessment, a test or a video step, spotted by its words in the email",
         "interview": "Invited to or had an interview, and no rejection since",
         "rejected": "Rejected after any interview or assessment, or no news 14 days after an interview or assessment (ghosted)", "offer": "An offer, or hired"}
@@ -40,12 +40,13 @@ if not steps:
 else:
     today = now.astimezone(CAIRO).date()
     todo = pd.DataFrame(steps).assign(
-        when=lambda t: [("" if pd.isna(d) else "Today" if d == today else f"In {(d - today).days} days")
+        when=lambda t: [("No date given" if pd.isna(d) else "Today" if d == today else f"In {(d - today).days} days")
                         for d in t["due"]]).sort_values(["due", "on"], ascending=[True, False], na_position="last")
     st.dataframe(todo, hide_index=True, column_order=["what", "company", "job", "due", "when", "news", "link", "email"], column_config={
         "what": st.column_config.TextColumn("To do", width=170), "company": st.column_config.TextColumn("Company", width=150),
         "job": st.column_config.TextColumn("Job", width=220),
-        "due": st.column_config.DateColumn("Due", format="ddd D MMM", help="Only when the email or your deadline gives a date"),
+        "due": st.column_config.DateColumn("Due", format="ddd D MMM", help="The date the email states, else your deadline for the job "
+                                           "(Today page, Edit deadlines, with the job id); empty when neither gives one"),
         "when": st.column_config.TextColumn("When", width="small"),
         "news": st.column_config.TextColumn("Latest news", width="large"),
         "link": st.column_config.LinkColumn("Job", display_text="Open", width="small", help="The job page, else the email"),
@@ -61,7 +62,7 @@ with st.container(horizontal=True):  # side by side on a desktop, wrapping on a 
               help=f"Open jobs (new or saved) that no rule hides; {int((open_jobs['fresh_level'] <= 3).sum())} posted in the "
                    "last 48 hours. The Jobs page lists them.")
     st.metric("Applied", n["applied"], border=True, width=170, help="Companies you applied to: each company once")
-    st.metric("Responses", n["responses"], border=True, width=170, help="Applied minus Waiting: any reply, a view included")
+    st.metric("Responses", n["responses"], border=True, width=170, help="Applied minus Waiting: an assessment, an interview, a rejection or an offer")
 with st.container(horizontal=True):
     for stage in STAGES:
         st.metric(LABELS[stage], n[stage], border=True, width=140, help=HELP[stage])
