@@ -57,7 +57,7 @@ when it selected jobs and graded none (key, credit or network); the emails still
 in core.step_run (status, summary, Claude tokens and exact dollars); the tracker's Last run page shows it.
 
 Every hour the job_radar_applications DAG reads his mailboxes (every Gmail account in MAILBOXES, read-only, plus every email from
-APPLICATION_SENDERS in .env: people and domains who hire him directly, kept out of the public repo) for news on his applications
+APPLICATION_SENDERS in .env: people and domains who hire him directly, kept out of the public repo) for news on his applications, and every email collect_inbox stored whole in core.mail (All Mail and Spam) that is no job alert and no tool mail
 (core.application_email). With features.follow_up_drafts on, an application with no answer exactly 7 or 14 days
 after its first confirmation email (Cairo calendar days) gets a draft in output/followups/<day>/, in his voice from his CV; with
 features.interview_prep on, an interview email gets notes in output/interviews/<company>-<title>/notes.md, written

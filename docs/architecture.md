@@ -226,7 +226,7 @@ minutes: the gaps between emails (random, 2 to 10 minutes) are only real if tick
 | `grade_claude` | `core.job`, `core.cv`, your last 30 clicks | `core.claude_grade` (a grade older than your newest CV upload is overwritten), `core.job.years_required` when the text gave none, a phone push |
 | `tailor` | `core.claude_grade` scoring 8+ | `output/applications/<day>/` (md, html, PDFs), `core.application` as saved |
 | `check_extracts` | the tasks' states | nothing: it fails the run when `schema` or an extract did not succeed |
-| `track_applications` | Gmail, read-only | `core.application_email`, `core.application`, `output/followups/`, `output/interviews/` |
+| `track_applications` | Gmail, read-only; `core.mail` (every stored email, Spam too) | `core.application_email`, `core.application`, `output/followups/`, `output/interviews/` |
 | `outreach_send` (every 5 min) and `outreach_replies` (hourly), DAGs `job_radar_outreach` and `job_radar_outreach_replies` | `output/outreach/*.md` drafts, `data/contacts.csv`, `core.suppression`; Gmail All Mail, read-only | dry run: `output/outreach/outbox/*.eml`, `core.outreach_send` (mode `dry_run`); live: the same row, then Gmail; replies: `core.suppression`, `core.outreach_pause` |
 | `job_radar_backup` (its own DAG) | `core`, `raw` | `output/backups/nightly-<day>.dump`, the newest 14 |
 | `job_radar.review weekly` (by hand, read-only) | `core.step_run`, `core.application`, `core.claude_grade`, `core.application_email` | `output/reviews/weekly-<day>.md` |
