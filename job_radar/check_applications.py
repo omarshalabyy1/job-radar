@@ -24,7 +24,7 @@ def linkedin_posting(body: str, company: str) -> tuple[str, str, str] | None:
 
 def add_job(cur, app: dict) -> int | None:
     """The tracker job of an application known from emails alone, made (or found by its key) with your status for its
-    stage; None when no email of it names a title."""
+    stage; None when no email of it names a title, or the job already has a status of yours."""
     from .steps import job_key  # steps imports this module
 
     title, location, url = app["job"], "", app["email_link"]
@@ -45,6 +45,8 @@ def add_job(cur, app: dict) -> int | None:
          ROLE_LABEL.get(rank, "Other"), app["applied_on"].date(), rank is not None)).fetchone()[0]
     cur.execute("INSERT INTO core.application (job_id, status, note, updated_at) VALUES (%s, %s, %s, %s) ON CONFLICT (job_id) DO NOTHING",
                 (job_id, STATUS[app["stage"]], f"confirmed by email {app['applied_on']:%Y-%m-%d} (check_applications)", app["latest_at"]))
+    if not cur.rowcount:  # the job has your own status already (one you ignored): it stays yours
+        return None
     cur.execute("UPDATE core.application_email SET job_id = %s WHERE message_id = ANY(%s) AND job_id IS NULL",
                 (job_id, [message_id for message_id, _ in app["emails"]]))
     return job_id
