@@ -9,7 +9,7 @@ import streamlit as st
 
 from tracker.applications_tab import render as follow_ups
 from tracker.common import load_jobs, query
-from job_radar.overview import MAIL, STAGES, STATUSES, applications, counts, in_range, needs_you
+from job_radar.overview import INBOX, MAIL, STAGES, STATUSES, applications, counts, gmail_link, in_range, needs_you
 
 LABELS = {"waiting": "Waiting", "assessment": "Assessment", "interview": "Interview",
           "rejected": "Rejected", "offer": "Offer"}
@@ -35,6 +35,9 @@ deadlines = query("SELECT d.due, d.what, d.note, coalesce(j.company, '') AS comp
                   " WHERE NOT d.done AND d.due >= (now() AT TIME ZONE 'Africa/Cairo')::date")
 steps += [{"what": f"Deadline: {d.what}", "company": d.company, "job": d.title, "due": d.due, "news": d.note, "on": None,
            "link": d.job_url, "email": None} for d in deadlines.itertuples()]
+steps += [{"what": "Email", "company": m.company, "job": m.title, "due": m.due, "news": m.action, "on": m.received_at,
+           "link": m.job_url or gmail_link(m.mailbox, m.message_id), "email": gmail_link(m.mailbox, m.message_id)}
+          for m in query(INBOX).itertuples()]
 if not steps:
     st.caption("Nothing waits on you: no assessment, interview or open deadline.")
 else:

@@ -40,6 +40,13 @@ MAIL = ("SELECT coalesce(j.company, e.company), coalesce(j.title, e.title), e.ki
         " e.message_id, e.job_id, m.body, e.mailbox, coalesce(m.done, false)"
         " FROM core.application_email e LEFT JOIN core.job j USING (job_id)"
         " LEFT JOIN core.mail m ON m.message_id = e.message_id AND m.mailbox = e.mailbox WHERE e.kind <> 'other'")
+# the Inbox's open job actions that are no assessment or interview (those are applications above): a form to fill, an
+# email address to confirm, a recruiter's message to answer. News of the last 30 days, not done, not past its day.
+INBOX = ("SELECT m.due, m.action, coalesce(j.company, e.company, split_part(m.sender, ' <', 1)) AS company, coalesce(j.title, e.title, '') AS title,"
+         " j.job_url, m.mailbox, m.message_id, m.received_at"
+         " FROM core.mail m LEFT JOIN core.application_email e ON e.message_id = m.message_id LEFT JOIN core.job j ON j.job_id = e.job_id"
+         " WHERE m.topic = 'job' AND m.action IS NOT NULL AND NOT m.done AND m.received_at > now() - interval '30 days'"
+         " AND (m.due IS NULL OR m.due >= (now() AT TIME ZONE 'Africa/Cairo')::date) AND coalesce(e.kind, '') <> 'interview'")
 # your statuses, with the board of the job's latest apply attempt and your open deadline for the job (Today page)
 STATUSES = ("SELECT j.company, j.title, a.status, a.updated_at, j.source,"
             " (SELECT t.board FROM core.apply_attempt t WHERE t.job_id = a.job_id ORDER BY t.started_at DESC LIMIT 1),"
