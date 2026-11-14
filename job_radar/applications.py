@@ -275,7 +275,7 @@ def read_mailbox(user: str, password: str, days: int, stored: set[str]) -> tuple
 # subjects in All Mail only, so the stored ones are read too, except job alerts (extract_email reads those) and tool mail.
 ALERTS = r"jobalerts?|jobs-listings|jobs-noreply|job ?alert|newsletter|digest"
 LINK = re.compile(r"\(https?://([^/)\s]+)[^)]*\)")
-PADDING = re.compile("[\u034f\u00ad\u200b-\u200f\u2060\ufeff]\s*")  # the invisible filler a marketing email opens with
+PADDING = re.compile("[\u034f\u00ad\u200b-\u200f\u2060\ufeff]\\s*")  # the invisible filler a marketing email opens with
 
 
 def whole_mail(conn, stored: set[str]) -> dict[str, list[dict]]:
