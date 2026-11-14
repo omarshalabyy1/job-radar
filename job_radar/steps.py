@@ -545,6 +545,10 @@ def job_key(title: str, company: str, job_url: str) -> str:
     return f"{words(title)} | {words(company).replace(' ', '') or job_url}"
 
 
+# a LinkedIn posting's id, from its page's link (.../jobs/view/data-engineer-at-acme-123) or an alert's (.../jobs/view/123)
+LINKEDIN_POSTING = re.compile(r"linkedin\.com/(?:comm/)?jobs/view/(?:[^/?#]*-)?(\d+)")
+
+
 COPY_SUFFIX = re.compile(r"\s*(?:[-–—:|]\s*copy(?:\s*\d+)?|\(\s*copy(?:\s*\d+)?\s*\))\s*$", re.I)  # a recruiter's leftover
 ARABIC_PLACES = {"القاهرة": "Cairo", "القاهرة الجديدة": "New Cairo", "الجيزة": "Giza", "مدينة نصر": "Nasr City",
                  "السادس من أكتوبر": "6th of October", "الإسكندرية": "Alexandria", "الرياض": "Riyadh", "جدة": "Jeddah",
@@ -632,6 +636,13 @@ def transform(conn) -> None:
     described = {job_key(title, company, job_url): description for title, company, job_url, description in conn.execute(
         "SELECT title, company, job_url, description FROM raw.job_posting WHERE last_seen >= current_date - %s"
         " AND description <> '' AND title <> '' AND company <> '' ORDER BY posting_id", (WORK_DAYS,))}
+    # one LinkedIn posting is one job, whatever each source calls its company (LinkedIn's page: 'Systems Limited - Egypt',
+    # its alert email: 'Systems Limited'; the alert's job stayed to apply to after you applied to the page's, 2026-11-14):
+    # its id -> the key of the job that has it, one you acted on first, else the oldest
+    posting_key = {m.group(1): key for key, url in conn.execute(
+        "SELECT job_key, job_url FROM core.job j WHERE job_url LIKE '%linkedin.com/%' ORDER BY"
+        " EXISTS (SELECT 1 FROM core.application a WHERE a.job_id = j.job_id), job_id DESC")
+        if (m := LINKEDIN_POSTING.search(url))}
     jobs: dict[str, dict] = {}
     skipped: Counter = Counter()  # postings out of your scope, by the first rule that left them out
     market = FEATURES.get("market", False)
@@ -659,6 +670,8 @@ def transform(conn) -> None:
             if not (market and p["job_url"] and p["title"] and is_tech_role(p["title"])):
                 continue
         key = job_key(p["title"], p["company"], p["job_url"])
+        if m := LINKEDIN_POSTING.search(p["job_url"] or ""):
+            key = posting_key.setdefault(m.group(1), key)
         # a job not yours has rank 0 and your role's name when its title has one, else its tech role family (SQL)
         job = jobs.setdefault(key, {
             "key": key, "title": clean_title(p["title"]), "company": p["company"], "location": clean_location(p["location"], place),
