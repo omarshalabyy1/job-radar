@@ -746,9 +746,11 @@ def transform(conn) -> None:
                         " JOIN core.board b ON b.ats || ':' || b.token = r.payload->>'board' WHERE (r.source, r.job_url) ="
                         " (j.source, j.job_url) AND b.last_ok_at::date > j.last_seen)" + kept)
         # a job of yours is aged by its posting date when it has one (a company board lists every open role with its original
-        # date: Canonical's was 2021), else by when the radar first saw it, like a website-only job; a job you added stays
+        # date: Canonical's was 2021), else by when the radar first saw it; a website-only job by when a source last listed
+        # it: aged by first_seen, one its board still listed was deleted and, its key not being remembered (job_seen is
+        # for your jobs), stored again as new by the day's next transform (391 jobs, 2026-11-14); a job you added stays
         # till you remove it
-        aged_where = ("CASE WHEN j.in_scope THEN coalesce(j.posted_at::date, j.first_seen) ELSE j.first_seen END < current_date - %s"
+        aged_where = ("CASE WHEN j.in_scope THEN coalesce(j.posted_at::date, j.first_seen) ELSE j.last_seen END < current_date - %s"
                       " AND j.source <> 'manual'" + acted_on)
         for where, days in ((closed_where, CLOSED_AFTER_DAYS), (aged_where, KEEP_DAYS)):
             # your jobs' keys only: a website job deleted may come back (reposted, or remote), for you or the site
