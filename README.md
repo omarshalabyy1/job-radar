@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="100%" src="docs/header.svg" alt="job-radar: data and AI jobs, found for you. A terminal runs a collect over 28 sources and 119 career pages in Egypt, ranks the jobs by your skills and emails them at 12:30pm, while a radar sweeps for new jobs.">
+  <img width="100%" src="docs/header.svg" alt="job-radar: data jobs, found for you. Egypt onsite, remote everywhere else, on Airflow, PostgreSQL, Docker and Streamlit. A terminal runs a collect over 28 sources and 119 career pages, ranks the jobs by your skills and emails them at 12:30pm.">
 </p>
 
 <p align="center">
@@ -293,15 +293,19 @@ in the tracker, and keep Docker Desktop running. The first emails arrive at the 
 
 ## 🏗️ For engineers
 
-Every table in the warehouse, the tables it is built from, and its row count on 6 October 2026 (the
-LinkedIn and startup extracts and the tables added since, `core.job_seen`, `core.claude_grade`, `core.job_vector`,
-`core.cv_vector`, `core.application_email`, `core.email_seen` and `core.step_run`, show no count):
+The data side at a glance: sources, the PostgreSQL warehouse in its three schemas (raw, core, mart), Airflow and what reads it
+(draw.io files: open them in app.diagrams.net to edit):
 
-![Data flow, table by table](docs/data-flow.svg)
+![High level architecture: job boards and APIs, company career pages, Gmail job alerts, the ECB's euro rates and settings.yaml feed a PostgreSQL 17 warehouse; the raw schema (2 tables, postings as received), the core schema (14 tables, one row per job, skills, pay and places) and the mart schema (4 views); the daily emails, the Streamlit tracker and the website on Neon read it; Airflow runs it daily at 12pm Cairo with 14 extract tasks](docs/architecture.drawio.svg)
 
-The tables and how they join; there is no star schema, one row per job sits in the middle:
+Every table of the data side and the tables it is built from, read from the code (the LLM, CV, apply, outreach and
+bookkeeping tables are left out):
 
-![The table model](docs/data-model.svg)
+![Data flow, table by table: the sources load raw.job_posting and raw.fx_rate; transform builds core.job with core.company, core.geo_pattern, core.role_track and the ECB rates; match_skills adds core.job_skill and core.skill_day; core.job_history, core.job_archive and core.job_seen come from core.job; four mart views; mart.job_status feeds the daily emails and the tracker](docs/data-flow.drawio.svg)
+
+The tables behind `mart.job_status` and how they join; there is no star schema, one row per job sits in the middle:
+
+![Data model: core.job with every column, core.application, core.deadline and core.job_skill referencing core.job.job_id, core.job_skill joined to core.skill on skill](docs/data-model.drawio.svg)
 
 The collect DAG in Airflow's graph view, every task green:
 
