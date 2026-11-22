@@ -296,16 +296,15 @@ in the tracker, and keep Docker Desktop running. The first emails arrive at the 
 The data side at a glance: sources, the PostgreSQL warehouse in its three schemas (raw, core, mart), Airflow and what reads it
 (draw.io files: open them in app.diagrams.net to edit):
 
-![High level architecture: job boards and APIs, company career pages, Gmail job alerts, the ECB's euro rates and settings.yaml feed a PostgreSQL 17 warehouse; the raw schema (2 tables, postings as received), the core schema (14 tables, one row per job, skills, pay and places) and the mart schema (4 views); the daily emails, the Streamlit tracker and the website on Neon read it; Airflow runs it daily at 12pm Cairo with 14 extract tasks](docs/architecture.drawio.svg)
+![Architecture: Python scrapers feed a PostgreSQL 17 warehouse in three schemas (raw, core, mart); the emails, the Streamlit tracker and the Neon website read it; Airflow runs it daily at 12pm Cairo](docs/architecture.drawio.svg)
 
-Every table of the data side and the tables it is built from, read from the code (the LLM, CV, apply, outreach and
-bookkeeping tables are left out):
+The data side's steps, in the order the daily run does them:
 
-![Data flow, table by table: the sources load raw.job_posting and raw.fx_rate; transform builds core.job with core.company, core.geo_pattern, core.role_track and the ECB rates; match_skills adds core.job_skill and core.skill_day; core.job_history, core.job_archive and core.job_seen come from core.job; four mart views; mart.job_status feeds the daily emails and the tracker](docs/data-flow.drawio.svg)
+![Data flow in six steps: collect (14 extract tasks into raw.job_posting), transform (one row per job in core.job), describe, match skills (core.job_skill), the 4 mart views, deliver (two emails, the tracker, Neon)](docs/data-flow.drawio.svg)
 
-The tables behind `mart.job_status` and how they join; there is no star schema, one row per job sits in the middle:
+The core tables keyed on the job and how they join; there is no star schema, one row per job sits in the middle:
 
-![Data model: core.job with every column, core.application, core.deadline and core.job_skill referencing core.job.job_id, core.job_skill joined to core.skill on skill](docs/data-model.drawio.svg)
+![Data model: core.job with all its columns; core.application, core.deadline and core.job_skill reference core.job.job_id; core.job_skill joins core.skill on skill](docs/data-model.drawio.svg)
 
 The collect DAG in Airflow's graph view, every task green:
 
