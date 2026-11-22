@@ -304,7 +304,7 @@ The data side's steps, in the order the daily run does them:
 
 The core tables keyed on the job and how they join; there is no star schema, one row per job sits in the middle:
 
-![Data model: core.job and its columns (AI-only columns not shown); core.application, core.deadline and core.job_skill reference core.job.job_id; core.job_skill joins core.skill on skill](docs/data-model.drawio.svg)
+![Data model: core.job and its columns; core.application, core.deadline and core.job_skill reference core.job.job_id; core.job_skill joins core.skill on skill](docs/data-model.drawio.svg)
 
 The collect DAG in Airflow's graph view, every task green:
 
